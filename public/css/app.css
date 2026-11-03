@@ -178,6 +178,7 @@ h2 {
 }
 .row-wrap {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* an auto column grows to a native date or time control's own width */
   gap: 4px;
 }
 
@@ -223,6 +224,7 @@ h2 {
 .field {
   flex: 1;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   font-size: 13px;
   font-weight: 700;
@@ -232,6 +234,8 @@ h2 {
 .field input,
 .field select {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
   border: 1px solid var(--field);
   border-radius: var(--r);
@@ -239,6 +243,18 @@ h2 {
   background: var(--surface);
   color: var(--ink);
   font: 16px var(--body);
+}
+/* iOS Safari gives date and time inputs their own width and centres the value. Take both back. */
+.field input[type='date'],
+.field input[type='time'] {
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+}
+.field input[type='date']::-webkit-date-and-time-value,
+.field input[type='time']::-webkit-date-and-time-value {
+  text-align: left;
 }
 .field input:disabled {
   background: var(--seg-bg);
@@ -266,6 +282,10 @@ h2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+.two > *,
+.three > * {
+  min-width: 0;
 }
 .three {
   display: grid;
