@@ -223,7 +223,7 @@
     var paceDone = !!r.pace;
     var fuelDone = !!r.fuel;
     var done = (paceDone ? 1 : 0) + (fuelDone ? 1 : 0);
-    var segs = [paceDone, fuelDone, false, false].map(function (x, i) {
+    var segs = [paceDone, fuelDone].map(function (x, i) {
       return h('span', { class: 'seg' + (x ? ' done' : i === done ? ' now' : '') });
     });
 
@@ -254,17 +254,15 @@
           days != null ? h('span', { class: 'chip' }, daysText(days)) : h('span'),
           h('a', { href: '#/setup/1' }, 'Change race'))),
       h('section', { class: 'card' },
-        h('div', { class: 'sechead' }, h('h2', null, 'Your plan'), h('span', { class: 'small' }, done + ' of 4 done')),
-        h('div', { class: 'segs four', 'aria-hidden': 'true' }, segs),
+        h('div', { class: 'sechead' }, h('h2', null, 'Your plan'), h('span', { class: 'small' }, done + ' of 2 done')),
+        h('div', { class: 'segs two', 'aria-hidden': 'true' }, segs),
         h('ol', { class: 'steps' },
           step(1, 'Pace', paceDone, !paceDone,
             paceDone ? 'Finish ' + hm(r.pace.finish) + (r.pace.bike.watts ? ' · bike ' + range(r.pace.bike.watts[0], r.pace.bike.watts[1]) + ' W' : '') : 'Targets for each leg and a finish range',
             paceDone ? '#/setup/5' : '#/setup/2', paceDone ? 'View' : 'Start'),
           step(2, 'Fuel', fuelDone, paceDone && !fuelDone,
             fuelDone ? (fuelStale(r) ? 'Out of date: open Fuel to update it' : r.fuel.bike.carbsPerHour + ' g carbs an hour on the bike') : 'Carbs, fluid and sodium per leg',
-            '#/fuel', fuelDone ? 'View' : 'Plan'),
-          step(3, 'Countdown', false, false, 'Taper, race week and race morning', null),
-          step(4, 'Debrief', false, false, 'Plan against race, one change for next time', null))),
+            '#/fuel', fuelDone ? 'View' : 'Plan'))),
       h('a', { class: 'btn', href: '#/card' }, 'Open race card'),
       h('section', { class: 'card' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Your details'), h('a', { href: '#/setup/2' }, 'Edit')),
@@ -565,13 +563,7 @@
           h('h1', { tabindex: '-1' }, raceTitle(r)),
           h('p', null, [r.start ? startText(r.start) + ' start' : '', daysText(days)].filter(Boolean).join(' · ')))),
       paceSec,
-      fuelSec,
-      h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Countdown'), h('span', { class: 'later' }, 'Coming later')),
-        h('p', { class: 'small' }, 'Taper, race week and race morning, worked back from your start time.')),
-      h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Debrief'), h('span', { class: 'later' }, 'Coming later')),
-        h('p', { class: 'small' }, 'Five questions after the race. One change for your next one.')));
+      fuelSec);
   }
 
   function stat(name, value, unit) {
@@ -733,9 +725,7 @@
       topBar(solo ? brandLink() : backLink('#/', r.name || 'My race'), null),
       solo ? null : h('nav', { class: 'stepnav', 'aria-label': 'Plan steps' },
         h('a', { href: r.pace ? '#/setup/5' : '#/setup/2', class: r.pace ? 'done' : null }, '1 Pace' + (r.pace ? ' ✓' : '')),
-        h('a', { href: '#/fuel', 'aria-current': 'step' }, '2 Fuel'),
-        h('span', null, '3 Countdown'),
-        h('span', null, '4 Debrief')),
+        h('a', { href: '#/fuel', 'aria-current': 'step' }, '2 Fuel')),
       title('Fuel plan', 'Carbs, fluid and sodium for each leg, timed to your splits.'),
       splitsBox,
       h('section', { class: 'card' },

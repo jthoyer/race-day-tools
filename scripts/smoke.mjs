@@ -139,6 +139,7 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
+check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 await shot('c1-card');
 
 // Print view
@@ -158,7 +159,9 @@ check(/175–185/.test(await page.locator('.racecard').innerText()), 'Race card 
 // Home with a race
 await page.goto(base + '/index.html#/');
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
-check(/2 of 4 done/.test(await page.locator('.app').innerText()), 'Home shows 2 of 4 done');
+const homeText = await page.locator('.app').innerText();
+check(/2 of 2 done/.test(homeText), 'Home shows 2 of 2 done');
+check(!/Countdown|Debrief|Later/.test(homeText), 'Home hides Countdown and Debrief until they exist');
 await shot('a1-home');
 
 // Lower the gut figure after saving fuel: the card must say the fuel plan is out of date

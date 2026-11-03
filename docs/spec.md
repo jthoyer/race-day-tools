@@ -28,7 +28,7 @@ Each is checkable. The tests that cover each one are named.
 
 ## Out of scope
 
-Payments and the paywall (D6), email (D4), the gut-training ladder, Countdown, Debrief, an offline copy (RD-07-S1), analytics (D3), hosting and deployment, the SEO pipeline, and published guide copy. Countdown and Debrief appear on the card as "Coming later".
+Payments and the paywall (D6), email (D4), the gut-training ladder, Countdown, Debrief, an offline copy (RD-07-S1), analytics (D3), hosting and deployment, the SEO pipeline, and published guide copy. Countdown and Debrief are hidden everywhere (the card, the home plan list and the fuel step bar) until they exist, so nothing promises a tool that is not there (decided 4 Nov 2026).
 
 ## Known limits
 

@@ -191,8 +191,8 @@ h2 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
-.segs.four {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.segs.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .seg {
   height: 6px;
@@ -654,7 +654,7 @@ details.test p {
 }
 .stepnav {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 .stepnav a,
