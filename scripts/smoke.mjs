@@ -129,15 +129,34 @@ const f2Text = await page.locator('.app').innerText();
 check(/It does not change your fuel plan/.test(f2Text) && !/fluid and sodium/.test(f2Text.split('Sweat rate')[0]), 'F2 weight help says why we ask, and does not claim fluid or sodium');
 await page.getByLabel('Body weight').fill('72');
 await page.getByLabel('Carbs your gut handles').fill('70');
+check(!(await page.getByText(/Enter a body weight/).isVisible()) && !(await page.getByText(/Enter 0 to 120 g an hour/).isVisible()), 'F2 errors go once a number is typed');
 await shot('f2');
 await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 
 // F3 Fitness numbers
 await page.getByRole('heading', { name: 'Fitness numbers' }).waitFor();
 check(/Your steady swim pace per 100 m in a pool/.test(await page.locator('.app').innerText()), 'F3 says what CSS is');
-await page.getByLabel('Critical swim speed (CSS)').fill('1:45');
+// Time entry: digits become a time, a dot works, one or two digits are refused, and an error goes as soon as the entry reads.
+const cssBox = page.getByLabel('Critical swim speed (CSS)');
+await cssBox.fill('45');
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+check(await page.getByText('Type minutes and seconds, such as 1:45 or 145.').isVisible(), 'F3 refuses 45 and says what to type');
+check(await page.getByRole('heading', { name: 'Fitness numbers' }).isVisible(), 'F3 does not move on with an unreadable time');
+await cssBox.fill('175');
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+check(await page.getByText('Seconds go up to 59.').isVisible(), 'F3 refuses 175 because seconds stop at 59');
+await cssBox.fill('130');
+check(!(await page.getByText('Seconds go up to 59.').isVisible()), 'The error goes as soon as the entry reads');
+await cssBox.blur();
+check((await cssBox.inputValue()) === '1:30', 'Typing 130 shows 1:30 when the person leaves the field');
+await cssBox.fill('1.45');
+await cssBox.blur();
+check((await cssBox.inputValue()) === '1:45', 'A dot works like a colon: 1.45 shows 1:45');
 await page.getByLabel('FTP', { exact: true }).fill('240');
-await page.getByLabel('Run threshold pace').fill('4:50');
+const runBox = page.getByLabel('Run threshold pace');
+await runBox.fill('450');
+await runBox.blur();
+check((await runBox.inputValue()) === '4:50', 'Typing 450 shows 4:50');
 await shot('f3');
 await page.getByRole('button', { name: 'Next: course and heat' }).click();
 
