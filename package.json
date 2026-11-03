@@ -1,0 +1,10 @@
+{
+  "name": "race-day-tools",
+  "private": true,
+  "description": "Race Fuel Planner and Race Pacing Planner: one static web app, on-device only.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "smoke": "node scripts/smoke.mjs",
+    "serve": "python3 -m http.server 8000 -d public"
+  }
+}

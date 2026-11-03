@@ -1,0 +1,228 @@
+/*
+ * Race Pacing Planner: the maths. No DOM. Runs on the device; nothing is sent anywhere.
+ *
+ * Every range below is a TYPICAL value for intermediate age-group athletes. None has been
+ * checked against current sources yet (blueprint cards RP-05-W1, RD-05-O1). Each is marked
+ * UNCHECKED with the place it should be verified. Change a number here, never in the UI.
+ */
+(function (root) {
+  'use strict';
+
+  var LEGS = {
+    standard: { swim: 1.5, bike: 40, run: 10 },
+    '70.3': { swim: 1.9, bike: 90, run: 21.1 }
+  };
+
+  // UNCHECKED. Open-water race pace as a multiple of pool CSS (slower: sighting, start, wetsuit varies).
+  var SWIM_FACTOR = { standard: [1.03, 1.08], '70.3': [1.06, 1.12] };
+
+  // UNCHECKED. Bike intensity factor (share of FTP) by distance and course.
+  // 70.3 rolling 0.73-0.77 is the blueprint's figure (RP-05-A1). Verify against current coaching sources.
+  var BIKE_IF = {
+    standard: { flat: [0.84, 0.89], rolling: [0.83, 0.88], hilly: [0.81, 0.86] },
+    '70.3': { flat: [0.74, 0.78], rolling: [0.73, 0.77], hilly: [0.71, 0.75] }
+  };
+  var HOT_IF_CUT = 0.02; // UNCHECKED. Ride a little easier in the heat.
+  var OLD_TEST_IF_CUT = 0.02; // UNCHECKED. An FTP test over 6 weeks old: aim lower (RP-03-W1).
+
+  // UNCHECKED. Heart-rate targets as a share of threshold heart rate.
+  var BIKE_HR = { standard: [0.88, 0.93], '70.3': [0.8, 0.85] };
+  var RUN_HR = { standard: [0.93, 0.98], '70.3': [0.85, 0.9] };
+
+  // UNCHECKED. Effort mode: targets out of 10 with a talk test (RP-03-A2).
+  var EFFORT = {
+    standard: { bike: '7 out of 10: a few words at a time', run: '7–8 out of 10: a word or two at a time' },
+    '70.3': { bike: '5–6 out of 10: you can speak in short sentences', run: '6–7 out of 10: short phrases only' }
+  };
+
+  // UNCHECKED. Race speed against the speed of a hard long ride, for Heart rate and Effort modes.
+  var SPEED_FACTOR = { standard: [1.02, 1.08], '70.3': [0.98, 1.04] };
+
+  // UNCHECKED. Run pace off the bike as a multiple of run threshold pace (RP-05-A2).
+  var RUN_FACTOR = { standard: [1.02, 1.06], '70.3': [1.08, 1.13] };
+  var RUN_HEAT = { mild: 1.0, warm: 1.01, hot: 1.04 };
+
+  // UNCHECKED. Changeovers, T1 plus T2, in minutes.
+  var TRANSITIONS = { standard: [3, 5], '70.3': [6, 9] };
+
+  // Bike speed model: steady-state power balance on flat roads, then a time multiplier per course.
+  // UNCHECKED. CdA 0.29 m2 suits an age-grouper on aero bars; Crr 0.005 suits good road tyres.
+  var BIKE_MODEL = { cda: 0.29, crr: 0.005, bikeKitKg: 10, rho: 1.2, drivetrain: 0.97, g: 9.81 };
+  var COURSE_TIME = { flat: 1.0, rolling: 1.04, hilly: 1.1 };
+
+  // Plausible input ranges (RP-03-A1). Outside these we ask the athlete to check.
+  var LIMITS = {
+    css: [65, 210], // seconds per 100 m
+    ftp: [80, 500], // watts
+    runThreshold: [180, 540], // seconds per km
+    weight: [35, 150], // kg
+    lthr: [100, 210], // beats per minute
+    steadySpeed: [15, 50] // km/h
+  };
+
+  function within(v, range) { return typeof v === 'number' && isFinite(v) && v >= range[0] && v <= range[1]; }
+
+  // Speed in m/s for a power in watts, on flat road, by bisection.
+  function bikeSpeed(watts, riderKg) {
+    var m = BIKE_MODEL;
+    var mass = riderKg + m.bikeKitKg;
+    var p = watts * m.drivetrain;
+    var lo = 0, hi = 30;
+    for (var i = 0; i < 60; i++) {
+      var v = (lo + hi) / 2;
+      var need = 0.5 * m.rho * m.cda * v * v * v + m.crr * mass * m.g * v;
+      if (need > p) hi = v; else lo = v;
+    }
+    return (lo + hi) / 2;
+  }
+
+  function round5(n) { return Math.round(n / 5) * 5; }
+
+  // Bike power target. Shared by the full plan and the guide embed (F7), so both give the same answer.
+  function bikeTarget(o) {
+    var d = BIKE_IF[o.distance] ? o.distance : '70.3';
+    var course = BIKE_IF[d][o.course] ? o.course : 'rolling';
+    var f = BIKE_IF[d][course];
+    var cut = (o.heat === 'hot' ? HOT_IF_CUT : 0) + (o.ftpRecent === false ? OLD_TEST_IF_CUT : 0);
+    var factor = [Number((f[0] - cut).toFixed(2)), Number((f[1] - cut).toFixed(2))];
+    return { factor: factor, watts: [round5(o.ftp * factor[0]), round5(o.ftp * factor[1])] };
+  }
+
+  // Checks the inputs. Returns a list of { field, message }. Empty means good to go.
+  function validate(input) {
+    var errs = [];
+    if (!LEGS[input.distance]) errs.push({ field: 'distance', message: 'Pick Standard or 70.3.' });
+    if (!within(input.css, LIMITS.css)) errs.push({ field: 'css', message: 'Enter your CSS as m:ss per 100 m, between 1:05 and 3:30.' });
+    if (!within(input.runThreshold, LIMITS.runThreshold)) errs.push({ field: 'runThreshold', message: 'Enter your run threshold as m:ss per km, between 3:00 and 9:00.' });
+    if (!within(input.weight, LIMITS.weight)) errs.push({ field: 'weight', message: 'Enter a body weight between 35 and 150 kg.' });
+    var mode = input.mode || 'power';
+    if (mode === 'power' && !within(input.ftp, LIMITS.ftp)) errs.push({ field: 'ftp', message: 'Enter an FTP between 80 and 500 watts.' });
+    if (mode !== 'power' && !within(input.steadySpeed, LIMITS.steadySpeed)) errs.push({ field: 'steadySpeed', message: 'Enter your speed on a hard long ride, between 15 and 50 km/h.' });
+    if (mode === 'hr') {
+      if (!within(input.bikeLthr, LIMITS.lthr)) errs.push({ field: 'bikeLthr', message: 'Enter a bike threshold heart rate between 100 and 210.' });
+      if (!within(input.runLthr, LIMITS.lthr)) errs.push({ field: 'runLthr', message: 'Enter a run threshold heart rate between 100 and 210.' });
+    }
+    return errs;
+  }
+
+  /*
+   * input: { distance, mode: 'power'|'hr'|'effort', css (s/100m), ftp (W), ftpRecent (bool),
+   *          runThreshold (s/km), weight (kg), bikeLthr, runLthr, steadySpeed (km/h),
+   *          course: 'flat'|'rolling'|'hilly', heat: 'mild'|'warm'|'hot' }
+   * Returns targets and leg times as ranges. Leg times are whole minutes, and the finish range is
+   * the sum of those whole minutes, so the numbers on screen always add up (RP-05-W2).
+   */
+  function planPace(input) {
+    var errors = validate(input);
+    if (errors.length) return { ok: false, errors: errors };
+
+    var d = input.distance;
+    var legs = LEGS[d];
+    var course = COURSE_TIME[input.course] ? input.course : 'rolling';
+    var heat = RUN_HEAT[input.heat] ? input.heat : 'warm';
+    var mode = input.mode || 'power';
+    var warnings = [];
+    var why = [];
+
+    // Swim
+    var sf = SWIM_FACTOR[d];
+    var swimPace = [input.css * sf[0], input.css * sf[1]];
+    var swimMin = [Math.round((swimPace[0] * legs.swim * 10) / 60), Math.round((swimPace[1] * legs.swim * 10) / 60)];
+    why.push({ leg: 'Swim', text: 'a little slower than your CSS of ' + fmt(input.css) + ', for open water and a steady start.' });
+
+    // Bike
+    var bike = { watts: null, hr: null, effort: null };
+    var bikeMin;
+    if (mode === 'power') {
+      var bt = bikeTarget({ ftp: input.ftp, distance: d, course: course, heat: heat, ftpRecent: input.ftpRecent });
+      var f = bt.factor;
+      bike.watts = bt.watts;
+      var vFast = bikeSpeed(bike.watts[1], input.weight);
+      var vSlow = bikeSpeed(bike.watts[0], input.weight);
+      bikeMin = [
+        Math.round(((legs.bike * 1000) / vFast / 60) * COURSE_TIME[course]),
+        Math.round(((legs.bike * 1000) / vSlow / 60) * COURSE_TIME[course])
+      ];
+      why.push({
+        leg: 'Bike',
+        text: Math.round(f[0] * 100) + '–' + Math.round(f[1] * 100) + '% of your FTP of ' + input.ftp + ' W, a typical range for ' +
+          (d === '70.3' ? 'a 70.3' : 'a Standard race') + ' on a ' + course + ' course' + (heat === 'hot' ? ', eased for the heat' : '') + '.'
+      });
+      if (input.ftpRecent === false) warnings.push('Your FTP test is over 6 weeks old, so the bike target is set a little lower. Retest if you can.');
+    } else {
+      var sp = SPEED_FACTOR[d];
+      var kmh = [input.steadySpeed * sp[1], input.steadySpeed * sp[0]];
+      bikeMin = [
+        Math.round((legs.bike / kmh[0]) * 60 * COURSE_TIME[course]),
+        Math.round((legs.bike / kmh[1]) * 60 * COURSE_TIME[course])
+      ];
+      if (mode === 'hr') {
+        var bh = BIKE_HR[d];
+        bike.hr = [Math.round(input.bikeLthr * bh[0]), Math.round(input.bikeLthr * bh[1])];
+        why.push({ leg: 'Bike', text: Math.round(bh[0] * 100) + '–' + Math.round(bh[1] * 100) + '% of your bike threshold heart rate of ' + input.bikeLthr + '. Times come from your hard long-ride speed.' });
+      } else {
+        why.push({ leg: 'Bike', text: 'an effort you can hold for the whole ride. Times come from your hard long-ride speed.' });
+      }
+      bike.effort = EFFORT[d].bike;
+    }
+
+    // Run
+    var rf = RUN_FACTOR[d];
+    var rh = RUN_HEAT[heat];
+    var runPace = [round5(input.runThreshold * rf[0] * rh), round5(input.runThreshold * rf[1] * rh)];
+    var runMin = [Math.round((runPace[0] * legs.run) / 60), Math.round((runPace[1] * legs.run) / 60)];
+    var run = { pace: runPace, hr: null, effort: EFFORT[d].run };
+    if (mode === 'hr') {
+      run.hr = [Math.round(input.runLthr * RUN_HR[d][0]), Math.round(input.runLthr * RUN_HR[d][1])];
+    }
+    why.push({
+      leg: 'Run',
+      text: 'slower than your threshold of ' + fmt(input.runThreshold) + ' /km, because you run after ' + legs.bike + ' km on the bike' +
+        (heat === 'hot' ? ', and slower again for the heat' : '') + '.'
+    });
+
+    var t = TRANSITIONS[d];
+    var finish = [swimMin[0] + bikeMin[0] + runMin[0] + t[0], swimMin[1] + bikeMin[1] + runMin[1] + t[1]];
+    why.push({ leg: 'Finish', text: 'the three legs plus changeovers, with the fast and slow ends added up.' });
+
+    return {
+      ok: true,
+      distance: d,
+      mode: mode,
+      course: course,
+      heat: heat,
+      legs: legs,
+      swim: { pace: [Math.round(swimPace[0]), Math.round(swimPace[1])], minutes: swimMin },
+      bike: { watts: bike.watts, hr: bike.hr, effort: bike.effort, minutes: bikeMin },
+      run: { pace: runPace, hr: run.hr, effort: run.effort, minutes: runMin },
+      transitions: t.slice(),
+      finish: finish,
+      why: why,
+      warnings: warnings
+    };
+  }
+
+  function fmt(seconds) {
+    var s = Math.round(seconds);
+    return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60);
+  }
+
+  // Mid-point split in minutes, for handing to the fuel plan (RP-06-A2).
+  function midSplits(plan) {
+    function mid(r) { return Math.round((r[0] + r[1]) / 2); }
+    return { swim: mid(plan.swim.minutes), bike: mid(plan.bike.minutes), run: mid(plan.run.minutes) };
+  }
+
+  var api = {
+    LEGS: LEGS,
+    LIMITS: LIMITS,
+    BIKE_IF: BIKE_IF,
+    bikeSpeed: bikeSpeed,
+    bikeTarget: bikeTarget,
+    validate: validate,
+    planPace: planPace,
+    midSplits: midSplits
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else { root.RD = root.RD || {}; root.RD.pace = api; }
+})(this);
