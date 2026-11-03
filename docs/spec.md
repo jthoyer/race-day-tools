@@ -11,7 +11,7 @@ One static web app that holds the first two race-day tools, the Pacing Planner a
 Each is checkable. The tests that cover each one are named.
 
 1. **Static and on-device.** `public/` runs from any static server with no build step. No accounts, no server calls, no analytics. State lives in `localStorage` under one key. Every storage read and write survives storage being blocked. (`store.js`; smoke test reload check)
-2. **Set-up flow F1–F5** follows the blueprint: F1 race, distance, date, an optional start time, an optional transition opening time, days to go and taper start; F2 weight, sweat rate (or typical), gut tolerance; F3 Power / Heart rate / Effort with CSS, FTP (and when tested), run threshold; F4 course and heat; F5 targets. (smoke test)
+2. **Set-up flow F1–F5** follows the blueprint: F1 race, distance, date, an optional start time, an optional transition opening time, days to go and taper start; F2 weight (with a line saying it turns a power target into a bike time and does not change the fuel plan), sweat rate (or typical), gut tolerance; F3 Power / Heart rate / Effort with CSS (critical swim speed, with a line saying what it is and why we ask), FTP (and when tested), run threshold; F4 course and heat; F5 targets. (smoke test)
 3. **Plausible inputs only (RP-03-A1).** Next refuses out-of-range or unreadable numbers, with a message by the field. A blank field is never read as zero. (`pace.test.js` "implausible numbers"; `fuel.test.js` "blank gut figure"; smoke test F2)
 4. **A range, never one time (RD-05-A2).** Every leg time and the finish are ranges. (`pace.test.js` "legs always add up")
 5. **The numbers add up (RP-05-W2).** The finish range is exactly the sum of the displayed leg minutes and changeovers. (`pace.test.js`)
