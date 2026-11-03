@@ -95,3 +95,16 @@ test('midSplits hands the fuel plan the middle of each leg', () => {
   const m = P.midSplits(p);
   assert.equal(m.bike, Math.round((p.bike.minutes[0] + p.bike.minutes[1]) / 2));
 });
+
+test('low numbers still give a range, never one number (RD-05-A2)', () => {
+  for (const ftp of [80, 100, 120, 125]) {
+    for (const distance of ['standard', '70.3']) {
+      const p = P.planPace({ ...example, ftp, distance });
+      assert.ok(p.ok);
+      assert.ok(p.bike.watts[0] < p.bike.watts[1], `FTP ${ftp} ${distance}: ${p.bike.watts}`);
+      for (const leg of ['swim', 'bike', 'run']) assert.ok(p[leg].minutes[0] < p[leg].minutes[1], `${leg} at FTP ${ftp}`);
+    }
+  }
+  const fast = P.planPace({ ...example, distance: 'standard', css: 65, runThreshold: 180 });
+  for (const leg of ['swim', 'bike', 'run']) assert.ok(fast[leg].minutes[0] < fast[leg].minutes[1]);
+});

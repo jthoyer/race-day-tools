@@ -59,17 +59,40 @@ test('the worked example gives a sensible 70.3 plan', () => {
   assert.equal(p.sweatTypical, true);
 });
 
-test('gel times are in order, inside the leg and clear of its last 10 minutes', () => {
-  for (const n of [1, 2, 3, 5, 8]) {
-    for (const minutes of [45, 90, 165, 240]) {
+test('gel times are in order, on 5-minute marks and clear of the last 10 minutes', () => {
+  for (const n of [1, 2, 3, 5, 8, 30, 60]) {
+    for (const minutes of [15, 45, 90, 165, 240]) {
       const t = F.spread(n, minutes);
-      assert.equal(t.length, n);
+      assert.ok(t.length >= 1 && t.length <= n);
       for (let i = 1; i < t.length; i++) assert.ok(t[i] > t[i - 1]);
       assert.ok(t.every((x) => x % 5 === 0 && x >= 5));
-      if (minutes / n >= 10) assert.ok(t[t.length - 1] <= minutes - 10 || minutes <= 15);
+      assert.ok(t[t.length - 1] <= Math.max(5, minutes - 10), `n=${n} minutes=${minutes} last=${t[t.length - 1]}`);
     }
   }
   assert.deepEqual(F.spread(0, 100), []);
+});
+
+test('a tiny serve that cannot reach the target gives fewer doses and a warning, never more carbs', () => {
+  const chew = { id: 'c', name: 'Tiny chew', kind: 'chew', carbs: 4, sodium: 10 };
+  const p = F.planFuel({ ...base, gut: 90, gel: chew, drink: null });
+  assert.ok(p.bike.gels <= Math.floor((165 - 10) / 5));
+  assert.ok(p.bike.carbsPerHour <= 90);
+  assert.ok(p.warnings.some((w) => /serve is small/.test(w)));
+});
+
+test('four sips an hour never pass the planned fluid or the sweat rate', () => {
+  for (let sweat = 0.2; sweat <= 3.0; sweat += 0.01) {
+    const s = Math.round(sweat * 100) / 100;
+    const p = F.planFuel({ ...base, sweat: s });
+    assert.ok(p.bike.sipMl * 4 <= p.bike.fluidPerHour * 1000 + 1e-9, `sweat ${s}: ${p.bike.sipMl} x 4 > ${p.bike.fluidPerHour} L`);
+    assert.ok(p.bike.sipMl * 4 <= s * 1000 + 1e-9);
+  }
+});
+
+test('a product with a blank number is refused, not read as zero', () => {
+  assert.equal(F.planFuel({ ...base, drink: { ...DRINK, carbs: null } }).ok, false);
+  assert.equal(F.planFuel({ ...base, drink: { ...DRINK, sodium: null } }).ok, false);
+  assert.equal(F.planFuel({ ...base, gel: { ...GEL, sodium: null } }).ok, false);
 });
 
 test('a low gut figure gets a training warning and stays capped', () => {

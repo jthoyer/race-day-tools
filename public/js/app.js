@@ -166,6 +166,7 @@
     var parts = hash.split('/');
     var fn = routes[parts[0]] || home;
     currentPrint = null;
+    if (!render.quiet) aboutShown = false;
     RD.ui.clear(view);
     var out = fn(parts.slice(1));
     view.appendChild(out);
@@ -260,7 +261,7 @@
             paceDone ? 'Finish ' + hm(r.pace.finish) + (r.pace.bike.watts ? ' · bike ' + range(r.pace.bike.watts[0], r.pace.bike.watts[1]) + ' W' : '') : 'Targets for each leg and a finish range',
             paceDone ? '#/setup/5' : '#/setup/2', paceDone ? 'View' : 'Start'),
           step(2, 'Fuel', fuelDone, paceDone && !fuelDone,
-            fuelDone ? r.fuel.bike.carbsPerHour + ' g carbs an hour on the bike' : 'Carbs, fluid and sodium per leg',
+            fuelDone ? (fuelStale(r) ? 'Out of date: open Fuel to update it' : r.fuel.bike.carbsPerHour + ' g carbs an hour on the bike') : 'Carbs, fluid and sodium per leg',
             '#/fuel', fuelDone ? 'View' : 'Plan'),
           step(3, 'Countdown', false, false, 'Taper, race week and race morning', null),
           step(4, 'Debrief', false, false, 'Plan against race, one change for next time', null))),
@@ -487,8 +488,7 @@
           type: 'button', class: 'btn', onclick: function () {
             r.pace = p;
             r.splits = RD.pace.midSplits(p);
-            r.splitsByHand = null; // the pace plan now sets the splits
-            if (r.fuel && (r.fuel.bike.minutes !== r.splits.bike || r.fuel.run.minutes !== r.splits.run)) r.fuelStale = true;
+            r.splitsByHand = null; // the pace plan now sets the splits; a saved fuel plan shows as out of date if they changed
             commit();
             go('saved');
           }
@@ -547,7 +547,7 @@
     if (f) {
       fuelSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('a', { href: '#/fuel' }, 'Edit')),
-        r.fuelStale ? h('p', { class: 'error' }, 'Your pace changed since this plan. Open Fuel to update it.') : null,
+        fuelStale(r) ? h('p', { class: 'error' }, 'Your splits, details or products changed since this plan. Open Fuel to update it.') : null,
         h('p', null, h('b', null, 'Bike ' + f.bike.carbsPerHour + ' g/hr. '), bikeLine(f)),
         h('p', null, h('b', null, 'Run ' + f.run.carbsPerHour + ' g/hr. '), runLine(f)));
     } else {
@@ -600,11 +600,38 @@
     if (!Array.isArray(S.products) || !S.products.length) return RD.fuel.DEFAULT_PRODUCTS.map(function (p) { return Object.assign({}, p); });
     return S.products;
   }
-  function find(id) {
-    var list = productList();
+  // Look a product up in the right list only: a product whose type changed to Drink is no longer a gel.
+  function findIn(list, id) {
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
     return null;
   }
+
+  // Everything the fuel plan depends on, read from the store. The fuel step plans from it, and the
+  // card compares it with what a saved plan was made from, to say when the plan is out of date.
+  function fuelInput() {
+    var r = S.race;
+    var solo = !r;
+    var ctx = solo ? S.solo || {} : r;
+    var fromPlan = !solo && !!r.splits && !r.splitsByHand;
+    var hand = solo ? S.solo || {} : r.splitsByHand ? { bikeMin: r.splitsByHand.bike, runMin: r.splitsByHand.run } : {};
+    var list = productList();
+    var gels = list.filter(function (p) { return p.kind !== 'drink'; });
+    var drinks = list.filter(function (p) { return p.kind === 'drink'; });
+    var gel = findIn(gels, S.choice.gel) || gels[0] || null;
+    var drink = S.choice.drink === 'none' ? null : findIn(drinks, S.choice.drink) || drinks[0] || null;
+    var d = S.details;
+    return {
+      fromPlan: fromPlan, gels: gels, drinks: drinks,
+      input: {
+        distance: ctx.distance,
+        bikeMin: fromPlan ? r.splits.bike : hand.bikeMin != null ? hand.bikeMin : null,
+        runMin: fromPlan ? r.splits.run : hand.runMin != null ? hand.runMin : null,
+        heat: ctx.heat, gut: d.gut, sweat: d.sweatTypical || d.sweat == null ? null : d.sweat, gel: gel, drink: drink
+      }
+    };
+  }
+  function inputKey(input) { return JSON.stringify(input); }
+  function fuelStale(r) { return !!(r && r.fuel && r.fuel.inputKey !== inputKey(fuelInput().input)); }
 
   function fuelStep() {
     var r = S.race;
@@ -612,22 +639,16 @@
     if (solo && !S.solo) { S.solo = { distance: '70.3', bikeMin: null, runMin: null, heat: 'warm' }; commit(); }
     var ctx = solo ? S.solo : r;
     var base = solo ? 'solo' : 'race';
-    var fromPlan = !solo && r.splits && !r.splitsByHand;
-    var bikeMin = fromPlan ? r.splits.bike : solo ? S.solo.bikeMin : r.splitsByHand ? r.splitsByHand.bike : null;
-    var runMin = fromPlan ? r.splits.run : solo ? S.solo.runMin : r.splitsByHand ? r.splitsByHand.run : null;
-
-    var list = productList();
-    var gels = list.filter(function (p) { return p.kind !== 'drink'; });
-    var drinks = list.filter(function (p) { return p.kind === 'drink'; });
-    var gel = find(S.choice.gel) || gels[0] || null;
-    var drink = S.choice.drink === 'none' ? null : find(S.choice.drink) || drinks[0] || null;
-
+    var fi = fuelInput();
+    var fromPlan = fi.fromPlan;
+    var gels = fi.gels;
+    var drinks = fi.drinks;
+    var input = fi.input;
+    var gel = input.gel;
+    var drink = input.drink;
     var d = S.details;
-    var input = {
-      distance: ctx.distance, bikeMin: bikeMin, runMin: runMin, heat: ctx.heat,
-      gut: d.gut, sweat: d.sweatTypical || d.sweat == null ? null : d.sweat, gel: gel, drink: drink
-    };
     var plan = RD.fuel.planFuel(input);
+    if (plan.ok) plan.inputKey = inputKey(input);
 
     // Splits: from the pace plan, or typed in.
     var splitsBox;
@@ -655,7 +676,8 @@
     }
 
     var aboutYou = null;
-    if (d.gut == null || unreadable('details.gut')) {
+    if (d.gut == null || unreadable('details.gut')) aboutShown = true;
+    if (aboutShown) {
       aboutYou = h('section', { class: 'card' },
         h('p', { class: 'legname' }, 'About you'),
         bound('details.gut', 'num', { label: 'Carbs your gut handles', unit: 'g an hour', placeholder: '60', live: refreshLater }),
@@ -691,7 +713,7 @@
     if (plan.ok && !solo) {
       saveBtn = h('button', {
         type: 'button', class: 'btn', onclick: function () {
-          r.fuel = plan; r.fuelStale = false; commit(); go('card');
+          r.fuel = plan; commit(); go('card');
         }
       }, r.fuel ? 'Update my race card' : 'Save to my race card');
     } else if (plan.ok && solo) {
@@ -728,6 +750,7 @@
         solo ? h('p', { class: 'small center' }, 'No account. Saved on this phone.') : null));
   }
 
+  var aboutShown = false; // once the fuel step asks for gut and sweat, it keeps asking until you leave
   var refreshTimer = null;
   function refreshLater() {
     clearTimeout(refreshTimer);
@@ -738,7 +761,7 @@
     var b = p.bike;
     var rn = p.run;
     var bikeRows = [
-      prow('Every 15 min', 'About ' + b.sipMl + ' ml of ' + (b.drinkShare > 0 && b.drinkShare < 1 ? 'fluid' : b.drink === 'water' ? 'water' : 'drink')),
+      prow('Every 15 min', 'About ' + b.sipMl + ' ml of ' + (b.drinkShare <= 0 || b.drink === 'water' ? 'water' : b.drinkShare < 1 ? 'fluid' : 'drink')),
       b.drinkShare > 0 && b.drinkShare < 1 ? prow('Mix', Math.round(b.drinkShare * 100) + '% drink, the rest water') : null,
       b.gels ? prow(minutesList(b.gelTimes), '1 serve of gel or chews') : prow('Gels', 'None needed: the drink covers it'),
       prow('Bottles', 'Start with ' + b.bottlesAtStart + (b.refills ? '; pick up ' + b.refills + ' more at aid stations' : '')),
@@ -808,9 +831,21 @@
         h('button', { type: 'button', class: 'btn ghost', onclick: function () { S.products = null; commit(); refresh(); } }, 'Back to typical products'),
         h('a', { class: 'btn', href: '#/fuel' }, 'Done')));
   }
+  // A blank or unreadable number is stored as null, never as 0, and the fuel plan refuses it.
+  // The error updates in place, so typing and tapping Done are never interrupted by a redraw.
   function numIn(id, label, v, on) {
-    return h('label', { class: 'field', for: id }, label,
-      h('input', { id: id, inputmode: 'decimal', value: v == null ? '' : v, oninput: function (e) { var n = RD.ui.num(e.target.value); on(n == null ? 0 : n); } }));
+    var err = h('p', { class: 'error', id: id + '-err', role: 'alert' }, 'Enter a number, such as 25.');
+    var input = h('input', {
+      id: id, inputmode: 'decimal', value: v == null ? '' : v,
+      oninput: function (e) { var n = RD.ui.num(e.target.value); on(n); show(n == null); }
+    });
+    function show(bad) {
+      err.hidden = !bad;
+      if (bad) { input.setAttribute('aria-invalid', 'true'); input.setAttribute('aria-describedby', err.id); }
+      else { input.removeAttribute('aria-invalid'); input.removeAttribute('aria-describedby'); }
+    }
+    show(v == null);
+    return h('div', { class: 'row-wrap' }, h('label', { class: 'field', for: id }, label, input), err);
   }
 
   // ---------- print: the top-tube card ----------
@@ -833,6 +868,7 @@
         h('p', null, 'Finish ' + hm(p.finish)));
     }
     if (f && f.ok !== false) {
+      if (c.race && c.race.fuel === f && fuelStale(c.race)) kids.push(h('p', null, h('b', null, 'Fuel plan out of date. Update it before race day.')));
       kids.push(h('h3', null, 'Bike fuel · ' + f.bike.carbsPerHour + ' g/hr'),
         h('p', null, 'Sip ~' + f.bike.sipMl + ' ml every 15 min'),
         f.bike.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.bike.gelTimes))) : null,

@@ -512,7 +512,7 @@ details.test summary {
   color: var(--link);
   font-size: 13px;
   cursor: pointer;
-  min-height: 32px;
+  min-height: 44px;
   display: flex;
   align-items: center;
 }

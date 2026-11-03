@@ -53,16 +53,17 @@
     return Number(floorTo(Math.min(want, sweat), 0.05).toFixed(2));
   }
 
-  // Spread n doses evenly through a leg of `minutes`, on 5-minute marks, never in the last 10 minutes.
+  // Spread up to n doses evenly through a leg of `minutes`, on 5-minute marks from 0:05, never in
+  // the last 10 minutes. If n doses don't fit, it returns fewer: fewer doses only ever means fewer
+  // carbs, so the gut cap still holds.
   function spread(n, minutes) {
     var times = [];
     if (n <= 0) return times;
-    var gap = minutes / n;
-    for (var i = 0; i < n; i++) {
-      var t = roundTo(gap * (i + 0.5), 5);
-      t = clamp(t, 5, Math.max(5, minutes - 10));
-      if (times.length && t <= times[times.length - 1]) t = times[times.length - 1] + 5;
-      times.push(t);
+    var slots = Math.max(1, Math.floor((minutes - 10) / 5));
+    var k = Math.min(n, slots);
+    for (var i = 0; i < k; i++) {
+      var idx = Math.floor((i * slots) / k + slots / (2 * k));
+      times.push((idx + 1) * 5);
     }
     return times;
   }
@@ -78,8 +79,8 @@
     if (!between(input.runMin, 15, 300)) errs.push({ field: 'runMin', message: 'Enter a run time between 0:15 and 5:00.' });
     if (!between(input.gut, 0, 120)) errs.push({ field: 'gut', message: 'Enter the carbs your gut handles, 0 to 120 g an hour.' });
     if (input.sweat != null && !between(input.sweat, 0.2, 3)) errs.push({ field: 'sweat', message: 'Enter a sweat rate between 0.2 and 3 L an hour, or use a typical value.' });
-    if (!input.gel || !(isNum(input.gel.carbs) && input.gel.carbs > 0)) errs.push({ field: 'gel', message: 'Pick a gel or chew with its carbs per serve.' });
-    if (input.drink && !(between(input.drink.carbs, 0, 1000) && isNum(input.drink.serveMl) && input.drink.serveMl > 0)) errs.push({ field: 'drink', message: 'A drink needs its carbs and serve size in ml.' });
+    if (!input.gel || !(isNum(input.gel.carbs) && input.gel.carbs > 0) || !between(input.gel.sodium, 0, 5000)) errs.push({ field: 'gel', message: 'Pick a gel or chew with its carbs per serve.' });
+    if (input.drink && !(between(input.drink.carbs, 0, 1000) && between(input.drink.sodium, 0, 5000) && isNum(input.drink.serveMl) && input.drink.serveMl > 0)) errs.push({ field: 'drink', message: 'A drink needs its carbs and serve size in ml.' });
     return errs;
   }
 
@@ -120,13 +121,15 @@
       warnings.push('Your drink is strong enough to pass your carb limit on its own, so the plan makes ' +
         Math.round((1 - drinkShare) * 100) + '% of your bike fluid plain water.');
     }
-    var bikeGelCount = Math.max(0, Math.floor(((bikeTarget - drinkCarbsH) * bikeH) / gel.carbs + 1e-9));
-    var bikeGelTimes = spread(bikeGelCount, input.bikeMin);
+    var bikeWanted = Math.max(0, Math.floor(((bikeTarget - drinkCarbsH) * bikeH) / gel.carbs + 1e-9));
+    var bikeGelTimes = spread(bikeWanted, input.bikeMin);
+    var bikeGelCount = bikeGelTimes.length;
     var bikeCarbsH = drinkCarbsH + (bikeGelCount * gel.carbs) / bikeH;
     var bikeSodiumTarget = roundTo(clamp(bikeFluid * SODIUM_PER_L[heat], SODIUM_RANGE[0], SODIUM_RANGE[1]), 50);
     var bikeSodiumFrom = bikeFluid * drinkShare * drinkSodiumPerL + (bikeGelCount * gel.sodium) / bikeH;
     var bikeTotalL = bikeFluid * bikeH;
-    var sipMl = roundTo((bikeFluid * 1000) / 4, 25);
+    // Round the sip DOWN, so four sips an hour never pass the planned fluid or the sweat rate.
+    var sipMl = floorTo((bikeFluid * 1000) / 4, 25);
     var bottlesAtStart = Math.min(BOTTLES_ON_BIKE, Math.max(1, Math.ceil(bikeTotalL / BOTTLE_L - 1e-9)));
     var refills = Math.max(0, Math.ceil(bikeTotalL / BOTTLE_L - 1e-9) - bottlesAtStart);
 
@@ -134,8 +137,12 @@
     var runH = input.runMin / 60;
     var runTarget = Math.min(CARB_CEILING[d].run, gut);
     var runFluid = fluidFor('run', sweat);
-    var runGelCount = Math.max(0, Math.floor((runTarget * runH) / gel.carbs + 1e-9));
-    var runGelTimes = spread(runGelCount, input.runMin);
+    var runWanted = Math.max(0, Math.floor((runTarget * runH) / gel.carbs + 1e-9));
+    var runGelTimes = spread(runWanted, input.runMin);
+    var runGelCount = runGelTimes.length;
+    if (bikeGelCount < bikeWanted || runGelCount < runWanted) {
+      warnings.push('Your gel or chew serve is small, so it can’t be taken often enough to reach the target. The plan takes one every 5 minutes at most. A bigger serve would help.');
+    }
     var runCarbsH = (runGelCount * gel.carbs) / runH;
     var runSodiumTarget = roundTo(clamp(runFluid * SODIUM_PER_L[heat], SODIUM_RANGE[0], SODIUM_RANGE[1]), 50);
     var runSodiumFrom = (runGelCount * gel.sodium) / runH;

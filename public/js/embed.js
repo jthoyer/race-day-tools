@@ -68,7 +68,7 @@
           startPlan(function (S) {
             S.race.distance = st.distance;
             S.race.course = st.course;
-            S.fitness.mode = 'power';
+            // Carry the FTP in, but leave a heart-rate or effort user's chosen mode alone.
             if (ok) S.fitness.ftp = st.ftp;
           });
         }, 'Add your race date and we’ll set swim and run targets, a finish range and a fuel plan. Your FTP and course come with you.')));
@@ -94,6 +94,7 @@
       bike: el.getAttribute('data-bike') || '',
       run: el.getAttribute('data-run') || '',
       gut: el.getAttribute('data-gut') || '',
+      gutEdited: false,
       heat: el.getAttribute('data-heat') || 'warm'
     };
     var P = RD.fuel.DEFAULT_PRODUCTS;
@@ -111,7 +112,7 @@
       function inp(name, label, unit, key, mode) {
         return RD.ui.field({
           name: 'embed-' + name, label: label, unit: unit, inputmode: mode || 'numeric', value: st[key], placeholder: name === 'bike' ? '2:45' : name === 'run' ? '1:55' : '60',
-          oninput: function (e) { st[key] = e.target.value; update(e.target.id); }
+          oninput: function (e) { st[key] = e.target.value; if (key === 'gut') st.gutEdited = true; update(e.target.id); }
         });
       }
       el.appendChild(h('div', { class: 'stack' },
@@ -135,8 +136,9 @@
             S.race.distance = st.distance;
             S.race.heat = st.heat;
             S.race.splitsByHand = { bike: T.parseHM(st.bike), run: T.parseHM(st.run) };
+            // The guide's example gut figure never replaces one you saved; one you typed here does.
             var g = RD.ui.num(st.gut);
-            if (g != null) S.details.gut = g;
+            if (g != null && (st.gutEdited || S.details.gut == null)) S.details.gut = g;
           });
         }, 'Add your race date and we’ll time your plan to your splits, with your own gels and drink. Your numbers come with you.')));
     }

@@ -78,6 +78,10 @@
 
   function round5(n) { return Math.round(n / 5) * 5; }
 
+  // A range never collapses to one number (RD-05-A2): rounding can make both ends equal, so the
+  // top end is kept at least one step above the bottom.
+  function widen(r, step) { return [r[0], Math.max(r[1], r[0] + step)]; }
+
   // Bike power target. Shared by the full plan and the guide embed (F7), so both give the same answer.
   function bikeTarget(o) {
     var d = BIKE_IF[o.distance] ? o.distance : '70.3';
@@ -85,7 +89,7 @@
     var f = BIKE_IF[d][course];
     var cut = (o.heat === 'hot' ? HOT_IF_CUT : 0) + (o.ftpRecent === false ? OLD_TEST_IF_CUT : 0);
     var factor = [Number((f[0] - cut).toFixed(2)), Number((f[1] - cut).toFixed(2))];
-    return { factor: factor, watts: [round5(o.ftp * factor[0]), round5(o.ftp * factor[1])] };
+    return { factor: factor, watts: widen([round5(o.ftp * factor[0]), round5(o.ftp * factor[1])], 5) };
   }
 
   // Checks the inputs. Returns a list of { field, message }. Empty means good to go.
@@ -127,7 +131,7 @@
     // Swim
     var sf = SWIM_FACTOR[d];
     var swimPace = [input.css * sf[0], input.css * sf[1]];
-    var swimMin = [Math.round((swimPace[0] * legs.swim * 10) / 60), Math.round((swimPace[1] * legs.swim * 10) / 60)];
+    var swimMin = widen([Math.round((swimPace[0] * legs.swim * 10) / 60), Math.round((swimPace[1] * legs.swim * 10) / 60)], 1);
     why.push({ leg: 'Swim', text: 'a little slower than your CSS of ' + fmt(input.css) + ', for open water and a steady start.' });
 
     // Bike
@@ -139,10 +143,10 @@
       bike.watts = bt.watts;
       var vFast = bikeSpeed(bike.watts[1], input.weight);
       var vSlow = bikeSpeed(bike.watts[0], input.weight);
-      bikeMin = [
+      bikeMin = widen([
         Math.round(((legs.bike * 1000) / vFast / 60) * COURSE_TIME[course]),
         Math.round(((legs.bike * 1000) / vSlow / 60) * COURSE_TIME[course])
-      ];
+      ], 1);
       why.push({
         leg: 'Bike',
         text: Math.round(f[0] * 100) + '–' + Math.round(f[1] * 100) + '% of your FTP of ' + input.ftp + ' W, a typical range for ' +
@@ -152,13 +156,13 @@
     } else {
       var sp = SPEED_FACTOR[d];
       var kmh = [input.steadySpeed * sp[1], input.steadySpeed * sp[0]];
-      bikeMin = [
+      bikeMin = widen([
         Math.round((legs.bike / kmh[0]) * 60 * COURSE_TIME[course]),
         Math.round((legs.bike / kmh[1]) * 60 * COURSE_TIME[course])
-      ];
+      ], 1);
       if (mode === 'hr') {
         var bh = BIKE_HR[d];
-        bike.hr = [Math.round(input.bikeLthr * bh[0]), Math.round(input.bikeLthr * bh[1])];
+        bike.hr = widen([Math.round(input.bikeLthr * bh[0]), Math.round(input.bikeLthr * bh[1])], 1);
         why.push({ leg: 'Bike', text: Math.round(bh[0] * 100) + '–' + Math.round(bh[1] * 100) + '% of your bike threshold heart rate of ' + input.bikeLthr + '. Times come from your hard long-ride speed.' });
       } else {
         why.push({ leg: 'Bike', text: 'an effort you can hold for the whole ride. Times come from your hard long-ride speed.' });
@@ -169,11 +173,11 @@
     // Run
     var rf = RUN_FACTOR[d];
     var rh = RUN_HEAT[heat];
-    var runPace = [round5(input.runThreshold * rf[0] * rh), round5(input.runThreshold * rf[1] * rh)];
-    var runMin = [Math.round((runPace[0] * legs.run) / 60), Math.round((runPace[1] * legs.run) / 60)];
+    var runPace = widen([round5(input.runThreshold * rf[0] * rh), round5(input.runThreshold * rf[1] * rh)], 5);
+    var runMin = widen([Math.round((runPace[0] * legs.run) / 60), Math.round((runPace[1] * legs.run) / 60)], 1);
     var run = { pace: runPace, hr: null, effort: EFFORT[d].run };
     if (mode === 'hr') {
-      run.hr = [Math.round(input.runLthr * RUN_HR[d][0]), Math.round(input.runLthr * RUN_HR[d][1])];
+      run.hr = widen([Math.round(input.runLthr * RUN_HR[d][0]), Math.round(input.runLthr * RUN_HR[d][1])], 1);
     }
     why.push({
       leg: 'Run',

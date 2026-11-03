@@ -12,21 +12,30 @@
     return {
       details: { weight: null, sweat: null, sweatTypical: true, gut: null },
       fitness: { mode: 'power', css: null, ftp: null, ftpRecent: true, runThreshold: null, bikeLthr: null, runLthr: null, steadySpeed: null },
-      race: null, // { name, distance, date, start, course, heat, pace, fuel, splits }
+      race: null, // { name, distance, date, start, course, heat, pace, fuel, splits, splitsByHand }
+      solo: null, // the fuel tool used with no race: { distance, bikeMin, runMin, heat }
       products: null, // null means the typical defaults
       choice: { gel: 'gel', drink: 'drink' }
     };
   }
 
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+  // Takes saved values only where their shape matches the defaults, so a damaged or old save can't
+  // crash the app. Objects merge key by key; race must be an object; products must be a list.
   function merge(base, saved) {
-    if (!saved || typeof saved !== 'object') return base;
+    if (!isObj(saved)) return base;
     Object.keys(base).forEach(function (k) {
       if (!(k in saved)) return;
       var b = base[k];
       var v = saved[k];
-      if (b && typeof b === 'object' && !Array.isArray(b) && v && typeof v === 'object' && !Array.isArray(v)) {
-        base[k] = merge(b, v);
-      } else {
+      if (isObj(b)) {
+        if (isObj(v)) base[k] = merge(b, v);
+      } else if (k === 'race' || k === 'solo') {
+        base[k] = isObj(v) ? v : null;
+      } else if (k === 'products') {
+        base[k] = Array.isArray(v) ? v.filter(isObj) : null;
+      } else if (v === null || typeof v !== 'object') {
         base[k] = v;
       }
     });
@@ -71,4 +80,4 @@
   var api = { KEY: KEY, blank: blank, load: load, save: save, reset: reset };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else { root.RD = root.RD || {}; root.RD.store = api; }
-})(this);
+})(typeof window !== "undefined" ? window : globalThis);

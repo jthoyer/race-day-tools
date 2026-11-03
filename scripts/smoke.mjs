@@ -141,6 +141,18 @@ await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
 check(/2 of 4 done/.test(await page.locator('.app').innerText()), 'Home shows 2 of 4 done');
 await shot('a1-home');
 
+// Lower the gut figure after saving fuel: the card must say the fuel plan is out of date
+await page.goto(base + '/index.html#/setup/2');
+await page.getByLabel('Carbs your gut handles').fill('50');
+await page.goto(base + '/index.html#/card');
+check(/changed since this plan/.test(await page.locator('.racecard').innerText()), 'Card flags fuel as out of date after a details change');
+await page.goto(base + '/index.html#/fuel');
+await page.getByRole('button', { name: 'Update my race card' }).click();
+await page.locator('.racecard').waitFor();
+const updated = await page.locator('.racecard').innerText();
+const bikeG = Number((/Bike (\d+) g\/hr/.exec(updated) || [])[1]);
+check(!/changed since this plan/.test(updated) && bikeG > 0 && bikeG <= 50, `Updating fuel clears the flag and keeps under the new gut figure (${bikeG} g/hr)`);
+
 // Products: add one, it appears in the fuel step
 await page.goto(base + '/index.html#/products');
 await page.getByRole('button', { name: 'Add a product' }).click();

@@ -17,7 +17,7 @@ Each is checkable. The tests that cover each one are named.
 5. **The numbers add up (RP-05-W2).** The finish range is exactly the sum of the displayed leg minutes and changeovers. (`pace.test.js`)
 6. **Blueprint worked example.** 70.3, FTP 240 W, CSS 1:45, run threshold 4:50 /km, 72 kg, rolling, warm gives a bike target of 175–185 W and a run of 5:15–5:30 /km. (`pace.test.js`; smoke test F5)
 7. **"How we got these" (RP-05-E3)** is open by default on F5.
-8. **Pace feeds fuel (RD-05-A1, RP-06-A2).** Saving F5 writes targets to the race card and opens Fuel with the bike and run times filled in. A later pace change marks a saved fuel plan stale. (smoke test)
+8. **Pace feeds fuel (RD-05-A1, RP-06-A2).** Saving F5 writes targets to the race card and shows F6, whose "Plan my fuel" opens Fuel with the bike and run times filled in. A saved fuel plan is marked out of date when anything it was made from changes: splits, details, products or heat. (smoke test)
 9. **Gut cap (RD-02-A1, RP-02-A2).** Planned carbs per hour, drink and gels together, never pass the gut figure on any leg, for any product. A drink too strong on its own is diluted with water, with a warning. (`fuel.test.js`)
 10. **Fluid cap (RD-02-W1).** Planned fluid never passes the sweat rate. (`fuel.test.js`)
 11. **Own products (RD-02-A3).** People can add, edit and remove gels, chews and drinks. Typical defaults are generic, with no brand names. (smoke test)
