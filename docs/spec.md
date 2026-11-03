@@ -11,7 +11,7 @@ One static web app that holds the first two race-day tools, the Pacing Planner a
 Each is checkable. The tests that cover each one are named.
 
 1. **Static and on-device.** `public/` runs from any static server with no build step. No accounts, no server calls, no analytics. State lives in `localStorage` under one key. Every storage read and write survives storage being blocked. (`store.js`; smoke test reload check)
-2. **Set-up flow F1–F5** follows the blueprint: F1 race, distance, date, start time, days to go and taper start; F2 weight, sweat rate (or typical), gut tolerance; F3 Power / Heart rate / Effort with CSS, FTP (and when tested), run threshold; F4 course and heat; F5 targets. (smoke test)
+2. **Set-up flow F1–F5** follows the blueprint: F1 race, distance, date, an optional start time, an optional transition opening time, days to go and taper start; F2 weight, sweat rate (or typical), gut tolerance; F3 Power / Heart rate / Effort with CSS, FTP (and when tested), run threshold; F4 course and heat; F5 targets. (smoke test)
 3. **Plausible inputs only (RP-03-A1).** Next refuses out-of-range or unreadable numbers, with a message by the field. A blank field is never read as zero. (`pace.test.js` "implausible numbers"; `fuel.test.js` "blank gut figure"; smoke test F2)
 4. **A range, never one time (RD-05-A2).** Every leg time and the finish are ranges. (`pace.test.js` "legs always add up")
 5. **The numbers add up (RP-05-W2).** The finish range is exactly the sum of the displayed leg minutes and changeovers. (`pace.test.js`)
@@ -24,8 +24,9 @@ Each is checkable. The tests that cover each one are named.
 12. **Not medical advice (RD-02-A2)** appears beside every plan, on the card and on the print.
 13. **Guide embeds (RD-02-A4, F7, RP-07).** A guide page runs one step on its own with no race set up. "Save to a race plan" starts a plan and carries the guide's numbers in. (smoke test)
 14. **Printable top-tube card (RD-07-A2).** Print shows only a card about 7 cm wide with pace targets and fuel times. (smoke test)
-15. **Phone first.** No sideways scroll at 390 px. Tap targets at least 44 px. Text goes into the page as text, never as HTML.
+15. **Phone first.** No sideways scroll at 390 px. Tap targets at least 44 px. Text goes into the page as text, never as HTML. The date and start time fields on the first set-up screen sit side by side inside the page with a gap at 390, 360 and 320 px (smoke test, which runs in Chromium only; the original overflow was seen in iOS Safari and needs a check on a phone).
 16. **Blank card start (decided 4 Nov 2026).** The first screen is an empty race card. Its band says "Name your race", empty parts have a dashed outline, and "Start my race card" and "Just plan my fuel" sit under it. A race with no name, date, pace or fuel shows the same screen, so Cancel on step 1 returns to it. The guides sit below as gallery cards: one column on a phone, two across when there is room, each at least 44 px high, each tagged Draft while its ranges are unchecked. (smoke test)
+17. **Optional race times (RD-019, decided 4 Nov 2026).** Start time and Transition opens are both optional and start blank. A blank time is never read as midnight, and 00:00 is a real time. When both are set, the transition opens before the start. If not, a message shows by the field, the entry is not saved and Next stays put. Each time can be cleared. A time shows on the home screen, the race card and the print card only when it is set, and never as a label with nothing after it. (`time.test.js`; smoke test)
 
 ## Out of scope
 

@@ -12,7 +12,7 @@
     return {
       details: { weight: null, sweat: null, sweatTypical: true, gut: null },
       fitness: { mode: 'power', css: null, ftp: null, ftpRecent: true, runThreshold: null, bikeLthr: null, runLthr: null, steadySpeed: null },
-      race: null, // { name, distance, date, start, course, heat, pace, fuel, splits, splitsByHand }
+      race: null, // { name, distance, date, start, transitionOpens, course, heat, pace, fuel, splits, splitsByHand }
       solo: null, // the fuel tool used with no race: { distance, bikeMin, runMin, heat }
       products: null, // null means the typical defaults
       choice: { gel: 'gel', drink: 'drink' }

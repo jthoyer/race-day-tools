@@ -55,6 +55,16 @@
     var hr = Number(m[1]);
     return (hr % 12 || 12) + ':' + m[2] + (hr < 12 ? 'am' : 'pm');
   }
+  // "7:00am start", "Transition opens 6:00am". A time that is blank or unreadable is left out,
+  // so a label never shows on its own with nothing after it. "00:00" is a real time: "12:00am".
+  function timeParts(r) {
+    var parts = [];
+    var s = startText(r.start);
+    if (s) parts.push(s + ' start');
+    var o = startText(r.transitionOpens);
+    if (o) parts.push('Transition opens ' + o);
+    return parts;
+  }
   function daysText(n) {
     if (n == null) return '';
     if (n > 1) return n + ' days to go';
@@ -104,6 +114,11 @@
       error: errors[path],
       oninput: function (e) {
         var text = e.target.value;
+        // opts.validate(text) returns a message when the entry breaks a rule with another field.
+        // The entry stays on screen with the message and is not saved, so a bad pair never reaches the card.
+        var bad = opts.validate ? opts.validate(text) : '';
+        if (bad) { raw[path] = text; errors[path] = bad; if (opts.live) opts.live(); return; }
+        if (opts.validate) delete errors[path];
         var parsed = kind === 'num' ? RD.ui.num(text)
           : kind === 'clock' ? T.parseClock(text)
             : kind === 'hm' ? T.parseHM(text)
@@ -292,7 +307,7 @@
       h('section', { class: 'hero' },
         h('p', { class: 'k' }, 'YOUR NEXT RACE'),
         h('h1', { tabindex: '-1' }, raceTitle(r)),
-        h('p', null, [longDate(r.date), r.start ? startText(r.start) + ' start' : ''].filter(Boolean).join(' · ') || 'No date yet'),
+        h('p', null, [longDate(r.date)].concat(timeParts(r)).filter(Boolean).join(' · ') || 'No date yet'),
         h('div', { class: 'meta' },
           days != null ? h('span', { class: 'chip' }, daysText(days)) : h('span'),
           h('a', { href: '#/setup/1' }, 'Change race'))),
@@ -325,7 +340,7 @@
 
   function ensureRace() {
     if (!S.race) {
-      S.race = { name: '', distance: '70.3', date: '', start: '07:00', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
+      S.race = { name: '', distance: '70.3', date: '', start: '', transitionOpens: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
       commit();
     }
     return S.race;
@@ -351,7 +366,24 @@
     };
   }
 
+  // A small button that empties an optional time. The saved value becomes blank, never midnight.
+  function clearTime(path, label) {
+    return h('button', {
+      type: 'button', class: 'back', style: 'color:var(--link)',
+      onclick: function () { delete raw[path]; delete errors[path]; set(path, ''); refresh(); }
+    }, label);
+  }
+
   function setupRace(r) {
+    // Re-draw only when the Clear buttons or an error appear or go. Re-drawing on every keystroke
+    // would drop a person out of the time field they are typing in.
+    var clearShown = !!(r.start || r.transitionOpens);
+    var errShown = !!(errors['race.start'] || errors['race.transitionOpens']);
+    function timesChanged() {
+      var clearNow = !!(r.start || r.transitionOpens);
+      var errNow = !!(errors['race.start'] || errors['race.transitionOpens']);
+      if (clearNow !== clearShown || errNow !== errShown) refresh();
+    }
     var days = T.daysUntil(r.date);
     var taper = r.date ? T.addDays(r.date, -(TAPER_DAYS[r.distance] || 14)) : null;
     var taperLine = null;
@@ -364,7 +396,7 @@
             : 'You are in your taper. It started ' + taperDay + '.';
     }
     return h('div', { class: 'stack' },
-      title('Which race?', 'Every step works back from the race date and start time.'),
+      title('Which race?', 'Add the date to see your days to go and when your taper starts. The times are optional.'),
       bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3' }),
       h('section', { class: 'card' },
         h('p', { class: 'label' }, 'Distance'),
@@ -373,14 +405,32 @@
         h('p', { class: 'help' }, legsText(r.distance))),
       h('div', { class: 'two' },
         bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
-        bound('race.start', 'text', { label: 'Start time', type: 'time' })),
+        bound('race.start', 'text', {
+          label: 'Start time (optional)', type: 'time', live: timesChanged,
+          validate: function (t) { return T.raceTimesError(t, r.transitionOpens); }
+        })),
       // A date field shows nothing at all on some phones while it is empty, so say what to do.
       r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.'),
+      bound('race.transitionOpens', 'text', {
+        label: 'Transition opens (optional)', type: 'time', live: timesChanged,
+        validate: function (t) { return T.raceTimesError(r.start, t); }
+      }),
+      // A phone's time picker may have no way to empty a time that is set, so give one.
+      r.start || r.transitionOpens ? h('div', { style: 'display:flex;flex-wrap:wrap;gap:0 18px' },
+        r.start ? clearTime('race.start', 'Clear start time') : null,
+        r.transitionOpens ? clearTime('race.transitionOpens', 'Clear transition time') : null) : null,
       taperLine ? h('section', { class: 'countdown' },
         h('div', { style: 'flex:1' }, h('p', { class: 'k' }, 'COUNTDOWN'), h('p', { class: 'v' }, daysText(days))),
         h('p', { class: 'n' }, taperLine)) : null,
       h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn', onclick: next(1, function () { if (!r.name) set('race.name', 'My race'); return {}; }) }, 'Next: about you'),
+        h('button', { type: 'button', class: 'btn', onclick: next(1, function () {
+          // An entry held back by the order check is not saved, so it must be fixed before moving on.
+          var e = {};
+          ['race.start', 'race.transitionOpens'].forEach(function (p) { if (unreadable(p)) e[p] = T.RACE_TIMES_MESSAGE; });
+          if (Object.keys(e).length) return e;
+          if (!r.name) set('race.name', 'My race');
+          return e;
+        }) }, 'Next: about you'),
         h('p', { class: 'small center' }, 'Saved on this phone as you go. No account.')));
   }
 
@@ -606,7 +656,7 @@
           h('span', null, d ? d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase() : '')),
         h('div', { style: 'flex:1;min-width:0' },
           h('h1', { tabindex: '-1' }, raceTitle(r)),
-          h('p', null, [r.start ? startText(r.start) + ' start' : '', daysText(days)].filter(Boolean).join(' · ')))),
+          h('p', null, timeParts(r).concat(daysText(days)).filter(Boolean).join(' · ')))),
       paceSec,
       fuelSec);
   }
@@ -758,7 +808,7 @@
       saveBtn = h('button', {
         type: 'button', class: 'btn', onclick: function () {
           S.race = {
-            name: '', distance: S.solo.distance, date: '', start: '07:00', course: 'rolling', heat: S.solo.heat,
+            name: '', distance: S.solo.distance, date: '', start: '', transitionOpens: '', course: 'rolling', heat: S.solo.heat,
             pace: null, fuel: plan, splits: null, splitsByHand: { bike: S.solo.bikeMin, run: S.solo.runMin }
           };
           commit(); go('setup/1');
@@ -895,7 +945,8 @@
     var p = c.pace;
     var f = c.fuel;
     var kids = [h('h2', null, raceTitle(r)),
-      r.date ? h('p', null, longDate(r.date) + (r.start ? ' · ' + startText(r.start) : '')) : null];
+      r.date ? h('p', null, longDate(r.date) + (startText(r.start) ? ' · ' + startText(r.start) : '')) : null,
+      startText(r.transitionOpens) ? h('p', null, 'Transition opens ' + startText(r.transitionOpens)) : null];
     if (p) {
       kids.push(h('h3', null, 'Pace'),
         h('p', null, 'Swim ', h('span', { class: 'big' }, pace(p.swim.pace)), ' /100m'),

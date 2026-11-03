@@ -94,6 +94,14 @@ const d = new Date(Date.now() + 20 * 86400000);
 const iso = d.toISOString().slice(0, 10);
 await page.getByLabel('Race date').fill(iso);
 await page.getByLabel('Start time').fill('06:40');
+// Transition opening is optional, and it must come before the start. A bad pair is not saved.
+await page.getByLabel('Transition opens').fill('07:30');
+check(await page.getByText('Transition should open before the race starts.').isVisible(), 'F1 refuses a transition that opens after the start');
+await page.getByRole('button', { name: 'Next: about you' }).click();
+check(await page.getByRole('heading', { name: 'Which race?' }).isVisible(), 'F1 does not move on with the times in the wrong order');
+await page.getByLabel('Transition opens').fill('05:30');
+check(!(await page.getByText('Transition should open before the race starts.').isVisible()), 'F1 accepts a transition that opens before the start');
+check(await page.getByRole('button', { name: 'Clear transition time' }).isVisible(), 'F1 offers to clear a time that is set');
 check(await page.getByText('Swim 1.9 km · Bike 90 km · Run 21.1 km').isVisible(), 'F1 shows the 70.3 leg distances');
 check(await page.getByText(/days to go/).first().isVisible(), 'F1 shows days to go');
 // The date and time fields sit side by side. They must stay inside the page, with a gap between them,
@@ -168,6 +176,7 @@ await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
+check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
 await shot('c1-card');
 
 // Print view
@@ -176,6 +185,7 @@ await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
 const tt = await page.locator('.tt').textContent();
 check(/Bike fuel/.test(tt) && /175–185 W/.test(tt), 'Print card has pace and fuel');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
+check(/Transition opens 5:30am/.test(tt), 'Print card shows when the transition opens');
 await shot('print');
 await page.emulateMedia({ media: 'screen' });
 
@@ -203,6 +213,21 @@ await page.locator('.racecard').waitFor();
 const updated = await page.locator('.racecard').innerText();
 const bikeG = Number((/Bike (\d+) g\/hr/.exec(updated) || [])[1]);
 check(!/changed since this plan/.test(updated) && bikeG > 0 && bikeG <= 50, `Updating fuel clears the flag and keeps under the new gut figure (${bikeG} g/hr)`);
+
+// Both times are optional. Clearing them saves blanks, never midnight, and the plan still shows.
+await page.goto(base + '/index.html#/setup/1');
+await page.getByRole('button', { name: 'Clear start time' }).click();
+await page.getByRole('button', { name: 'Clear transition time' }).click();
+const blanks = await page.evaluate(() => { const r = JSON.parse(localStorage.getItem('race-day-tools.v1')).race; return [r.start, r.transitionOpens]; });
+check(blanks[0] === '' && blanks[1] === '', 'Clearing the times saves blanks');
+await page.goto(base + '/index.html#/card');
+const noTimes = await page.locator('.racecard').innerText();
+check(!/\d:\d\d(am|pm) start|Transition opens/.test(noTimes) && /175–185/.test(noTimes), 'A race with no times still shows its plan, and no time text');
+// Midnight is a real time and not the same as blank.
+await page.goto(base + '/index.html#/setup/1');
+await page.getByLabel('Start time').fill('00:00');
+await page.goto(base + '/index.html#/card');
+check(/12:00am start/.test(await page.locator('.racecard').innerText()), 'A midnight start shows as 12:00am and not as blank');
 
 // Products: add one, it appears in the fuel step
 await page.goto(base + '/index.html#/products');

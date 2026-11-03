@@ -17,7 +17,7 @@
   function startPlan(apply) {
     var S = RD.store.load();
     if (S.race && !root.confirm('You already have a race plan on this phone. Replace it with a new one? Your details stay.')) return;
-    S.race = { name: '', distance: '70.3', date: '', start: '07:00', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
+    S.race = { name: '', distance: '70.3', date: '', start: '', transitionOpens: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
     apply(S);
     if (!RD.store.save(S) && !root.confirm('This browser is blocking storage, so your numbers can’t be kept. Open the planner anyway?')) return;
     root.location.href = APP + '#/setup/1';
