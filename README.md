@@ -23,6 +23,36 @@ npm run smoke        # walks the whole journey in Chromium at phone size (needs 
 
 Set `SHOTS=some/dir` before `npm run smoke` to save a screenshot of every screen.
 
+## Look
+
+The app uses the same design tokens as the Balance Tri Club apps, so it feels familiar to club members. It shares only the look: no sign-in, data or club branding. The tokens live in `public/css/app.css`.
+
+| Token | Value | Use |
+| --- | --- | --- |
+| Ink | `#182542` | Text and dark surfaces |
+| Yellow | `#f8c44f` | The one primary button on a screen |
+| Text blue | `#0070a8` | Links. Never use the club's brand blue `#00a3e0` for text on white: it fails contrast at 2.9:1 |
+| Muted | `#566177` | Secondary text |
+| Line | `#d9dfe8` | Borders |
+| Canvas | `#f7f8fa` | Page background |
+| Green | `#116b43` | Done, and the race card band |
+
+- DM Sans for body and controls, Outfit for headings and the wordmark, both from Google Fonts.
+- A 9 px corner radius on buttons, inputs and cards.
+- Controls at least 44 px high and wide.
+- One yellow action per screen; secondary actions are grey or outlined.
+- Phone first, and light only.
+
+## Hosting
+
+Not decided yet (D4). `public/_headers` already holds the security headers and a content policy in the format Cloudflare and Netlify read; `connect-src 'none'` means the page can make no network request. If it goes on Cloudflare like the club apps, the club's pattern is a project linked to this repo, an empty build command and only `public/` published.
+
+To fill in: the host, the domain, and who owns the account.
+
+## Contributing
+
+Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUTING.md](CONTRIBUTING.md). Agents also follow [AGENTS.md](AGENTS.md).
+
 ## How it fits together
 
 | File | What it does |
@@ -36,6 +66,7 @@ Set `SHOTS=some/dir` before `npm run smoke` to save a screenshot of every screen
 | `public/js/app.js` | The screens: home, set-up F1–F5, saved F6, fuel A2, race card C1, products, print. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race fuel. |
+| `public/_headers` | Security headers and the content policy. |
 | `tests/` | Unit tests (`node --test`). |
 | `scripts/smoke.mjs` | Browser smoke test. |
 
