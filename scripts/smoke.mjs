@@ -87,6 +87,7 @@ await page.getByRole('heading', { name: 'Name your race' }).waitFor();
 check(await page.locator('.racecard.blank').isVisible(), 'Cancelling step 1 leaves the blank card');
 await page.getByRole('link', { name: 'Start my race card' }).click();
 await page.getByRole('heading', { name: 'Which race?' }).waitFor();
+check(await page.getByText('Tap the date to choose it.').isVisible(), 'F1 says what to do with an empty date');
 await page.getByLabel('Race name').fill('Spring 70.3');
 await page.getByRole('button', { name: '70.3' }).click();
 const d = new Date(Date.now() + 20 * 86400000);
@@ -95,6 +96,18 @@ await page.getByLabel('Race date').fill(iso);
 await page.getByLabel('Start time').fill('06:40');
 check(await page.getByText('Swim 1.9 km · Bike 90 km · Run 21.1 km').isVisible(), 'F1 shows the 70.3 leg distances');
 check(await page.getByText(/days to go/).first().isVisible(), 'F1 shows days to go');
+// The date and time fields sit side by side. They must stay inside the page, with a gap between them,
+// at phone widths. The bug was seen in iOS Safari and this runs in Chromium, so it guards the layout only.
+for (const w of [390, 360, 320]) {
+  await page.setViewportSize({ width: w, height: 844 });
+  const box = await page.evaluate(() => {
+    const a = document.querySelector('input[type=date]').getBoundingClientRect();
+    const b = document.querySelector('input[type=time]').getBoundingClientRect();
+    return { aRight: a.right, bLeft: b.left, bRight: b.right, w: document.documentElement.clientWidth, sw: document.documentElement.scrollWidth };
+  });
+  check(box.bRight <= box.w && box.bLeft - box.aRight >= 8 && box.sw <= w, `F1 date and time fields fit, with a gap, at ${w}px`);
+}
+await page.setViewportSize({ width: 390, height: 844 });
 await shot('f1');
 await noHorizontalScroll('F1');
 await page.getByRole('button', { name: 'Next: about you' }).click();

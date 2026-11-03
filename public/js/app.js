@@ -374,6 +374,8 @@
       h('div', { class: 'two' },
         bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
         bound('race.start', 'text', { label: 'Start time', type: 'time' })),
+      // A date field shows nothing at all on some phones while it is empty, so say what to do.
+      r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.'),
       taperLine ? h('section', { class: 'countdown' },
         h('div', { style: 'flex:1' }, h('p', { class: 'k' }, 'COUNTDOWN'), h('p', { class: 'v' }, daysText(days))),
         h('p', { class: 'n' }, taperLine)) : null,
