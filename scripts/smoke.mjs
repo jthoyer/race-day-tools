@@ -146,6 +146,7 @@ await page.emulateMedia({ media: 'print' });
 await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
 const tt = await page.locator('.tt').textContent();
 check(/Bike fuel/.test(tt) && /175–185 W/.test(tt), 'Print card has pace and fuel');
+check(/Gel \(typical\)/.test(tt) && /Sports drink \(typical\)/.test(tt) && /mg/.test(tt), 'Print card names the gel and the drink and shows sodium in mg');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
 await shot('print');
 await page.emulateMedia({ media: 'screen' });
