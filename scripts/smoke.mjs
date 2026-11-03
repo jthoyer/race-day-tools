@@ -62,15 +62,30 @@ async function noHorizontalScroll(where) {
 
 // Home, empty
 await page.goto(base + '/index.html');
-await page.getByRole('heading', { name: 'Plan your race day' }).waitFor();
+await page.getByRole('heading', { name: 'Name your race' }).waitFor();
 await shot('home-empty');
+const blankText = await page.locator('.app').innerText();
+check(await page.locator('.racecard.blank').isVisible(), 'First screen is a blank race card');
+check(!/Countdown|Debrief|Coming later/.test(blankText), 'Blank card hides Countdown and Debrief');
+check(await page.getByRole('link', { name: 'Just plan my fuel' }).isVisible(), 'First screen keeps "Just plan my fuel"');
+const gcards = page.locator('a.gcard');
+check((await gcards.count()) === 2, 'Guides show as two gallery cards');
+check(JSON.stringify(await gcards.evaluateAll((els) => els.map((e) => e.getAttribute('href')))) === '["guides/race-fuel.html","guides/bike-pacing.html"]', 'Gallery cards link to both guides');
+check((await gcards.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'Gallery cards are at least 44 px high');
+check(/Draft/.test(await gcards.first().innerText()), 'Gallery cards say Draft while the guides are unchecked');
 // The probe is expected to be refused; its console errors are dropped at the end by its unique address.
 const sent = await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false));
 check(sent === false, 'Content policy blocks every network request (connect-src none)');
 await noHorizontalScroll('home');
 
 // F1 Which race?
-await page.getByRole('link', { name: 'Start a race plan' }).click();
+await page.getByRole('link', { name: 'Start my race card' }).click();
+await page.getByRole('heading', { name: 'Which race?' }).waitFor();
+// Cancelling step 1 leaves a race with no name, date or plan. That is still the blank card.
+await page.getByRole('link', { name: 'Cancel' }).click();
+await page.getByRole('heading', { name: 'Name your race' }).waitFor();
+check(await page.locator('.racecard.blank').isVisible(), 'Cancelling step 1 leaves the blank card');
+await page.getByRole('link', { name: 'Start my race card' }).click();
 await page.getByRole('heading', { name: 'Which race?' }).waitFor();
 await page.getByLabel('Race name').fill('Spring 70.3');
 await page.getByRole('button', { name: '70.3' }).click();
@@ -139,6 +154,7 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
+check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 await shot('c1-card');
 
 // Print view
@@ -158,7 +174,9 @@ check(/175–185/.test(await page.locator('.racecard').innerText()), 'Race card 
 // Home with a race
 await page.goto(base + '/index.html#/');
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
-check(/2 of 4 done/.test(await page.locator('.app').innerText()), 'Home shows 2 of 4 done');
+const homeText = await page.locator('.app').innerText();
+check(/2 of 2 done/.test(homeText), 'Home shows 2 of 2 done');
+check(!/Countdown|Debrief|Later/.test(homeText), 'Home hides Countdown and Debrief until they exist');
 await shot('a1-home');
 
 // Lower the gut figure after saving fuel: the card must say the fuel plan is out of date

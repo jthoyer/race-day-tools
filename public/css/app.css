@@ -191,8 +191,8 @@ h2 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
-.segs.four {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.segs.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .seg {
   height: 6px;
@@ -654,7 +654,7 @@ details.test p {
 }
 .stepnav {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 .stepnav a,
@@ -846,6 +846,74 @@ details.test p {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* Guides gallery on the first screen: one tappable card per guide. */
+.gallery {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+.gcard {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-height: 44px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--ink);
+  text-decoration: none;
+}
+.gcard:hover {
+  border-color: var(--pick);
+  background: var(--pick-bg);
+}
+.gtop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gtitle {
+  font: 600 17px/1.25 var(--display);
+  overflow-wrap: anywhere;
+}
+.gsum {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Blank race card: the first screen. Empty parts get a dashed outline. */
+.racecard.blank .band {
+  background: var(--seg-bg);
+  color: var(--ink);
+}
+.racecard.blank .date {
+  border-right-color: var(--field);
+}
+.racecard.blank .date span,
+.racecard.blank .band p {
+  color: var(--muted);
+}
+.racecard.blank h1 {
+  color: var(--ink);
+}
+.stat.ph {
+  background: transparent;
+  border: 1px dashed var(--field);
+}
+.stat.ph b {
+  color: var(--muted);
+}
+.ph-line {
+  border: 1px dashed var(--field);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 14px;
 }
 
 /* Guides: an article with the tool inside it (F7) */

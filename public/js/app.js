@@ -200,22 +200,65 @@
 
   // ---------- home (A1) ----------
 
+  // A race with no name, date, pace or fuel is the same as no race: show the blank card.
+  // (Opening step 1 and then pressing Cancel leaves such a race behind.)
+  function isBlankRace(r) { return !r || (!r.name && !r.date && !r.pace && !r.fuel); }
+
+  // The first screen is an empty race card. Each step fills in one part of it.
+  // Empty parts have a dashed outline so a person can see what is still to do.
+  function blankCard() {
+    function ph(name, unit) {
+      return h('div', { class: 'stat ph' }, h('span', null, name), h('b', null, '–'), h('span', null, unit || ' '));
+    }
+    return h('article', { class: 'racecard blank' },
+      h('div', { class: 'band' },
+        h('div', { class: 'date', 'aria-hidden': 'true' }, h('strong', null, '–'), h('span', null, ' ')),
+        h('div', { style: 'flex:1;min-width:0' },
+          h('h1', { tabindex: '-1' }, 'Name your race'),
+          h('p', null, 'Add your race to begin'))),
+      h('section', { class: 'sec' },
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'),
+          h('a', { href: '#/setup/1', 'aria-label': 'Set up pace' }, 'Set up')),
+        h('div', { class: 'stats', 'aria-hidden': 'true' }, ph('Swim', '/100m'), ph('Bike'), ph('Run', '/km')),
+        h('p', { 'aria-hidden': 'true' }, 'Finish ', h('b', null, '–'))),
+      h('section', { class: 'sec' },
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('span', { class: 'later' }, 'After pace')),
+        h('div', { class: 'ph-line' }, 'Carbs, fluid and sodium per leg')));
+  }
+
+  // The guides on the first screen. A new guide is one more entry here. Both are drafts: their
+  // ranges are not yet checked against sources, so each card says so (see the draft note on the page).
+  var GUIDES = [
+    { href: 'guides/race-fuel.html', topic: 'Fuelling', draft: true,
+      title: 'How many gels for a 70.3?',
+      summary: 'Gel times for the bike and run, capped at what your gut has trained.' },
+    { href: 'guides/bike-pacing.html', topic: 'Bike pacing', draft: true,
+      title: 'How hard should you ride a 70.3 bike?',
+      summary: 'Your bike power target, from your FTP and the course.' }
+  ];
+
+  // One tappable card per guide. One column on a phone, two across when there is room.
+  function guidesGallery() {
+    return h('section', { class: 'stack', 'aria-label': 'Guides' },
+      h('p', { class: 'label' }, 'Guides'),
+      h('div', { class: 'gallery' }, GUIDES.map(function (g) {
+        return h('a', { class: 'gcard', href: g.href },
+          h('span', { class: 'gtop' }, h('span', { class: 'label' }, g.topic), g.draft ? h('span', { class: 'tag' }, 'Draft') : null),
+          h('span', { class: 'gtitle' }, g.title),
+          h('span', { class: 'gsum' }, g.summary));
+      })));
+  }
+
   function home() {
     var r = S.race;
-    if (!r) {
+    if (isBlankRace(r)) {
       return h('div', { class: 'app' },
         topBar(brandLink(), null),
-        h('section', { class: 'hero' },
-          h('p', { class: 'k' }, 'STANDARD AND 70.3 TRIATHLON'),
-          h('h1', { tabindex: '-1' }, 'Plan your race day'),
-          h('p', null, 'Pace targets for each leg and a timed fuel plan, on one race card you can print for your top tube.')),
-        h('div', { class: 'actions' },
-          h('a', { class: 'btn', href: '#/setup/1' }, 'Start a race plan'),
+        blankCard(),
+        h('div', { class: 'actions', style: 'margin-top:0' },
+          h('a', { class: 'btn', href: '#/setup/1' }, 'Start my race card'),
           h('a', { class: 'btn second', href: '#/fuel' }, 'Just plan my fuel')),
-        h('section', { class: 'card' },
-          h('p', { class: 'label' }, 'Guides'),
-          h('p', null, h('a', { href: 'guides/race-fuel.html' }, 'How many gels for a 70.3?')),
-          h('p', null, h('a', { href: 'guides/bike-pacing.html' }, 'How hard should you ride a 70.3 bike?'))),
+        guidesGallery(),
         note('Free. No account. Saved on this phone only. Typical ranges, not medical advice.'));
     }
 
@@ -223,7 +266,7 @@
     var paceDone = !!r.pace;
     var fuelDone = !!r.fuel;
     var done = (paceDone ? 1 : 0) + (fuelDone ? 1 : 0);
-    var segs = [paceDone, fuelDone, false, false].map(function (x, i) {
+    var segs = [paceDone, fuelDone].map(function (x, i) {
       return h('span', { class: 'seg' + (x ? ' done' : i === done ? ' now' : '') });
     });
 
@@ -254,17 +297,15 @@
           days != null ? h('span', { class: 'chip' }, daysText(days)) : h('span'),
           h('a', { href: '#/setup/1' }, 'Change race'))),
       h('section', { class: 'card' },
-        h('div', { class: 'sechead' }, h('h2', null, 'Your plan'), h('span', { class: 'small' }, done + ' of 4 done')),
-        h('div', { class: 'segs four', 'aria-hidden': 'true' }, segs),
+        h('div', { class: 'sechead' }, h('h2', null, 'Your plan'), h('span', { class: 'small' }, done + ' of 2 done')),
+        h('div', { class: 'segs two', 'aria-hidden': 'true' }, segs),
         h('ol', { class: 'steps' },
           step(1, 'Pace', paceDone, !paceDone,
             paceDone ? 'Finish ' + hm(r.pace.finish) + (r.pace.bike.watts ? ' · bike ' + range(r.pace.bike.watts[0], r.pace.bike.watts[1]) + ' W' : '') : 'Targets for each leg and a finish range',
             paceDone ? '#/setup/5' : '#/setup/2', paceDone ? 'View' : 'Start'),
           step(2, 'Fuel', fuelDone, paceDone && !fuelDone,
             fuelDone ? (fuelStale(r) ? 'Out of date: open Fuel to update it' : r.fuel.bike.carbsPerHour + ' g carbs an hour on the bike') : 'Carbs, fluid and sodium per leg',
-            '#/fuel', fuelDone ? 'View' : 'Plan'),
-          step(3, 'Countdown', false, false, 'Taper, race week and race morning', null),
-          step(4, 'Debrief', false, false, 'Plan against race, one change for next time', null))),
+            '#/fuel', fuelDone ? 'View' : 'Plan'))),
       h('a', { class: 'btn', href: '#/card' }, 'Open race card'),
       h('section', { class: 'card' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Your details'), h('a', { href: '#/setup/2' }, 'Edit')),
@@ -565,13 +606,7 @@
           h('h1', { tabindex: '-1' }, raceTitle(r)),
           h('p', null, [r.start ? startText(r.start) + ' start' : '', daysText(days)].filter(Boolean).join(' · ')))),
       paceSec,
-      fuelSec,
-      h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Countdown'), h('span', { class: 'later' }, 'Coming later')),
-        h('p', { class: 'small' }, 'Taper, race week and race morning, worked back from your start time.')),
-      h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Debrief'), h('span', { class: 'later' }, 'Coming later')),
-        h('p', { class: 'small' }, 'Five questions after the race. One change for your next one.')));
+      fuelSec);
   }
 
   function stat(name, value, unit) {
@@ -733,9 +768,7 @@
       topBar(solo ? brandLink() : backLink('#/', r.name || 'My race'), null),
       solo ? null : h('nav', { class: 'stepnav', 'aria-label': 'Plan steps' },
         h('a', { href: r.pace ? '#/setup/5' : '#/setup/2', class: r.pace ? 'done' : null }, '1 Pace' + (r.pace ? ' ✓' : '')),
-        h('a', { href: '#/fuel', 'aria-current': 'step' }, '2 Fuel'),
-        h('span', null, '3 Countdown'),
-        h('span', null, '4 Debrief')),
+        h('a', { href: '#/fuel', 'aria-current': 'step' }, '2 Fuel')),
       title('Fuel plan', 'Carbs, fluid and sodium for each leg, timed to your splits.'),
       splitsBox,
       h('section', { class: 'card' },

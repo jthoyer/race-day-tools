@@ -25,10 +25,11 @@ Each is checkable. The tests that cover each one are named.
 13. **Guide embeds (RD-02-A4, F7, RP-07).** A guide page runs one step on its own with no race set up. "Save to a race plan" starts a plan and carries the guide's numbers in. (smoke test)
 14. **Printable top-tube card (RD-07-A2).** Print shows only a card about 7 cm wide with pace targets and fuel times. (smoke test)
 15. **Phone first.** No sideways scroll at 390 px. Tap targets at least 44 px. Text goes into the page as text, never as HTML.
+16. **Blank card start (decided 4 Nov 2026).** The first screen is an empty race card. Its band says "Name your race", empty parts have a dashed outline, and "Start my race card" and "Just plan my fuel" sit under it. A race with no name, date, pace or fuel shows the same screen, so Cancel on step 1 returns to it. The guides sit below as gallery cards: one column on a phone, two across when there is room, each at least 44 px high, each tagged Draft while its ranges are unchecked. (smoke test)
 
 ## Out of scope
 
-Payments and the paywall (D6), email (D4), the gut-training ladder, Countdown, Debrief, an offline copy (RD-07-S1), analytics (D3), hosting and deployment, the SEO pipeline, and published guide copy. Countdown and Debrief appear on the card as "Coming later".
+Payments and the paywall (D6), email (D4), the gut-training ladder, Countdown, Debrief, an offline copy (RD-07-S1), analytics (D3), hosting and deployment, the SEO pipeline, and published guide copy. Countdown and Debrief are hidden everywhere (the card, the home plan list and the fuel step bar) until they exist, so nothing promises a tool that is not there (decided 4 Nov 2026).
 
 ## Known limits
 
