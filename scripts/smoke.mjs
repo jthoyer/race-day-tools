@@ -301,10 +301,25 @@ await page.goto(base + '/index.html#/products');
 await page.getByRole('button', { name: 'Add a product' }).click();
 const names = page.getByLabel('Name');
 await names.last().fill('Test gel 40');
-await page.getByLabel('Carbs per serve (g)').last().fill('40');
+const carbsList = page.getByLabel('Carbs per serve (g)');
+check((await carbsList.last().locator('option').allInnerTexts()).join(',') === '20 g,25 g,30 g,35 g,40 g,45 g,50 g,Other', 'Carbs per serve is a list of 20 g to 50 g in 5 g steps, plus Other');
+await carbsList.last().selectOption({ label: '40 g' });
 await page.getByRole('link', { name: 'Done' }).click();
 await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
 check((await page.locator('select').first().innerText()).includes('Test gel 40'), 'A new product shows in the fuel step');
+check((await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).products.slice(-1)[0].carbs)) === 40, 'Picking 40 g from the list saves exactly 40');
+// A figure off the list is typed under Other, kept, and shown as typed after a reload. It is never rounded to a step.
+await page.goto(base + '/index.html#/products');
+await carbsList.last().selectOption('other');
+await page.getByLabel('Exact figure (g)').last().fill('22');
+await page.reload();
+check((await carbsList.last().inputValue()) === 'other' && (await page.getByLabel('Exact figure (g)').last().inputValue()) === '22', 'A carb figure off the list shows as typed under Other, not rounded');
+const saved22 = await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).products.slice(-1)[0].carbs);
+check(saved22 === 22, 'The saved carb figure is exactly 22');
+await carbsList.last().selectOption({ label: '40 g' });
+check((await page.getByLabel('Exact figure (g)').count()) === (await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).products.filter((p) => ![20, 25, 30, 35, 40, 45, 50].includes(p.carbs)).length)), 'Picking a step from Other hides the typed box again');
+await page.getByRole('link', { name: 'Done' }).click();
+await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
 // The product the person picks is named in the plan rows, so the choice shows where it is used.
 await page.locator('select').first().selectOption({ label: 'Test gel 40' });
 const planText = await page.locator('.app').innerText();

@@ -949,6 +949,31 @@
 
   // ---------- products ----------
 
+  // Which products are showing the typed "Other" box for carbs. A figure that is not on the list always shows it.
+  var carbOther = {};
+
+  // Carbs per serve: pick from the list (20 to 50 g in 5 g steps, from fuel.js), or choose Other and type the exact
+  // figure from the label. A saved figure that is not on the list is shown as it is under Other, never rounded to a step.
+  function carbPick(id, p, save) {
+    var key = p.id || id;
+    var steps = RD.fuel.carbSteps();
+    var onList = typeof p.carbs === 'number' && steps.indexOf(p.carbs) !== -1;
+    var other = !!carbOther[key] || !onList;
+    var select = h('select', {
+      id: id,
+      onchange: function (e) {
+        if (e.target.value === 'other') { carbOther[key] = true; }
+        else { delete carbOther[key]; save(Number(e.target.value)); }
+        refresh();
+      }
+    },
+      steps.map(function (g) { return h('option', { value: String(g), selected: !other && g === p.carbs ? 'selected' : null }, g + ' g'); }),
+      h('option', { value: 'other', selected: other ? 'selected' : null }, 'Other'));
+    return h('div', { class: 'row-wrap' },
+      h('label', { class: 'field', for: id }, 'Carbs per serve (g)', select),
+      other ? numIn(id + 'x', 'Exact figure (g)', p.carbs, save) : null);
+  }
+
   function products() {
     if (!Array.isArray(S.products)) { S.products = productList(); commit(); }
     var list = S.products;
@@ -965,7 +990,7 @@
           RD.ui.choice([{ value: 'gel', label: 'Gel' }, { value: 'chew', label: 'Chews' }, { value: 'drink', label: 'Drink' }], p.kind,
             function (v) { upd(i, 'kind', v); if (v === 'drink' && !p.serveMl) upd(i, 'serveMl', 500); refresh(); }, 'pill', 'Kind'),
           h('div', { class: 'two' },
-            numIn(id + 'c', 'Carbs per serve (g)', p.carbs, function (v) { upd(i, 'carbs', v); }),
+            carbPick(id + 'c', p, function (v) { upd(i, 'carbs', v); }),
             numIn(id + 's', 'Sodium per serve (mg)', p.sodium, function (v) { upd(i, 'sodium', v); })),
           p.kind === 'drink' ? numIn(id + 'm', 'Serve size (ml)', p.serveMl, function (v) { upd(i, 'serveMl', v); }) : null,
           p.kind === 'chew' ? h('p', { class: 'help' }, 'A serve is what you eat at once, for example 3 chews.') : null);

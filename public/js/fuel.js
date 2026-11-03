@@ -43,6 +43,15 @@
     { id: 'chews', name: 'Chews, 3 pieces (typical)', kind: 'chew', carbs: 24, sodium: 60, serveMl: 0 }
   ];
 
+  // UNCHECKED. The carbs-per-serve choices offered on the My products screen, in grams: a floor, a ceiling and a
+  // step (RD-018). A figure off the list, such as a label that says 22 g, is still allowed through "Other".
+  var CARB_PICK = { min: 20, max: 50, step: 5 };
+  function carbSteps() {
+    var out = [];
+    for (var g = CARB_PICK.min; g <= CARB_PICK.max; g += CARB_PICK.step) out.push(g);
+    return out;
+  }
+
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function roundTo(v, step) { return Math.round(v / step) * step; }
   function floorTo(v, step) { return Math.floor(v / step + 1e-9) * step; }
@@ -207,6 +216,8 @@
     CARB_CEILING: CARB_CEILING,
     TYPICAL_SWEAT: TYPICAL_SWEAT,
     DEFAULT_PRODUCTS: DEFAULT_PRODUCTS,
+    CARB_PICK: CARB_PICK,
+    carbSteps: carbSteps,
     spread: spread,
     validate: validate,
     planFuel: planFuel
