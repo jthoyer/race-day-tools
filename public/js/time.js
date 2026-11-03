@@ -95,11 +95,23 @@
     return o < s ? '' : RACE_TIMES_MESSAGE;
   }
 
+  // A time of day plus some minutes: addMinutes('07:00', 291) is { time: '11:51', days: 0 }. `days` counts the
+  // midnights passed, so a finish after midnight says so. A blank or unreadable start gives null, never a made-up time.
+  function addMinutes(start, minutes) {
+    var s = clockMinutes(start);
+    if (s == null || typeof minutes !== 'number' || !isFinite(minutes)) return null;
+    var total = s + Math.round(minutes);
+    var days = Math.floor(total / 1440);
+    var m = total - days * 1440;
+    return { time: pad(Math.floor(m / 60)) + ':' + pad(m % 60), days: days };
+  }
+
   var api = {
     parseClock: parseClock, parseHM: parseHM, fmtPace: fmtPace, fmtHM: fmtHM, daysUntil: daysUntil, addDays: addDays,
     clockMinutes: clockMinutes, raceTimesError: raceTimesError, RACE_TIMES_MESSAGE: RACE_TIMES_MESSAGE,
     tidyTime: tidyTime, unreadableTimeMessage: unreadableTimeMessage
   };
+  api.addMinutes = addMinutes;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else { root.RD = root.RD || {}; root.RD.time = api; }
 })(this);

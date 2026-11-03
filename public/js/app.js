@@ -81,6 +81,20 @@
   }
   function minutesList(times) { return times.map(T.fmtHM).join(' · '); }
 
+  // The finish as a time of day, such as "11:51am–12:05pm": the start time plus the finish range shown, to the
+  // minute. After midnight it says so. With no start time it gives '' and nothing is shown, never a made-up time.
+  function finishClock(start, finish) {
+    var lo = T.addMinutes(start, finish[0]);
+    var hi = T.addMinutes(start, finish[1]);
+    if (!lo || !hi) return '';
+    var text = lo.time === hi.time && lo.days === hi.days ? startText(lo.time) : startText(lo.time) + '–' + startText(hi.time);
+    return hi.days > 0 ? text + ', next day' : text;
+  }
+  // Shown where a finish exists but there is no start time to add it to.
+  function finishClockHint() {
+    return h('span', null, h('a', { href: '#/setup/1' }, 'Add a start time'), ' to see your finish time of day.');
+  }
+
   // ---------- inputs bound to the store ----------
 
   function get(path) {
@@ -566,7 +580,8 @@
         h('button', { type: 'button', class: 'btn', onclick: next(4) }, 'See my pace targets')));
   }
 
-  function targetsBlock(p) {
+  function targetsBlock(p, r) {
+    var clock = finishClock(r && r.start, p.finish);
     var bikeT;
     var bikeSub = null;
     if (p.bike.watts) bikeT = range(p.bike.watts[0], p.bike.watts[1]) + ' W';
@@ -581,7 +596,8 @@
       leg('Bike', bikeT, bikeSub, hm(p.bike.minutes)),
       leg('Run', pace(p.run.pace) + ' /km', runSub, hm(p.run.minutes)),
       leg('Changes', 'T1 and T2', null, hm(p.transitions)),
-      h('div', { class: 'finish' }, h('span', { class: 'k' }, 'FINISH'), h('span', { class: 'v' }, hm(p.finish))));
+      h('div', { class: 'finish' }, h('span', { class: 'k' }, 'FINISH'), h('span', { class: 'v' }, hm(p.finish))),
+      h('p', { class: 'fclock' }, clock ? 'About ' + clock : finishClockHint()));
   }
 
   function setupTargets(r) {
@@ -595,7 +611,7 @@
     currentPrint = { race: r, pace: p, fuel: r.fuel };
     return h('div', { class: 'stack' },
       title('Your pace targets', 'Hold these and you finish strong. Each is a range, not one number.'),
-      targetsBlock(p),
+      targetsBlock(p, r),
       p.warnings.length ? h('div', { class: 'info warn' }, h('ul', null, p.warnings.map(function (w) { return h('li', null, w); }))) : null,
       h('details', { class: 'why', open: true },
         h('summary', null, 'How we got these'),
@@ -649,13 +665,15 @@
     var paceSec;
     if (p) {
       var bikeStat = p.bike.watts ? [range(p.bike.watts[0], p.bike.watts[1]), 'watts'] : p.bike.hr ? [range(p.bike.hr[0], p.bike.hr[1]), 'bpm'] : ['Effort', p.bike.effort.split(':')[0]];
+      var clock = finishClock(r.start, p.finish);
       paceSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'), h('a', { href: '#/setup/3' }, 'Edit')),
         h('div', { class: 'stats' },
           stat('Swim', pace(p.swim.pace), '/100m'),
           stat('Bike', bikeStat[0], bikeStat[1]),
           stat('Run', pace(p.run.pace), '/km')),
-        h('p', null, 'Finish ', h('b', null, hm(p.finish))));
+        h('p', null, 'Finish ', h('b', null, hm(p.finish)), clock ? ' · about ' + clock : ''),
+        clock ? null : h('p', { class: 'small' }, finishClockHint()));
     } else {
       paceSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'), h('a', { href: '#/setup/2' }, 'Set up')),
@@ -976,11 +994,13 @@
       r.date ? h('p', null, longDate(r.date) + (startText(r.start) ? ' · ' + startText(r.start) : '')) : null,
       startText(r.transitionOpens) ? h('p', null, 'Transition opens ' + startText(r.transitionOpens)) : null];
     if (p) {
+      var clockPrint = finishClock(r.start, p.finish);
       kids.push(h('h3', null, 'Pace'),
         h('p', null, 'Swim ', h('span', { class: 'big' }, pace(p.swim.pace)), ' /100m'),
         h('p', null, 'Bike ', h('span', { class: 'big' }, p.bike.watts ? range(p.bike.watts[0], p.bike.watts[1]) + ' W' : p.bike.hr ? range(p.bike.hr[0], p.bike.hr[1]) + ' bpm' : p.bike.effort.split(':')[0])),
         h('p', null, 'Run ', h('span', { class: 'big' }, pace(p.run.pace)), ' /km'),
-        h('p', null, 'Finish ' + hm(p.finish)));
+        h('p', null, 'Finish ' + hm(p.finish)),
+        clockPrint ? h('p', null, 'About ' + clockPrint) : null);
     }
     if (f && f.ok !== false) {
       if (c.race && c.race.fuel === f && fuelStale(c.race)) kids.push(h('p', null, h('b', null, 'Fuel plan out of date. Update it before race day.')));

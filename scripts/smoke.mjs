@@ -173,6 +173,14 @@ const targets = await page.locator('.targets').innerText();
 check(/175–185 W/.test(targets), 'F5 bike target is 175–185 W');
 check(/5:15–5:30 \/km/.test(targets), 'F5 run target is 5:15–5:30 /km');
 check(/FINISH\s*\n?\s*\d:\d\d–\d:\d\d/.test(targets), 'F5 finish is a range');
+// The finish as a time of day is the start plus the finish range shown, to the minute. The expected text is
+// worked out here from the range on screen, so this does not just repeat the app's own sum.
+const fin = /FINISH\s*\n?\s*(\d+):(\d\d)–(\d+):(\d\d)/.exec(targets);
+const finLo = Number(fin[1]) * 60 + Number(fin[2]);
+const finHi = Number(fin[3]) * 60 + Number(fin[4]);
+const clock12 = (m) => { const m1 = m % 1440; const h24 = Math.floor(m1 / 60); return (h24 % 12 || 12) + ':' + String(m1 % 60).padStart(2, '0') + (h24 < 12 ? 'am' : 'pm'); };
+const wantClock = (startMin) => `${clock12(startMin + finLo)}–${clock12(startMin + finHi)}` + (startMin + finHi >= 1440 ? ', next day' : '');
+check((await page.locator('.targets .fclock').innerText()).trim() === 'About ' + wantClock(6 * 60 + 40), `F5 shows the finish as a time of day: about ${wantClock(6 * 60 + 40)}`);
 check(await page.getByText('How we got these').isVisible(), 'F5 shows how we got these');
 check(await page.getByText(/your CSS \(your steady pool pace\) of 1:45/).isVisible(), 'F5 says what CSS is where it first uses it');
 await shot('f5');
@@ -212,6 +220,7 @@ const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
+check(card.includes('· about ' + wantClock(6 * 60 + 40)), 'Race card shows the finish as a time of day');
 await shot('c1-card');
 
 // Print view
@@ -221,6 +230,7 @@ const tt = await page.locator('.tt').textContent();
 check(/Bike fuel/.test(tt) && /175–185 W/.test(tt), 'Print card has pace and fuel');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
 check(/Transition opens 5:30am/.test(tt), 'Print card shows when the transition opens');
+check(tt.includes('About ' + wantClock(6 * 60 + 40)), 'Print card shows the finish as a time of day');
 await shot('print');
 await page.emulateMedia({ media: 'screen' });
 
@@ -258,11 +268,19 @@ check(blanks[0] === '' && blanks[1] === '', 'Clearing the times saves blanks');
 await page.goto(base + '/index.html#/card');
 const noTimes = await page.locator('.racecard').innerText();
 check(!/\d:\d\d(am|pm) start|Transition opens/.test(noTimes) && /175–185/.test(noTimes), 'A race with no times still shows its plan, and no time text');
+check(/Add a start time to see your finish time of day/.test(noTimes) && !/· about \d/.test(noTimes), 'With no start time the card says so and shows no finish time of day');
 // Midnight is a real time and not the same as blank.
 await page.goto(base + '/index.html#/setup/1');
 await page.getByLabel('Start time').fill('00:00');
 await page.goto(base + '/index.html#/card');
-check(/12:00am start/.test(await page.locator('.racecard').innerText()), 'A midnight start shows as 12:00am and not as blank');
+const midnightCard = await page.locator('.racecard').innerText();
+check(/12:00am start/.test(midnightCard), 'A midnight start shows as 12:00am and not as blank');
+check(midnightCard.includes('· about ' + wantClock(0)), 'A midnight start still gives a finish time of day');
+// A finish after midnight says so.
+await page.goto(base + '/index.html#/setup/1');
+await page.getByLabel('Start time').fill('23:00');
+await page.goto(base + '/index.html#/card');
+check((await page.locator('.racecard').innerText()).includes('· about ' + wantClock(23 * 60)), 'A finish after midnight says next day');
 
 // Products: add one, it appears in the fuel step
 await page.goto(base + '/index.html#/products');

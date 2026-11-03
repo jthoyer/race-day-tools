@@ -529,6 +529,15 @@ h2 {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+.targets .fclock {
+  margin: 4px 0 0;
+  color: #c7cede;
+  font-size: 14px;
+  text-align: right;
+}
+.targets .fclock a {
+  color: var(--accent-hover);
+}
 details.why {
   border: 1px solid var(--line);
   border-radius: var(--r);
