@@ -218,6 +218,7 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
+check(/Gel \(typical\) at \d/.test(card) && /Sip about \d+ ml of (Sports drink \(typical\)( and water)?|water) every 15 min/.test(card), 'Race card names the gel and the drink');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
 check(card.includes('· about ' + wantClock(6 * 60 + 40)), 'Race card shows the finish as a time of day');
@@ -291,6 +292,15 @@ await page.getByLabel('Carbs per serve (g)').last().fill('40');
 await page.getByRole('link', { name: 'Done' }).click();
 await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
 check((await page.locator('select').first().innerText()).includes('Test gel 40'), 'A new product shows in the fuel step');
+// The product the person picks is named in the plan rows, so the choice shows where it is used.
+await page.locator('select').first().selectOption({ label: 'Test gel 40' });
+const planText = await page.locator('.app').innerText();
+check(/1 serve of Test gel 40/.test(planText) && !/1 serve of gel or chews/.test(planText), 'The plan rows name the gel the person picked');
+const sipRow = await page.locator('.prow', { hasText: 'Every 15 min' }).innerText();
+const mixRow = (await page.locator('.prow', { hasText: 'Mix' }).count()) ? await page.locator('.prow', { hasText: 'Mix' }).first().innerText() : '';
+check(!/of drink\s*$/.test(sipRow.trim()) && /Sports drink \(typical\)|water/.test(sipRow + mixRow), 'The sip row names what is in the bottle');
+await page.locator('select').nth(1).selectOption({ label: 'Water only' });
+check(/ml of water/.test(await page.locator('.prow', { hasText: 'Every 15 min' }).innerText()), 'Water only shows as water in the sip row');
 
 // Guide: bike target works alone, then saves into a plan with FTP and course carried over
 const g = await browser.newPage({ viewport: { width: 390, height: 844 } });
