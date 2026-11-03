@@ -200,17 +200,40 @@
 
   // ---------- home (A1) ----------
 
+  // A race with no name, date, pace or fuel is the same as no race: show the blank card.
+  // (Opening step 1 and then pressing Cancel leaves such a race behind.)
+  function isBlankRace(r) { return !r || (!r.name && !r.date && !r.pace && !r.fuel); }
+
+  // The first screen is an empty race card. Each step fills in one part of it.
+  // Empty parts have a dashed outline so a person can see what is still to do.
+  function blankCard() {
+    function ph(name, unit) {
+      return h('div', { class: 'stat ph' }, h('span', null, name), h('b', null, '–'), h('span', null, unit || ' '));
+    }
+    return h('article', { class: 'racecard blank' },
+      h('div', { class: 'band' },
+        h('div', { class: 'date', 'aria-hidden': 'true' }, h('strong', null, '–'), h('span', null, ' ')),
+        h('div', { style: 'flex:1;min-width:0' },
+          h('h1', { tabindex: '-1' }, 'Name your race'),
+          h('p', null, 'Add your race to begin'))),
+      h('section', { class: 'sec' },
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'),
+          h('a', { href: '#/setup/1', 'aria-label': 'Set up pace' }, 'Set up')),
+        h('div', { class: 'stats', 'aria-hidden': 'true' }, ph('Swim', '/100m'), ph('Bike'), ph('Run', '/km')),
+        h('p', { 'aria-hidden': 'true' }, 'Finish ', h('b', null, '–'))),
+      h('section', { class: 'sec' },
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('span', { class: 'later' }, 'After pace')),
+        h('div', { class: 'ph-line' }, 'Carbs, fluid and sodium per leg')));
+  }
+
   function home() {
     var r = S.race;
-    if (!r) {
+    if (isBlankRace(r)) {
       return h('div', { class: 'app' },
         topBar(brandLink(), null),
-        h('section', { class: 'hero' },
-          h('p', { class: 'k' }, 'STANDARD AND 70.3 TRIATHLON'),
-          h('h1', { tabindex: '-1' }, 'Plan your race day'),
-          h('p', null, 'Pace targets for each leg and a timed fuel plan, on one race card you can print for your top tube.')),
-        h('div', { class: 'actions' },
-          h('a', { class: 'btn', href: '#/setup/1' }, 'Start a race plan'),
+        blankCard(),
+        h('div', { class: 'actions', style: 'margin-top:0' },
+          h('a', { class: 'btn', href: '#/setup/1' }, 'Start my race card'),
           h('a', { class: 'btn second', href: '#/fuel' }, 'Just plan my fuel')),
         h('section', { class: 'card' },
           h('p', { class: 'label' }, 'Guides'),

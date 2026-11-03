@@ -848,6 +848,36 @@ details.test p {
   font-weight: 600;
 }
 
+/* Blank race card: the first screen. Empty parts get a dashed outline. */
+.racecard.blank .band {
+  background: var(--seg-bg);
+  color: var(--ink);
+}
+.racecard.blank .date {
+  border-right-color: var(--field);
+}
+.racecard.blank .date span,
+.racecard.blank .band p {
+  color: var(--muted);
+}
+.racecard.blank h1 {
+  color: var(--ink);
+}
+.stat.ph {
+  background: transparent;
+  border: 1px dashed var(--field);
+}
+.stat.ph b {
+  color: var(--muted);
+}
+.ph-line {
+  border: 1px dashed var(--field);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 /* Guides: an article with the tool inside it (F7) */
 .article {
   display: grid;
