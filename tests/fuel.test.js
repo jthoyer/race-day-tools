@@ -122,3 +122,27 @@ test('a blank gut figure is refused, never read as zero', () => {
   assert.equal(F.planFuel({ ...base, gut: NaN }).ok, false);
   assert.equal(F.planFuel({ ...base, bikeMin: '' }).ok, false);
 });
+
+test('the carb list is 20 to 50 g in 5 g steps (RD-018)', () => {
+  assert.deepEqual(F.carbSteps(), [20, 25, 30, 35, 40, 45, 50]);
+  assert.deepEqual(F.CARB_PICK, { min: 20, max: 50, step: 5 });
+});
+
+test('every carb step is a plannable gel and drink, and the gut cap still holds (RD-018)', () => {
+  for (const g of F.carbSteps()) {
+    for (const gut of [30, 50, 70]) {
+      // As a gel or chew serve.
+      const gel = { ...GEL, carbs: g };
+      const pg = F.planFuel({ ...base, gut, gel });
+      assert.ok(pg.ok, 'gel ' + g + ': ' + JSON.stringify(pg.errors));
+      assert.ok(carbsTaken('bike', pg, gel) <= gut + 1e-9, `gel ${g} g: bike over gut ${gut}`);
+      assert.ok(carbsTaken('run', pg, gel) <= gut + 1e-9, `gel ${g} g: run over gut ${gut}`);
+      // As a drink serve (per 500 ml).
+      const drink = { ...DRINK, carbs: g };
+      const pd = F.planFuel({ ...base, gut, drink });
+      assert.ok(pd.ok, 'drink ' + g + ': ' + JSON.stringify(pd.errors));
+      assert.ok(carbsTaken('bike', pd, GEL) <= gut + 1e-9, `drink ${g} g: bike over gut ${gut}`);
+      assert.ok(pd.bike.carbsPerHour <= gut && pd.run.carbsPerHour <= gut);
+    }
+  }
+});
