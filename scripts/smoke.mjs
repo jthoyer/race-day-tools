@@ -136,6 +136,19 @@ await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 // F3 Fitness numbers
 await page.getByRole('heading', { name: 'Fitness numbers' }).waitFor();
 check(/Your steady swim pace per 100 m in a pool/.test(await page.locator('.app').innerText()), 'F3 says what CSS is');
+// The pace choice changes the bike and the run and never the swim, so it sits between them and the swim.
+const topOf3 = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
+const swimTop3 = await topOf3(page.getByText('Swim', { exact: true }));
+const choiceTop = await topOf3(page.getByText('How do you pace the bike and run?'));
+const bikeTop3 = await topOf3(page.getByText('Bike', { exact: true }));
+check(swimTop3 < choiceTop && choiceTop < bikeTop3, 'F3 puts the pace choice between Swim and Bike');
+check(await page.getByText(/Power needs your FTP\. Heart rate needs/).isVisible(), 'F3 says what each pace mode needs');
+// Switching mode shows what that mode needs and keeps what was typed for the others.
+await page.getByLabel('FTP', { exact: true }).fill('240');
+await page.getByRole('button', { name: 'Heart rate' }).click();
+check((await page.getByLabel('Bike threshold heart rate').isVisible()) && (await page.getByLabel('Run threshold heart rate').isVisible()), 'Heart rate mode asks for both threshold heart rates');
+await page.getByRole('button', { name: 'Power' }).click();
+check((await page.getByLabel('FTP', { exact: true }).inputValue()) === '240', 'Switching pace mode keeps the FTP that was typed');
 // Time entry: digits become a time, a dot works, one or two digits are refused, and an error goes as soon as the entry reads.
 const cssBox = page.getByLabel('Critical swim speed (CSS)');
 await cssBox.fill('45');

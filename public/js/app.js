@@ -523,14 +523,19 @@
     }
     return h('div', { class: 'stack' },
       title('Fitness numbers', 'Your targets come from these. Use your latest test.'),
-      RD.ui.choice([{ value: 'power', label: 'Power' }, { value: 'hr', label: 'Heart rate' }, { value: 'effort', label: 'Effort' }], mode,
-        function (v) { set('fitness.mode', v); errors = {}; refresh(); }, 'segbtn', 'Train with'),
       h('section', { class: 'card' },
         h('p', { class: 'legname' }, 'Swim'),
         bound('fitness.css', 'clock', { label: 'Critical swim speed (CSS)', unit: '/100m', placeholder: '1:45' }),
         h('p', { class: 'help' }, 'Your steady swim pace per 100 m in a pool. It comes from a 200 m and a 400 m test. Your swim target starts from it.'),
         h('details', { class: 'test' }, h('summary', null, 'How to test CSS'),
           h('p', { class: 'help' }, 'Swim a 400 m and a 200 m time trial with a rest between. CSS pace per 100 m is (400 time − 200 time) ÷ 2.'))),
+      // This choice changes the bike and the run, and never the swim, so it sits between them and the swim.
+      // What each mode asks for is checked against validate() in pace.js: the run threshold pace is needed in all three.
+      h('section', { class: 'card' },
+        h('p', { class: 'label' }, 'How do you pace the bike and run?'),
+        RD.ui.choice([{ value: 'power', label: 'Power' }, { value: 'hr', label: 'Heart rate' }, { value: 'effort', label: 'Effort' }], mode,
+          function (v) { set('fitness.mode', v); errors = {}; refresh(); }, 'segbtn', 'How you pace the bike and run'),
+        h('p', { class: 'help' }, 'Power needs your FTP. Heart rate needs your threshold heart rates and the speed of a hard long ride. Effort needs only the speed of a hard long ride.')),
       bike,
       h('section', { class: 'card' },
         h('p', { class: 'legname' }, 'Run'),
