@@ -596,8 +596,9 @@
 
   // ---------- fuel step (A2) ----------
 
+  // null means "never edited": use the typical products. An empty list means the athlete removed them all.
   function productList() {
-    if (!Array.isArray(S.products) || !S.products.length) return RD.fuel.DEFAULT_PRODUCTS.map(function (p) { return Object.assign({}, p); });
+    if (!Array.isArray(S.products)) return RD.fuel.DEFAULT_PRODUCTS.map(function (p) { return Object.assign({}, p); });
     return S.products;
   }
   // Look a product up in the right list only: a product whose type changed to Drink is no longer a gel.
@@ -802,7 +803,7 @@
   // ---------- products ----------
 
   function products() {
-    if (!Array.isArray(S.products) || !S.products.length) { S.products = productList(); commit(); }
+    if (!Array.isArray(S.products)) { S.products = productList(); commit(); }
     var list = S.products;
     function upd(i, k, v) { list[i][k] = v; commit(); }
     return h('div', { class: 'app' },

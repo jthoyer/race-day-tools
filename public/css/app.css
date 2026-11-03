@@ -80,7 +80,13 @@ a:hover {
   gap: 8px;
   min-height: 64px;
 }
+.top > * {
+  min-width: 0;
+}
 .brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font: 700 21px var(--display);
   letter-spacing: -0.3px;
   color: var(--ink);
@@ -102,6 +108,12 @@ a:hover {
   cursor: pointer;
   font-family: var(--body);
 }
+.back {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .racename {
   color: var(--muted);
   font-size: 14px;
@@ -111,6 +123,16 @@ a:hover {
   white-space: nowrap;
 }
 
+h1,
+h2,
+.hero p,
+.step p,
+.sec p,
+.prow span,
+.carry li,
+.chip {
+  overflow-wrap: anywhere;
+}
 h1 {
   margin: 0;
   font: 700 30px/1.1 var(--display);
@@ -552,6 +574,9 @@ details.test p {
   margin-top: 4px;
 }
 .hero .meta a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--accent-hover);
 }
 .chip {
@@ -620,6 +645,8 @@ details.test p {
 }
 .step a {
   min-height: 44px;
+  min-width: 44px;
+  justify-content: flex-end;
   display: inline-flex;
   align-items: center;
   font-weight: 600;
@@ -784,6 +811,8 @@ details.test p {
 }
 .sechead a {
   min-height: 44px;
+  min-width: 44px;
+  justify-content: flex-end;
   display: inline-flex;
   align-items: center;
   font-size: 14px;
