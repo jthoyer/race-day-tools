@@ -845,7 +845,9 @@
         h('label', { class: 'field' }, 'Bike drink',
           h('select', { onchange: function (e) { set('choice.drink', e.target.value); refresh(); } },
             drinks.map(function (p) { return h('option', { value: p.id, selected: drink && p.id === drink.id ? 'selected' : null }, p.name); }),
-            h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')))));
+            h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')))),
+      // Says what the choice does, right under the choice, with the carbs per serve the plan will use.
+      h('p', { class: 'help' }, RD.fuel.describeProducts(gel, drink)));
 
     var out;
     if (!plan.ok) {
