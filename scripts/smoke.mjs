@@ -223,6 +223,23 @@ const swimTop = await topOf(page.getByRole('heading', { name: 'Before the swim' 
 const capTop = await topOf(page.getByText(/Capped at what your gut has trained/));
 const runTop = await topOf(page.getByRole('heading', { name: /^Run · / }));
 check(carryTop < swimTop && swimTop < runTop && runTop < capTop, 'The carry list comes first and the cap and safety note stays last');
+// A row label may wrap at spaces but is never broken in the middle of a word ("Bottle / s"). A label's box can never be
+// narrower than its longest word, so measure each word in the label's own font and compare.
+const brokenLabels = () => page.evaluate(() => {
+  const ctx = document.createElement('canvas').getContext('2d');
+  return [...document.querySelectorAll('.prow span:first-child')].filter((el) => {
+    const cs = getComputedStyle(el);
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const longest = Math.max(...el.textContent.split(/\s+/).filter(Boolean).map((w) => ctx.measureText(w).width));
+    return el.getBoundingClientRect().width + 0.5 < longest;
+  }).map((el) => el.textContent.trim());
+});
+for (const w of [390, 360, 320]) {
+  await page.setViewportSize({ width: w, height: 844 });
+  const broken = await brokenLabels();
+  check(broken.length === 0, `Plan row labels are not broken mid-word at ${w}px` + (broken.length ? ` (broken: ${broken.join(', ')})` : ''));
+}
+await page.setViewportSize({ width: 390, height: 844 });
 await shot('a2-fuel');
 await noHorizontalScroll('Fuel');
 await page.getByRole('button', { name: 'Save to my race card' }).click();

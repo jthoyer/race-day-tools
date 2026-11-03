@@ -764,6 +764,9 @@ details.test p {
 }
 .prow span:first-child {
   color: var(--muted);
+  /* Wrap at spaces only. The global "anywhere" rule lets a label shrink to one letter ("Bottle / s") when the
+     right-hand text is long. With "normal" it can't get narrower than its longest word, so the right side wraps instead. */
+  overflow-wrap: normal;
 }
 .prow span:last-child {
   text-align: right;
