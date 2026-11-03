@@ -96,7 +96,7 @@
   function validate(input) {
     var errs = [];
     if (!LEGS[input.distance]) errs.push({ field: 'distance', message: 'Pick Standard or 70.3.' });
-    if (!within(input.css, LIMITS.css)) errs.push({ field: 'css', message: 'Enter your CSS as m:ss per 100 m, between 1:05 and 3:30.' });
+    if (!within(input.css, LIMITS.css)) errs.push({ field: 'css', message: 'Enter your critical swim speed (CSS) as m:ss per 100 m, between 1:05 and 3:30.' });
     if (!within(input.runThreshold, LIMITS.runThreshold)) errs.push({ field: 'runThreshold', message: 'Enter your run threshold as m:ss per km, between 3:00 and 9:00.' });
     if (!within(input.weight, LIMITS.weight)) errs.push({ field: 'weight', message: 'Enter a body weight between 35 and 150 kg.' });
     var mode = input.mode || 'power';
@@ -132,7 +132,7 @@
     var sf = SWIM_FACTOR[d];
     var swimPace = [input.css * sf[0], input.css * sf[1]];
     var swimMin = widen([Math.round((swimPace[0] * legs.swim * 10) / 60), Math.round((swimPace[1] * legs.swim * 10) / 60)], 1);
-    why.push({ leg: 'Swim', text: 'a little slower than your CSS of ' + fmt(input.css) + ', for open water and a steady start.' });
+    why.push({ leg: 'Swim', text: 'a little slower than your CSS (your steady pool pace) of ' + fmt(input.css) + ', for open water and a steady start.' });
 
     // Bike
     var bike = { watts: null, hr: null, effort: null };

@@ -62,6 +62,28 @@
     return hr * 60 + min;
   }
 
+  // Typed digits become a time, so a phone's digits-only keypad is enough (it has no colon key).
+  //   "130" -> "1:30"   "450" -> "4:50"   "1030" -> "10:30"   and a dot works like a colon: "1.30" -> "1:30".
+  // Text that already has a colon is left alone. So is everything else, and the strict parsers then refuse it.
+  // One or two digits ("45") could be seconds or minutes, so they are never guessed. A row of zeros is not a time.
+  function tidyTime(text) {
+    if (typeof text !== 'string') return text;
+    var t = text.trim();
+    if (/^\d{3,4}$/.test(t) && Number(t) > 0) return t.slice(0, -2) + ':' + t.slice(-2);
+    if (/^\d{1,2}\.\d{2}$/.test(t)) return t.replace('.', ':');
+    return t;
+  }
+
+  // What to tell a person whose time can't be read. kind: 'clock' (m:ss) or 'hm' (h:mm).
+  function unreadableTimeMessage(text, kind) {
+    var t = typeof text === 'string' ? text.trim() : '';
+    var digits = /^\d{3,4}$/.test(t) ? t : /^\d{1,2}[.:]\d{2}$/.test(t) ? t.replace(/[.:]/, '') : '';
+    if (digits && Number(digits.slice(-2)) >= 60) {
+      return kind === 'hm' ? 'Minutes go up to 59. For example, 2:45 or 245.' : 'Seconds go up to 59. For example, 1:15 or 115.';
+    }
+    return kind === 'hm' ? 'Type hours and minutes, such as 2:45 or 245.' : 'Type minutes and seconds, such as 1:45 or 145.';
+  }
+
   var RACE_TIMES_MESSAGE = 'Transition should open before the race starts.';
 
   // The transition area opens before the race starts. Checked only when both times are set and
@@ -86,7 +108,8 @@
 
   var api = {
     parseClock: parseClock, parseHM: parseHM, fmtPace: fmtPace, fmtHM: fmtHM, daysUntil: daysUntil, addDays: addDays,
-    clockMinutes: clockMinutes, raceTimesError: raceTimesError, RACE_TIMES_MESSAGE: RACE_TIMES_MESSAGE
+    clockMinutes: clockMinutes, raceTimesError: raceTimesError, RACE_TIMES_MESSAGE: RACE_TIMES_MESSAGE,
+    tidyTime: tidyTime, unreadableTimeMessage: unreadableTimeMessage
   };
   api.addMinutes = addMinutes;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

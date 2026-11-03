@@ -133,16 +133,34 @@
         var bad = opts.validate ? opts.validate(text) : '';
         if (bad) { raw[path] = text; errors[path] = bad; if (opts.live) opts.live(); return; }
         if (opts.validate) delete errors[path];
+        // Times can be typed as digits ("130" is 1:30) or with a dot ("1.30"). See time.js, tidyTime.
         var parsed = kind === 'num' ? RD.ui.num(text)
-          : kind === 'clock' ? T.parseClock(text)
-            : kind === 'hm' ? T.parseHM(text)
+          : kind === 'clock' ? T.parseClock(T.tidyTime(text))
+            : kind === 'hm' ? T.parseHM(T.tidyTime(text))
               : text;
         if (kind !== 'text' && parsed == null && text.trim() !== '') raw[path] = text;
         else delete raw[path];
+        // An error stays on screen until the next Next, so take it off as soon as what is typed reads.
+        // A new one waits for the person to leave the field or press Next.
+        if (kind !== 'text' && parsed != null && errors[path]) clearFieldError(e.target, path);
         set(path, kind !== 'text' && text.trim() === '' ? null : parsed);
         if (opts.live) opts.live();
-      }
+      },
+      // When the person leaves a time field, show the time we read, so a slip is easy to see.
+      onchange: kind === 'clock' || kind === 'hm' ? function (e) {
+        var p = kind === 'clock' ? T.parseClock(T.tidyTime(e.target.value)) : T.parseHM(T.tidyTime(e.target.value));
+        if (p != null) e.target.value = kind === 'clock' ? T.fmtPace(p) : T.fmtHM(p);
+      } : null
     });
+  }
+
+  // Take an error message off a field without redrawing the screen, so typing is not interrupted.
+  function clearFieldError(input, path) {
+    delete errors[path];
+    var msg = document.getElementById(input.id + '-err');
+    if (msg) msg.remove();
+    input.removeAttribute('aria-invalid');
+    input.removeAttribute('aria-describedby');
   }
 
   // True when something typed in this field can't be read.
@@ -454,7 +472,9 @@
       title('About you', 'You enter these once. Every race and every step uses them.'),
       h('section', { class: 'card' },
         bound('details.weight', 'num', { label: 'Body weight', unit: 'kg' }),
-        h('p', { class: 'help' }, 'Sets bike speed, and fluid and sodium.')),
+        // Weight is used only to turn a power target into a bike time (pace.js, bikeSpeed). The fuel plan
+        // never reads it, so this text must not say it sets fluid or sodium.
+        h('p', { class: 'help' }, 'Your weight and your bike’s together set how much power it takes to roll, so the same watts give a different speed. In Power mode we use it to turn your target into a bike time. It does not change your fuel plan.')),
       h('section', { class: 'card' },
         bound('details.sweat', 'num', { label: 'Sweat rate', unit: 'L an hour', disabled: d.sweatTypical, placeholder: d.sweatTypical ? 'Typical for the heat' : '' }),
         h('label', { class: 'check' },
@@ -507,7 +527,8 @@
         function (v) { set('fitness.mode', v); errors = {}; refresh(); }, 'segbtn', 'Train with'),
       h('section', { class: 'card' },
         h('p', { class: 'legname' }, 'Swim'),
-        bound('fitness.css', 'clock', { label: 'CSS, your threshold swim pace', unit: '/100m', placeholder: '1:45' }),
+        bound('fitness.css', 'clock', { label: 'Critical swim speed (CSS)', unit: '/100m', placeholder: '1:45' }),
+        h('p', { class: 'help' }, 'Your steady swim pace per 100 m in a pool. It comes from a 200 m and a 400 m test. Your swim target starts from it.'),
         h('details', { class: 'test' }, h('summary', null, 'How to test CSS'),
           h('p', { class: 'help' }, 'Swim a 400 m and a 200 m time trial with a rest between. CSS pace per 100 m is (400 time − 200 time) ÷ 2.'))),
       bike,
@@ -536,7 +557,11 @@
     var e = {};
     var map = { css: 'fitness.css', ftp: 'fitness.ftp', runThreshold: 'fitness.runThreshold', bikeLthr: 'fitness.bikeLthr', runLthr: 'fitness.runLthr', steadySpeed: 'fitness.steadySpeed' };
     RD.pace.validate(paceInput()).forEach(function (x) { if (map[x.field]) e[map[x.field]] = x.message; });
-    Object.keys(map).forEach(function (k) { if (unreadable(map[k])) e[map[k]] = 'That doesn’t look right. Check the format.'; });
+    Object.keys(map).forEach(function (k) {
+      if (!unreadable(map[k])) return;
+      // The swim and run pace fields are times: say what to type. The rest are plain numbers.
+      e[map[k]] = k === 'css' || k === 'runThreshold' ? T.unreadableTimeMessage(raw[map[k]], 'clock') : 'That doesn’t look right. Check the format.';
+    });
     return e;
   }
 
@@ -761,7 +786,9 @@
     if (fromPlan) {
       splitsBox = h('section', { class: 'fromplan' },
         h('p', { class: 'label' }, 'From your pace plan'),
-        h('p', null, 'Swim ' + T.fmtHM(r.splits.swim) + ' · Bike ' + T.fmtHM(r.splits.bike) + ' · Run ' + T.fmtHM(r.splits.run)),
+        // The same tiles as the race card. These are the middle of each pace range, which is what the fuel plan uses.
+        h('div', { class: 'stats' }, stat('Swim', T.fmtHM(r.splits.swim), 'h:mm'), stat('Bike', T.fmtHM(r.splits.bike), 'h:mm'), stat('Run', T.fmtHM(r.splits.run), 'h:mm')),
+        h('p', { class: 'help' }, 'The middle of each range in your pace plan.'),
         h('button', {
           type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () {
             r.splitsByHand = { bike: r.splits.bike, run: r.splits.run }; commit(); refresh();
@@ -879,6 +906,14 @@
       rn.sodiumShort ? prow('Top up', '~' + rn.sodiumShort + ' mg/hr more, or cola or sports drink at aid stations') : null
     ];
     return h('div', { class: 'stack' },
+      // The packing list comes first: it is what a person needs before they read the legs.
+      h('section', { class: 'card' },
+        h('p', { class: 'label' }, 'Carry list'),
+        h('ul', { class: 'carry' },
+          h('li', null, p.carry.bikeGels + ' × ' + p.carry.gelName + ' on the bike'),
+          h('li', null, p.carry.runGels + ' × ' + p.carry.gelName + ' for the run (T2 bag or race belt)'),
+          h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (p.carry.drink && p.bike.drinkShare > 0 ? ' (' + p.carry.drink + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
+          p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null)),
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Before the swim'), null),
         h('p', { class: 'help', style: 'padding-bottom:8px' }, p.preRace)),
@@ -888,13 +923,6 @@
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Run · ' + T.fmtHM(rn.minutes)), h('span', { class: 'badge' }, rn.carbsPerHour + ' g/hr')),
         runRows),
-      h('section', { class: 'card' },
-        h('p', { class: 'label' }, 'Carry list'),
-        h('ul', { class: 'carry' },
-          h('li', null, p.carry.bikeGels + ' × ' + p.carry.gelName + ' on the bike'),
-          h('li', null, p.carry.runGels + ' × ' + p.carry.gelName + ' for the run (T2 bag or race belt)'),
-          h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (p.carry.drink && p.bike.drinkShare > 0 ? ' (' + p.carry.drink + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
-          p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null)),
       h('div', { class: 'info warn' },
         h('div', null,
           h('p', null, 'Capped at what your gut has trained: ' + p.gut + ' g an hour. Fluid stays under your ' + (p.sweatTypical ? 'typical ' : '') + 'sweat rate of ' + p.sweat + ' L an hour.'),

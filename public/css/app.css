@@ -720,6 +720,12 @@ details.test p {
 .fromplan p {
   margin: 0;
 }
+.fromplan .stats {
+  margin: 6px 0 2px;
+}
+.fromplan .stat {
+  background: var(--surface);
+}
 .legplan {
   background: var(--surface);
   border: 1px solid var(--line);

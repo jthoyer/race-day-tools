@@ -125,16 +125,38 @@ await page.getByRole('heading', { name: 'About you' }).waitFor();
 await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 check(await page.getByRole('heading', { name: 'About you' }).isVisible(), 'F2 refuses to move on with empty fields');
 check((await page.getByRole('alert').count()) >= 2, 'F2 shows field errors');
+const f2Text = await page.locator('.app').innerText();
+check(/It does not change your fuel plan/.test(f2Text) && !/fluid and sodium/.test(f2Text.split('Sweat rate')[0]), 'F2 weight help says why we ask, and does not claim fluid or sodium');
 await page.getByLabel('Body weight').fill('72');
 await page.getByLabel('Carbs your gut handles').fill('70');
+check(!(await page.getByText(/Enter a body weight/).isVisible()) && !(await page.getByText(/Enter 0 to 120 g an hour/).isVisible()), 'F2 errors go once a number is typed');
 await shot('f2');
 await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 
 // F3 Fitness numbers
 await page.getByRole('heading', { name: 'Fitness numbers' }).waitFor();
-await page.getByLabel('CSS, your threshold swim pace').fill('1:45');
+check(/Your steady swim pace per 100 m in a pool/.test(await page.locator('.app').innerText()), 'F3 says what CSS is');
+// Time entry: digits become a time, a dot works, one or two digits are refused, and an error goes as soon as the entry reads.
+const cssBox = page.getByLabel('Critical swim speed (CSS)');
+await cssBox.fill('45');
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+check(await page.getByText('Type minutes and seconds, such as 1:45 or 145.').isVisible(), 'F3 refuses 45 and says what to type');
+check(await page.getByRole('heading', { name: 'Fitness numbers' }).isVisible(), 'F3 does not move on with an unreadable time');
+await cssBox.fill('175');
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+check(await page.getByText('Seconds go up to 59.').isVisible(), 'F3 refuses 175 because seconds stop at 59');
+await cssBox.fill('130');
+check(!(await page.getByText('Seconds go up to 59.').isVisible()), 'The error goes as soon as the entry reads');
+await cssBox.blur();
+check((await cssBox.inputValue()) === '1:30', 'Typing 130 shows 1:30 when the person leaves the field');
+await cssBox.fill('1.45');
+await cssBox.blur();
+check((await cssBox.inputValue()) === '1:45', 'A dot works like a colon: 1.45 shows 1:45');
 await page.getByLabel('FTP', { exact: true }).fill('240');
-await page.getByLabel('Run threshold pace').fill('4:50');
+const runBox = page.getByLabel('Run threshold pace');
+await runBox.fill('450');
+await runBox.blur();
+check((await runBox.inputValue()) === '4:50', 'Typing 450 shows 4:50');
 await shot('f3');
 await page.getByRole('button', { name: 'Next: course and heat' }).click();
 
@@ -160,6 +182,7 @@ const clock12 = (m) => { const m1 = m % 1440; const h24 = Math.floor(m1 / 60); r
 const wantClock = (startMin) => `${clock12(startMin + finLo)}–${clock12(startMin + finHi)}` + (startMin + finHi >= 1440 ? ', next day' : '');
 check((await page.locator('.targets .fclock').innerText()).trim() === 'About ' + wantClock(6 * 60 + 40), `F5 shows the finish as a time of day: about ${wantClock(6 * 60 + 40)}`);
 check(await page.getByText('How we got these').isVisible(), 'F5 shows how we got these');
+check(await page.getByText(/your CSS \(your steady pool pace\) of 1:45/).isVisible(), 'F5 says what CSS is where it first uses it');
 await shot('f5');
 await noHorizontalScroll('F5');
 await page.getByRole('button', { name: 'Save to my race card' }).click();
@@ -175,6 +198,18 @@ check(await page.getByText('From your pace plan').isVisible(), 'Fuel uses the pa
 const fuelText = await page.locator('.app').innerText();
 check(/Capped at what your gut has trained: 70 g an hour/.test(fuelText), 'Fuel shows the gut cap');
 check(/not medical advice/i.test(fuelText), 'Fuel shows not medical advice');
+// The splits show as the same tiles as the race card, and they are the numbers the plan uses.
+const tiles = await page.locator('.fromplan .stat').allInnerTexts();
+check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && tiles.every((t) => /h:mm/.test(t)), 'Fuel shows the pace splits as three tiles');
+const bikeTile = (/(\d:\d\d)/.exec(tiles[1]) || [])[1];
+check(!!bikeTile && new RegExp('Bike · ' + bikeTile).test(fuelText), 'The bike tile is the time the fuel plan uses');
+// The carry list is the first card of the plan. The cap and safety note stays last.
+const topOf = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
+const carryTop = await topOf(page.getByText('Carry list', { exact: true }));
+const swimTop = await topOf(page.getByRole('heading', { name: 'Before the swim' }));
+const capTop = await topOf(page.getByText(/Capped at what your gut has trained/));
+const runTop = await topOf(page.getByRole('heading', { name: /^Run · / }));
+check(carryTop < swimTop && swimTop < runTop && runTop < capTop, 'The carry list comes first and the cap and safety note stays last');
 await shot('a2-fuel');
 await noHorizontalScroll('Fuel');
 await page.getByRole('button', { name: 'Save to my race card' }).click();
