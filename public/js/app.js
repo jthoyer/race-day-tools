@@ -226,6 +226,29 @@
         h('div', { class: 'ph-line' }, 'Carbs, fluid and sodium per leg')));
   }
 
+  // The guides on the first screen. A new guide is one more entry here. Both are drafts: their
+  // ranges are not yet checked against sources, so each card says so (see the draft note on the page).
+  var GUIDES = [
+    { href: 'guides/race-fuel.html', topic: 'Fuelling', draft: true,
+      title: 'How many gels for a 70.3?',
+      summary: 'Gel times for the bike and run, capped at what your gut has trained.' },
+    { href: 'guides/bike-pacing.html', topic: 'Bike pacing', draft: true,
+      title: 'How hard should you ride a 70.3 bike?',
+      summary: 'Your bike power target, from your FTP and the course.' }
+  ];
+
+  // One tappable card per guide. One column on a phone, two across when there is room.
+  function guidesGallery() {
+    return h('section', { class: 'stack', 'aria-label': 'Guides' },
+      h('p', { class: 'label' }, 'Guides'),
+      h('div', { class: 'gallery' }, GUIDES.map(function (g) {
+        return h('a', { class: 'gcard', href: g.href },
+          h('span', { class: 'gtop' }, h('span', { class: 'label' }, g.topic), g.draft ? h('span', { class: 'tag' }, 'Draft') : null),
+          h('span', { class: 'gtitle' }, g.title),
+          h('span', { class: 'gsum' }, g.summary));
+      })));
+  }
+
   function home() {
     var r = S.race;
     if (isBlankRace(r)) {
@@ -235,10 +258,7 @@
         h('div', { class: 'actions', style: 'margin-top:0' },
           h('a', { class: 'btn', href: '#/setup/1' }, 'Start my race card'),
           h('a', { class: 'btn second', href: '#/fuel' }, 'Just plan my fuel')),
-        h('section', { class: 'card' },
-          h('p', { class: 'label' }, 'Guides'),
-          h('p', null, h('a', { href: 'guides/race-fuel.html' }, 'How many gels for a 70.3?')),
-          h('p', null, h('a', { href: 'guides/bike-pacing.html' }, 'How hard should you ride a 70.3 bike?'))),
+        guidesGallery(),
         note('Free. No account. Saved on this phone only. Typical ranges, not medical advice.'));
     }
 

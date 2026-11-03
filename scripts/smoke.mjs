@@ -68,6 +68,11 @@ const blankText = await page.locator('.app').innerText();
 check(await page.locator('.racecard.blank').isVisible(), 'First screen is a blank race card');
 check(!/Countdown|Debrief|Coming later/.test(blankText), 'Blank card hides Countdown and Debrief');
 check(await page.getByRole('link', { name: 'Just plan my fuel' }).isVisible(), 'First screen keeps "Just plan my fuel"');
+const gcards = page.locator('a.gcard');
+check((await gcards.count()) === 2, 'Guides show as two gallery cards');
+check(JSON.stringify(await gcards.evaluateAll((els) => els.map((e) => e.getAttribute('href')))) === '["guides/race-fuel.html","guides/bike-pacing.html"]', 'Gallery cards link to both guides');
+check((await gcards.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'Gallery cards are at least 44 px high');
+check(/Draft/.test(await gcards.first().innerText()), 'Gallery cards say Draft while the guides are unchecked');
 // The probe is expected to be refused; its console errors are dropped at the end by its unique address.
 const sent = await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false));
 check(sent === false, 'Content policy blocks every network request (connect-src none)');
