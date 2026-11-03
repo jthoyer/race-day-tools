@@ -13,11 +13,26 @@ const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'public');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const SHOTS = process.env.SHOTS || '';
 
+// Serve public/_headers as a host would, so a content policy that breaks the app fails this test.
+const HEADERS = {};
+{
+  const text = await readFile(join(ROOT, '_headers'), 'utf8');
+  let on = false;
+  for (const line of text.split('\n')) {
+    if (/^\S/.test(line)) on = line.trim() === '/*';
+    else if (on && line.includes(':')) {
+      const i = line.indexOf(':');
+      HEADERS[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    }
+  }
+  if (!HEADERS['Content-Security-Policy']) throw new Error('public/_headers has no content policy for /*');
+}
+
 const server = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
   try {
     const body = await readFile(join(ROOT, path.endsWith('/') ? path + 'index.html' : path));
-    res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' });
+    res.writeHead(200, { ...HEADERS, 'content-type': TYPES[extname(path)] || 'application/octet-stream' });
     res.end(body);
   } catch {
     res.writeHead(404);
@@ -32,6 +47,8 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const problems = [];
 page.on('pageerror', (e) => problems.push('page error: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g/.test(m.text())) problems.push('console: ' + m.text()); });
+// A content-policy violation shows as a console error above, and as a securitypolicyviolation event here.
+await page.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error('CSP blocked ' + e.violatedDirective + ' ' + e.blockedURI)));
 // Fonts come from Google; the test must not depend on the network.
 await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
 
@@ -47,6 +64,9 @@ async function noHorizontalScroll(where) {
 await page.goto(base + '/index.html');
 await page.getByRole('heading', { name: 'Plan your race day' }).waitFor();
 await shot('home-empty');
+// The probe is expected to be refused; its console errors are dropped at the end by its unique address.
+const sent = await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false));
+check(sent === false, 'Content policy blocks every network request (connect-src none)');
 await noHorizontalScroll('home');
 
 // F1 Which race?
@@ -166,6 +186,8 @@ check((await page.locator('select').first().innerText()).includes('Test gel 40')
 // Guide: bike target works alone, then saves into a plan with FTP and course carried over
 const g = await browser.newPage({ viewport: { width: 390, height: 844 } });
 g.on('pageerror', (e) => problems.push('guide page error: ' + e.message));
+g.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g/.test(m.text())) problems.push('guide console: ' + m.text()); });
+await g.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error('CSP blocked ' + e.violatedDirective + ' ' + e.blockedURI)));
 await g.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
 await g.goto(base + '/guides/bike-pacing.html');
 await g.getByLabel('Your FTP').fill('240');
@@ -187,6 +209,9 @@ if (SHOTS) await g.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, '0')}-
 await browser.close();
 server.close();
 
+const real = problems.filter((x) => !x.includes('__csp_probe__'));
+problems.length = 0;
+problems.push(...real);
 if (problems.length) {
   console.error('\n' + problems.join('\n'));
   process.exit(1);
