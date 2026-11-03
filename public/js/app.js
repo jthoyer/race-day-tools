@@ -440,7 +440,9 @@
       title('About you', 'You enter these once. Every race and every step uses them.'),
       h('section', { class: 'card' },
         bound('details.weight', 'num', { label: 'Body weight', unit: 'kg' }),
-        h('p', { class: 'help' }, 'Sets bike speed, and fluid and sodium.')),
+        // Weight is used only to turn a power target into a bike time (pace.js, bikeSpeed). The fuel plan
+        // never reads it, so this text must not say it sets fluid or sodium.
+        h('p', { class: 'help' }, 'Your weight and your bike’s together set how much power it takes to roll, so the same watts give a different speed. In Power mode we use it to turn your target into a bike time. It does not change your fuel plan.')),
       h('section', { class: 'card' },
         bound('details.sweat', 'num', { label: 'Sweat rate', unit: 'L an hour', disabled: d.sweatTypical, placeholder: d.sweatTypical ? 'Typical for the heat' : '' }),
         h('label', { class: 'check' },
@@ -493,7 +495,8 @@
         function (v) { set('fitness.mode', v); errors = {}; refresh(); }, 'segbtn', 'Train with'),
       h('section', { class: 'card' },
         h('p', { class: 'legname' }, 'Swim'),
-        bound('fitness.css', 'clock', { label: 'CSS, your threshold swim pace', unit: '/100m', placeholder: '1:45' }),
+        bound('fitness.css', 'clock', { label: 'Critical swim speed (CSS)', unit: '/100m', placeholder: '1:45' }),
+        h('p', { class: 'help' }, 'Your steady swim pace per 100 m in a pool. It comes from a 200 m and a 400 m test. Your swim target starts from it.'),
         h('details', { class: 'test' }, h('summary', null, 'How to test CSS'),
           h('p', { class: 'help' }, 'Swim a 400 m and a 200 m time trial with a rest between. CSS pace per 100 m is (400 time − 200 time) ÷ 2.'))),
       bike,

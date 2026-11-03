@@ -125,6 +125,8 @@ await page.getByRole('heading', { name: 'About you' }).waitFor();
 await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 check(await page.getByRole('heading', { name: 'About you' }).isVisible(), 'F2 refuses to move on with empty fields');
 check((await page.getByRole('alert').count()) >= 2, 'F2 shows field errors');
+const f2Text = await page.locator('.app').innerText();
+check(/It does not change your fuel plan/.test(f2Text) && !/fluid and sodium/.test(f2Text.split('Sweat rate')[0]), 'F2 weight help says why we ask, and does not claim fluid or sodium');
 await page.getByLabel('Body weight').fill('72');
 await page.getByLabel('Carbs your gut handles').fill('70');
 await shot('f2');
@@ -132,7 +134,8 @@ await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 
 // F3 Fitness numbers
 await page.getByRole('heading', { name: 'Fitness numbers' }).waitFor();
-await page.getByLabel('CSS, your threshold swim pace').fill('1:45');
+check(/Your steady swim pace per 100 m in a pool/.test(await page.locator('.app').innerText()), 'F3 says what CSS is');
+await page.getByLabel('Critical swim speed (CSS)').fill('1:45');
 await page.getByLabel('FTP', { exact: true }).fill('240');
 await page.getByLabel('Run threshold pace').fill('4:50');
 await shot('f3');
@@ -152,6 +155,7 @@ check(/175–185 W/.test(targets), 'F5 bike target is 175–185 W');
 check(/5:15–5:30 \/km/.test(targets), 'F5 run target is 5:15–5:30 /km');
 check(/FINISH\s*\n?\s*\d:\d\d–\d:\d\d/.test(targets), 'F5 finish is a range');
 check(await page.getByText('How we got these').isVisible(), 'F5 shows how we got these');
+check(await page.getByText(/your CSS \(your steady pool pace\) of 1:45/).isVisible(), 'F5 says what CSS is where it first uses it');
 await shot('f5');
 await noHorizontalScroll('F5');
 await page.getByRole('button', { name: 'Save to my race card' }).click();

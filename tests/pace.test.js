@@ -17,6 +17,15 @@ test('blueprint worked example: bike 175-185 W, run 5:15-5:30 /km', () => {
   assert.ok(p.finish[1] >= 315 && p.finish[1] <= 345, 'slow end ' + p.finish[1]);
 });
 
+test('CSS is explained where the app mentions it (RD-021)', () => {
+  const p = P.planPace(example);
+  const swim = p.why.find((w) => w.leg === 'Swim').text;
+  assert.match(swim, /your CSS \(your steady pool pace\) of 1:45/);
+  const bad = P.planPace({ ...example, css: 0 });
+  assert.equal(bad.ok, false);
+  assert.match(bad.errors.find((e) => e.field === 'css').message, /critical swim speed \(CSS\)/);
+});
+
 test('the legs always add up to the finish range (RP-05-W2)', () => {
   for (const distance of ['standard', '70.3']) {
     for (const course of ['flat', 'rolling', 'hilly']) {
