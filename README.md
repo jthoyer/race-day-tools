@@ -45,9 +45,15 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 ## Hosting
 
-Not decided yet (D4). `public/_headers` already holds the security headers and a content policy in the format Cloudflare and Netlify read; `connect-src 'none'` means the page can make no network request. If it goes on Cloudflare like the club apps, the club's pattern is a project linked to this repo, an empty build command and only `public/` published.
+**GitHub Pages, for now:** https://jthoyer.github.io/race-day-tools/
 
-To fill in: the host, the domain, and who owns the account.
+`.github/workflows/pages.yml` runs `npm test` on every push to `main` and, if it passes, publishes `public/` as it is. **Merging to `main` is a release**, live within a minute or two.
+
+Set up outside the repo, so a rebuild would lose it: in the repo's **Settings → Pages**, *Source* is **GitHub Actions**.
+
+GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'none'` means the page can make no network request. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
+
+The longer-term host and domain are still open (D4).
 
 ## Contributing
 
