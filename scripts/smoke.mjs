@@ -136,6 +136,19 @@ await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 // F3 Fitness numbers
 await page.getByRole('heading', { name: 'Fitness numbers' }).waitFor();
 check(/Your steady swim pace per 100 m in a pool/.test(await page.locator('.app').innerText()), 'F3 says what CSS is');
+// The pace choice changes the bike and the run and never the swim, so it sits between them and the swim.
+const topOf3 = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
+const swimTop3 = await topOf3(page.getByText('Swim', { exact: true }));
+const choiceTop = await topOf3(page.getByText('How do you pace the bike and run?'));
+const bikeTop3 = await topOf3(page.getByText('Bike', { exact: true }));
+check(swimTop3 < choiceTop && choiceTop < bikeTop3, 'F3 puts the pace choice between Swim and Bike');
+check(await page.getByText(/Power needs your FTP\. Heart rate needs/).isVisible(), 'F3 says what each pace mode needs');
+// Switching mode shows what that mode needs and keeps what was typed for the others.
+await page.getByLabel('FTP', { exact: true }).fill('240');
+await page.getByRole('button', { name: 'Heart rate' }).click();
+check((await page.getByLabel('Bike threshold heart rate').isVisible()) && (await page.getByLabel('Run threshold heart rate').isVisible()), 'Heart rate mode asks for both threshold heart rates');
+await page.getByRole('button', { name: 'Power' }).click();
+check((await page.getByLabel('FTP', { exact: true }).inputValue()) === '240', 'Switching pace mode keeps the FTP that was typed');
 // Time entry: digits become a time, a dot works, one or two digits are refused, and an error goes as soon as the entry reads.
 const cssBox = page.getByLabel('Critical swim speed (CSS)');
 await cssBox.fill('45');
@@ -218,6 +231,7 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
+check(/Gel \(typical\) at \d/.test(card) && /Sip about \d+ ml of (Sports drink \(typical\)( and water)?|water) every 15 min/.test(card), 'Race card names the gel and the drink');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
 check(card.includes('· about ' + wantClock(6 * 60 + 40)), 'Race card shows the finish as a time of day');
@@ -306,6 +320,15 @@ await carbsList.last().selectOption({ label: '40 g' });
 check((await page.getByLabel('Exact figure (g)').count()) === (await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).products.filter((p) => ![20, 25, 30, 35, 40, 45, 50].includes(p.carbs)).length)), 'Picking a step from Other hides the typed box again');
 await page.getByRole('link', { name: 'Done' }).click();
 await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
+// The product the person picks is named in the plan rows, so the choice shows where it is used.
+await page.locator('select').first().selectOption({ label: 'Test gel 40' });
+const planText = await page.locator('.app').innerText();
+check(/1 serve of Test gel 40/.test(planText) && !/1 serve of gel or chews/.test(planText), 'The plan rows name the gel the person picked');
+const sipRow = await page.locator('.prow', { hasText: 'Every 15 min' }).innerText();
+const mixRow = (await page.locator('.prow', { hasText: 'Mix' }).count()) ? await page.locator('.prow', { hasText: 'Mix' }).first().innerText() : '';
+check(!/of drink\s*$/.test(sipRow.trim()) && /Sports drink \(typical\)|water/.test(sipRow + mixRow), 'The sip row names what is in the bottle');
+await page.locator('select').nth(1).selectOption({ label: 'Water only' });
+check(/ml of water/.test(await page.locator('.prow', { hasText: 'Every 15 min' }).innerText()), 'Water only shows as water in the sip row');
 
 // Guide: bike target works alone, then saves into a plan with FTP and course carried over
 const g = await browser.newPage({ viewport: { width: 390, height: 844 } });
