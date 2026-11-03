@@ -743,7 +743,9 @@
     if (fromPlan) {
       splitsBox = h('section', { class: 'fromplan' },
         h('p', { class: 'label' }, 'From your pace plan'),
-        h('p', null, 'Swim ' + T.fmtHM(r.splits.swim) + ' · Bike ' + T.fmtHM(r.splits.bike) + ' · Run ' + T.fmtHM(r.splits.run)),
+        // The same tiles as the race card. These are the middle of each pace range, which is what the fuel plan uses.
+        h('div', { class: 'stats' }, stat('Swim', T.fmtHM(r.splits.swim), 'h:mm'), stat('Bike', T.fmtHM(r.splits.bike), 'h:mm'), stat('Run', T.fmtHM(r.splits.run), 'h:mm')),
+        h('p', { class: 'help' }, 'The middle of each range in your pace plan.'),
         h('button', {
           type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () {
             r.splitsByHand = { bike: r.splits.bike, run: r.splits.run }; commit(); refresh();
@@ -861,6 +863,14 @@
       rn.sodiumShort ? prow('Top up', '~' + rn.sodiumShort + ' mg/hr more, or cola or sports drink at aid stations') : null
     ];
     return h('div', { class: 'stack' },
+      // The packing list comes first: it is what a person needs before they read the legs.
+      h('section', { class: 'card' },
+        h('p', { class: 'label' }, 'Carry list'),
+        h('ul', { class: 'carry' },
+          h('li', null, p.carry.bikeGels + ' × ' + p.carry.gelName + ' on the bike'),
+          h('li', null, p.carry.runGels + ' × ' + p.carry.gelName + ' for the run (T2 bag or race belt)'),
+          h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (p.carry.drink && p.bike.drinkShare > 0 ? ' (' + p.carry.drink + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
+          p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null)),
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Before the swim'), null),
         h('p', { class: 'help', style: 'padding-bottom:8px' }, p.preRace)),
@@ -870,13 +880,6 @@
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Run · ' + T.fmtHM(rn.minutes)), h('span', { class: 'badge' }, rn.carbsPerHour + ' g/hr')),
         runRows),
-      h('section', { class: 'card' },
-        h('p', { class: 'label' }, 'Carry list'),
-        h('ul', { class: 'carry' },
-          h('li', null, p.carry.bikeGels + ' × ' + p.carry.gelName + ' on the bike'),
-          h('li', null, p.carry.runGels + ' × ' + p.carry.gelName + ' for the run (T2 bag or race belt)'),
-          h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (p.carry.drink && p.bike.drinkShare > 0 ? ' (' + p.carry.drink + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
-          p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null)),
       h('div', { class: 'info warn' },
         h('div', null,
           h('p', null, 'Capped at what your gut has trained: ' + p.gut + ' g an hour. Fluid stays under your ' + (p.sweatTypical ? 'typical ' : '') + 'sweat rate of ' + p.sweat + ' L an hour.'),

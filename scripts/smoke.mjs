@@ -167,6 +167,18 @@ check(await page.getByText('From your pace plan').isVisible(), 'Fuel uses the pa
 const fuelText = await page.locator('.app').innerText();
 check(/Capped at what your gut has trained: 70 g an hour/.test(fuelText), 'Fuel shows the gut cap');
 check(/not medical advice/i.test(fuelText), 'Fuel shows not medical advice');
+// The splits show as the same tiles as the race card, and they are the numbers the plan uses.
+const tiles = await page.locator('.fromplan .stat').allInnerTexts();
+check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && tiles.every((t) => /h:mm/.test(t)), 'Fuel shows the pace splits as three tiles');
+const bikeTile = (/(\d:\d\d)/.exec(tiles[1]) || [])[1];
+check(!!bikeTile && new RegExp('Bike · ' + bikeTile).test(fuelText), 'The bike tile is the time the fuel plan uses');
+// The carry list is the first card of the plan. The cap and safety note stays last.
+const topOf = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
+const carryTop = await topOf(page.getByText('Carry list', { exact: true }));
+const swimTop = await topOf(page.getByRole('heading', { name: 'Before the swim' }));
+const capTop = await topOf(page.getByText(/Capped at what your gut has trained/));
+const runTop = await topOf(page.getByRole('heading', { name: /^Run · / }));
+check(carryTop < swimTop && swimTop < runTop && runTop < capTop, 'The carry list comes first and the cap and safety note stays last');
 await shot('a2-fuel');
 await noHorizontalScroll('Fuel');
 await page.getByRole('button', { name: 'Save to my race card' }).click();
