@@ -28,7 +28,7 @@ Work happens on **short-lived branches cut from an up-to-date `main`**, one bran
 
 - Name it `type/short-description`, lowercase with hyphens: `feat/countdown`, `fix/sip-rounding`, `docs/verify-ranges`, `refactor/split-app-js`, `test/fuel-fuzz`, `chore/headers`. Say what, not who or when.
 - Use the same type in the PR title. Never commit to `main` directly, never force-push it.
-- Nothing is hosted yet (decision D4). Once it is, merging to `main` will be a release. Write each PR as if it already were.
+- **Merging to `main` deploys** to https://jthoyer.github.io/race-day-tools/ within a minute or two, once `npm test` passes, so a merge is a release.
 - The PR description says what changed and why, anything to do by hand outside the repo, what you ran and what you could not run, and any decision for the reviewer.
 
 ## Commits
