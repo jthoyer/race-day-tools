@@ -119,16 +119,34 @@
         var bad = opts.validate ? opts.validate(text) : '';
         if (bad) { raw[path] = text; errors[path] = bad; if (opts.live) opts.live(); return; }
         if (opts.validate) delete errors[path];
+        // Times can be typed as digits ("130" is 1:30) or with a dot ("1.30"). See time.js, tidyTime.
         var parsed = kind === 'num' ? RD.ui.num(text)
-          : kind === 'clock' ? T.parseClock(text)
-            : kind === 'hm' ? T.parseHM(text)
+          : kind === 'clock' ? T.parseClock(T.tidyTime(text))
+            : kind === 'hm' ? T.parseHM(T.tidyTime(text))
               : text;
         if (kind !== 'text' && parsed == null && text.trim() !== '') raw[path] = text;
         else delete raw[path];
+        // An error stays on screen until the next Next, so take it off as soon as what is typed reads.
+        // A new one waits for the person to leave the field or press Next.
+        if (kind !== 'text' && parsed != null && errors[path]) clearFieldError(e.target, path);
         set(path, kind !== 'text' && text.trim() === '' ? null : parsed);
         if (opts.live) opts.live();
-      }
+      },
+      // When the person leaves a time field, show the time we read, so a slip is easy to see.
+      onchange: kind === 'clock' || kind === 'hm' ? function (e) {
+        var p = kind === 'clock' ? T.parseClock(T.tidyTime(e.target.value)) : T.parseHM(T.tidyTime(e.target.value));
+        if (p != null) e.target.value = kind === 'clock' ? T.fmtPace(p) : T.fmtHM(p);
+      } : null
     });
+  }
+
+  // Take an error message off a field without redrawing the screen, so typing is not interrupted.
+  function clearFieldError(input, path) {
+    delete errors[path];
+    var msg = document.getElementById(input.id + '-err');
+    if (msg) msg.remove();
+    input.removeAttribute('aria-invalid');
+    input.removeAttribute('aria-describedby');
   }
 
   // True when something typed in this field can't be read.
@@ -522,7 +540,11 @@
     var e = {};
     var map = { css: 'fitness.css', ftp: 'fitness.ftp', runThreshold: 'fitness.runThreshold', bikeLthr: 'fitness.bikeLthr', runLthr: 'fitness.runLthr', steadySpeed: 'fitness.steadySpeed' };
     RD.pace.validate(paceInput()).forEach(function (x) { if (map[x.field]) e[map[x.field]] = x.message; });
-    Object.keys(map).forEach(function (k) { if (unreadable(map[k])) e[map[k]] = 'That doesn’t look right. Check the format.'; });
+    Object.keys(map).forEach(function (k) {
+      if (!unreadable(map[k])) return;
+      // The swim and run pace fields are times: say what to type. The rest are plain numbers.
+      e[map[k]] = k === 'css' || k === 'runThreshold' ? T.unreadableTimeMessage(raw[map[k]], 'clock') : 'That doesn’t look right. Check the format.';
+    });
     return e;
   }
 

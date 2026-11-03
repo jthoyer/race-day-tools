@@ -127,14 +127,33 @@ check(await page.getByRole('heading', { name: 'About you' }).isVisible(), 'F2 re
 check((await page.getByRole('alert').count()) >= 2, 'F2 shows field errors');
 await page.getByLabel('Body weight').fill('72');
 await page.getByLabel('Carbs your gut handles').fill('70');
+check(!(await page.getByText(/Enter a body weight/).isVisible()) && !(await page.getByText(/Enter 0 to 120 g an hour/).isVisible()), 'F2 errors go once a number is typed');
 await shot('f2');
 await page.getByRole('button', { name: 'Next: fitness numbers' }).click();
 
 // F3 Fitness numbers
 await page.getByRole('heading', { name: 'Fitness numbers' }).waitFor();
-await page.getByLabel('CSS, your threshold swim pace').fill('1:45');
+// Time entry: digits become a time, a dot works, one or two digits are refused, and an error goes as soon as the entry reads.
+const cssBox = page.getByLabel('CSS, your threshold swim pace');
+await cssBox.fill('45');
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+check(await page.getByText('Type minutes and seconds, such as 1:45 or 145.').isVisible(), 'F3 refuses 45 and says what to type');
+check(await page.getByRole('heading', { name: 'Fitness numbers' }).isVisible(), 'F3 does not move on with an unreadable time');
+await cssBox.fill('175');
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+check(await page.getByText('Seconds go up to 59.').isVisible(), 'F3 refuses 175 because seconds stop at 59');
+await cssBox.fill('130');
+check(!(await page.getByText('Seconds go up to 59.').isVisible()), 'The error goes as soon as the entry reads');
+await cssBox.blur();
+check((await cssBox.inputValue()) === '1:30', 'Typing 130 shows 1:30 when the person leaves the field');
+await cssBox.fill('1.45');
+await cssBox.blur();
+check((await cssBox.inputValue()) === '1:45', 'A dot works like a colon: 1.45 shows 1:45');
 await page.getByLabel('FTP', { exact: true }).fill('240');
-await page.getByLabel('Run threshold pace').fill('4:50');
+const runBox = page.getByLabel('Run threshold pace');
+await runBox.fill('450');
+await runBox.blur();
+check((await runBox.inputValue()) === '4:50', 'Typing 450 shows 4:50');
 await shot('f3');
 await page.getByRole('button', { name: 'Next: course and heat' }).click();
 
