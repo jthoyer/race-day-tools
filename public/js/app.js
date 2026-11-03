@@ -712,14 +712,24 @@
   function stat(name, value, unit) {
     return h('div', { class: 'stat' }, h('span', null, name), h('b', null, value), h('span', null, unit));
   }
+  // The gel or chew and the drink a plan was made with, by the names the person chose or typed.
+  // The plan holds them (carry.gelName, carry.drink). A null drink means water only.
+  function gelName(f) { return (f.carry && f.carry.gelName) || 'gel or chews'; }
+  function drinkName(f) { return f.carry && f.carry.drink ? f.carry.drink : null; }
+  // What the bike sips are made of: water, the drink on its own, or the drink mixed with water.
+  function sipKind(f) {
+    var dn = drinkName(f);
+    var share = f.bike.drinkShare;
+    return !dn || share <= 0 ? 'water' : share < 1 ? dn + ' and water' : dn;
+  }
   function bikeLine(f) {
-    var parts = ['Sip about ' + f.bike.sipMl + ' ml every 15 min.'];
-    if (f.bike.gels) parts.push('Gel at ' + minutesList(f.bike.gelTimes) + '.');
+    var parts = ['Sip about ' + f.bike.sipMl + ' ml of ' + sipKind(f) + ' every 15 min.'];
+    if (f.bike.gels) parts.push(gelName(f) + ' at ' + minutesList(f.bike.gelTimes) + '.');
     return parts.join(' ');
   }
   function runLine(f) {
     var parts = [];
-    if (f.run.gels) parts.push('Gel at ' + minutesList(f.run.gelTimes) + '.');
+    if (f.run.gels) parts.push(gelName(f) + ' at ' + minutesList(f.run.gelTimes) + '.');
     else parts.push('No gels needed; sports drink at aid stations if you want it.');
     parts.push('Water at each aid station.');
     return parts.join(' ');
@@ -897,15 +907,16 @@
     var b = p.bike;
     var rn = p.run;
     var bikeRows = [
-      prow('Every 15 min', 'About ' + b.sipMl + ' ml of ' + (b.drinkShare <= 0 || b.drink === 'water' ? 'water' : b.drinkShare < 1 ? 'fluid' : 'drink')),
-      b.drinkShare > 0 && b.drinkShare < 1 ? prow('Mix', Math.round(b.drinkShare * 100) + '% drink, the rest water') : null,
-      b.gels ? prow(minutesList(b.gelTimes), '1 serve of gel or chews') : prow('Gels', 'None needed: the drink covers it'),
+      // The rows name the products the person chose, so the choice shows where it is used.
+      prow('Every 15 min', 'About ' + b.sipMl + ' ml of ' + (!drinkName(p) || b.drinkShare <= 0 ? 'water' : b.drinkShare < 1 ? 'fluid' : drinkName(p))),
+      b.drinkShare > 0 && b.drinkShare < 1 && drinkName(p) ? prow('Mix', Math.round(b.drinkShare * 100) + '% ' + drinkName(p) + ', the rest water') : null,
+      b.gels ? prow(minutesList(b.gelTimes), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed: the drink covers it'),
       prow('Bottles', 'Start with ' + b.bottlesAtStart + (b.refills ? '; pick up ' + b.refills + ' more at aid stations' : '')),
       prow('Sodium', '~' + b.sodiumTarget + ' mg/hr (' + b.sodiumFromProducts + ' from your products)'),
       b.sodiumShort ? prow('Top up', '~' + b.sodiumShort + ' mg/hr more: a salt capsule or salty snack you have tried') : null
     ];
     var runRows = [
-      rn.gels ? prow(minutesList(rn.gelTimes), '1 serve of gel or chews') : prow('Gels', 'None needed for this run'),
+      rn.gels ? prow(minutesList(rn.gelTimes), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed for this run'),
       prow('Each aid station', 'Water, a few sips: about ' + Math.round(rn.fluidPerHour * 1000) + ' ml an hour'),
       prow('Sodium', '~' + rn.sodiumTarget + ' mg/hr (' + rn.sodiumFromProducts + ' from your gels)'),
       rn.sodiumShort ? prow('Top up', '~' + rn.sodiumShort + ' mg/hr more, or cola or sports drink at aid stations') : null
