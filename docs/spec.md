@@ -23,7 +23,7 @@ Each is checkable. The tests that cover each one are named.
 11. **Own products (RD-02-A3).** People can add, edit and remove gels, chews and drinks. Typical defaults are generic, with no brand names. (smoke test)
 12. **Not medical advice (RD-02-A2)** appears beside every plan, on the card and on the print.
 13. **Guide embeds (RD-02-A4, F7, RP-07).** A guide page runs one step on its own with no race set up. "Save to a race plan" starts a plan and carries the guide's numbers in. (smoke test)
-14. **Printable top-tube card (RD-07-A2).** Print shows only a card about 7 cm wide with pace targets and fuel times. (smoke test)
+14. **Printable top-tube card (RD-07-A2).** Print shows only a card about 7 cm wide with pace targets and, from a saved fuel plan, the pre-race line, bike and run carbs, drink and sip, gel name and times, sodium and a carry list. With no fuel plan it says "Fuel plan not made yet." (smoke test checks the fuel lines; the "not made yet" line was checked by hand)
 15. **Phone first.** No sideways scroll at 390 px. Tap targets at least 44 px. Text goes into the page as text, never as HTML.
 
 ## Out of scope

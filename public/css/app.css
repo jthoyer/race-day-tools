@@ -965,6 +965,7 @@ details.test p {
   }
   .tt p {
     margin: 0 0 1mm;
+    overflow-wrap: anywhere;
   }
   .tt .big {
     font: 700 14pt var(--display);

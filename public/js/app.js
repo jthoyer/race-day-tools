@@ -870,12 +870,30 @@
     }
     if (f && f.ok !== false) {
       if (c.race && c.race.fuel === f && fuelStale(c.race)) kids.push(h('p', null, h('b', null, 'Fuel plan out of date. Update it before race day.')));
-      kids.push(h('h3', null, 'Bike fuel · ' + f.bike.carbsPerHour + ' g/hr'),
-        h('p', null, 'Sip ~' + f.bike.sipMl + ' ml every 15 min'),
-        f.bike.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.bike.gelTimes))) : null,
-        h('h3', null, 'Run fuel · ' + f.run.carbsPerHour + ' g/hr'),
-        f.run.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.run.gelTimes))) : null,
-        h('p', null, 'Water at each aid station'));
+      var fb = f.bike;
+      var fr = f.run;
+      // A plan saved by an older version may lack carry or preRace: print what is there, never crash.
+      var carry = f.carry || null;
+      var gelName = carry && carry.gelName ? carry.gelName : 'Gel';
+      // A diluted drink is called "fluid", as on the screen, so nobody drinks it neat.
+      var drinkName = fb.drinkShare <= 0 ? 'water' : fb.drinkShare < 1 ? 'fluid' : fb.drink;
+      kids.push(f.preRace ? h('p', { class: 'fine' }, f.preRace) : null,
+        h('h3', null, 'Bike fuel · ' + fb.carbsPerHour + ' g/hr'),
+        h('p', null, 'Sip ~' + fb.sipMl + ' ml every 15 min: ' + drinkName),
+        fb.drinkShare > 0 && fb.drinkShare < 1 ? h('p', null, Math.round(fb.drinkShare * 100) + '% drink, the rest water') : null,
+        fb.gels ? h('p', null, gelName + ' at ', h('span', { class: 'big' }, minutesList(fb.gelTimes))) : h('p', null, 'No gels needed'),
+        h('p', null, 'Sodium ~' + fb.sodiumTarget + ' mg/hr'),
+        fb.sodiumShort ? h('p', null, 'Top up ~' + fb.sodiumShort + ' mg/hr more') : null,
+        h('h3', null, 'Run fuel · ' + fr.carbsPerHour + ' g/hr'),
+        fr.gels ? h('p', null, gelName + ' at ', h('span', { class: 'big' }, minutesList(fr.gelTimes))) : h('p', null, 'No gels needed'),
+        h('p', null, 'Water at each aid station, ~' + Math.round(fr.fluidPerHour * 1000) + ' ml/hr'),
+        h('p', null, 'Sodium ~' + fr.sodiumTarget + ' mg/hr'),
+        fr.sodiumShort ? h('p', null, 'Top up ~' + fr.sodiumShort + ' mg/hr more') : null,
+        carry ? h('h3', null, 'Carry') : null,
+        carry ? h('p', null, carry.bikeGels + ' × ' + gelName + ' on bike, ' + carry.runGels + ' for run, ' + carry.bottles + ' bottle' + (carry.bottles > 1 ? 's' : '') + (carry.drink && fb.drinkShare > 0 ? ' (' + carry.drink + (fb.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')) : null,
+        carry && (fb.sodiumShort || fr.sodiumShort) ? h('p', null, 'Salt capsules or a salty snack you have tried') : null);
+    } else if (p) {
+      kids.push(h('p', null, 'Fuel plan not made yet.'));
     }
     kids.push(h('p', { class: 'fine' }, 'Times are from the start of each leg. Typical ranges, not medical advice.'));
     pr.appendChild(h('div', { class: 'tt' }, kids));
