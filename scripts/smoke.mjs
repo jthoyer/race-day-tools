@@ -213,8 +213,10 @@ check(/Capped at what your gut has trained: 70 g an hour/.test(fuelText), 'Fuel 
 check(/not medical advice/i.test(fuelText), 'Fuel shows not medical advice');
 // The splits show as the same tiles as the race card, and they are the numbers the plan uses.
 const tiles = await page.locator('.fromplan .stat').allInnerTexts();
-check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && tiles.every((t) => /h:mm/.test(t)), 'Fuel shows the pace splits as three tiles');
+check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && tiles.every((t) => /\d:\d\d–\d:\d\d/.test(t)), 'Fuel shows the pace splits as three tiles');
 const bikeTile = (/(\d:\d\d)/.exec(tiles[1]) || [])[1];
+const bikeRange = /(\d:\d\d)–(\d:\d\d)/.exec(tiles[1]) || [];
+check(bikeRange.length === 3 && bikeRange[1] <= bikeTile && bikeTile <= bikeRange[2], 'The bike tile sits inside its range');
 check(!!bikeTile && new RegExp('Bike · ' + bikeTile).test(fuelText), 'The bike tile is the time the fuel plan uses');
 // The carry list is the first card of the plan. The cap and safety note stays last.
 const topOf = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
@@ -224,7 +226,7 @@ const capTop = await topOf(page.getByText(/Capped at what your gut has trained/)
 const runTop = await topOf(page.getByRole('heading', { name: /^Run · / }));
 check(carryTop < swimTop && swimTop < runTop && runTop < capTop, 'The carry list comes first and the cap and safety note stays last');
 // A line right under the product choice says what the plan uses, with the carbs per serve.
-check(/The plan uses Gel \(typical\) at 25 g a serve and Sports drink \(typical\) at 30 g per 500 ml\./.test(fuelText), 'The fuel step says which gel and drink the plan uses, with their carbs');
+check(/The plan uses Gel at 25g a serve and Sports drink at 30g per 500 ml\./.test(fuelText), 'The fuel step says which gel and drink the plan uses, with their carbs');
 const useTop = await topOf(page.getByText(/The plan uses /));
 const selTop = await topOf(page.locator('select').first());
 check(selTop < useTop && useTop < carryTop, 'That line sits under the product choice and above the carry list');
@@ -253,7 +255,7 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
-check(/Gel \(typical\) at \d/.test(card) && /Sip about \d+ ml of (Sports drink \(typical\)( and water)?|water) every 15 min/.test(card), 'Race card names the gel and the drink');
+check(/Gel at \d/.test(card) && /Sip about \d+ ml of (Sports drink( and water)?|water) every 15 min/.test(card), 'Race card names the gel and the drink');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
 check(card.includes('· about ' + wantClock(6 * 60 + 40)), 'Race card shows the finish as a time of day');
@@ -346,15 +348,15 @@ await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
 await page.locator('select').first().selectOption({ label: '30g' });
 const planText = await page.locator('.app').innerText();
 check(/1 serve of Gel/.test(planText) && !/1 serve of gel or chews/.test(planText), 'The plan rows still name the gel');
-check(/The plan uses Gel \(typical\) at 30 g a serve and /.test(planText), 'The "plan uses" line follows the carbs the person picked');
+check(/The plan uses Gel at 30g a serve and /.test(planText), 'The "plan uses" line follows the carbs the person picked');
 const savedChoice = await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).choice);
 check(savedChoice.gelCarbs === 30, 'The picked gel carbs are saved exactly');
 const sipRow = await page.locator('.prow', { hasText: 'Every 15 min' }).innerText();
 const mixRow = (await page.locator('.prow', { hasText: 'Mix' }).count()) ? await page.locator('.prow', { hasText: 'Mix' }).first().innerText() : '';
-check(!/of drink\s*$/.test(sipRow.trim()) && /Sports drink \(typical\)|water/.test(sipRow + mixRow), 'The sip row names what is in the bottle');
+check(!/of drink\s*$/.test(sipRow.trim()) && /Sports drink|water/.test(sipRow + mixRow), 'The sip row names what is in the bottle');
 await page.locator('select').nth(1).selectOption({ label: 'Water only' });
 check(/ml of water/.test(await page.locator('.prow', { hasText: 'Every 15 min' }).innerText()), 'Water only shows as water in the sip row');
-check(/The plan uses Gel \(typical\) at 30 g a serve, with water only\./.test(await page.locator('.app').innerText()), 'The "plan uses" line says water only when no drink is picked');
+check(/The plan uses Gel at 30g a serve, with water only\./.test(await page.locator('.app').innerText()), 'The "plan uses" line says water only when no drink is picked');
 
 // Guide: bike target works alone, then saves into a plan with FTP and course carried over
 const g = await browser.newPage({ viewport: { width: 390, height: 844 } });
