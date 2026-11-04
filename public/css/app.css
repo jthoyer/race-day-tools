@@ -1087,3 +1087,10 @@ details.test p {
 
 /* The rule between the product choice and the carry list inside the "Your fuel" card. */
 .divider { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; width: 100%; }
+
+/* RD-025. The km beside a gel time is quieter than the time, which stays first and is the rule.
+   The row rules for the first and last span in a row also match these spans, so these are written to win. */
+.prow .gtimes { display: grid; gap: 2px; overflow-wrap: normal; text-align: left; }
+.prow .gtimes .gt { white-space: nowrap; text-align: left; font-weight: 400; color: var(--muted); }
+.prow .gtimes .gt .km { text-align: left; font-size: 13px; font-weight: 400; color: var(--muted); opacity: 0.85; }
+.kmnote { padding: 0 0 8px; }

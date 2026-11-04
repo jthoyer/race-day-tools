@@ -65,7 +65,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | File | What it does |
 | --- | --- |
 | `public/index.html` | The app shell. Loads the scripts in order. |
-| `public/js/pace.js` | Pacing maths: targets per leg, leg times, finish range. No DOM. |
+| `public/js/pace.js` | Pacing maths: targets per leg, leg times, finish range, and the approximate km beside a gel time (`kmAt`). No DOM. |
 | `public/js/fuel.js` | Fuel maths: carbs, fluid and sodium per leg, gel times, carry list. No DOM. |
 | `public/js/time.js` | Parsing and formatting times and dates. |
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |

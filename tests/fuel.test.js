@@ -195,3 +195,14 @@ test('pickOptions offers the loads and keeps an off-list figure, and ignores a b
   assert.deepEqual(F.pickOptions('gel', 22), [20, 22, 25, 30, 40]);
   for (const bad of [null, undefined, NaN, 0, -5, '25']) assert.deepEqual(F.pickOptions('drink', bad), [20, 30, 40, 60]);
 });
+
+test('the gel times and their count are what they were before km was shown beside them (RD-025)', () => {
+  const base = { heat: 'warm', gut: 60, sweat: null, gel: GEL, drink: DRINK };
+  const a = F.planFuel({ ...base, distance: '70.3', bikeMin: 161, runMin: 114 });
+  assert.deepEqual(a.bike.gelTimes, [40, 115]);
+  assert.deepEqual(a.run.gelTimes, [15, 40, 65, 90]);
+  assert.equal(a.distance, '70.3');
+  const b = F.planFuel({ ...base, distance: 'standard', bikeMin: 70, runMin: 45 });
+  assert.deepEqual(b.bike.gelTimes, [35]);
+  assert.deepEqual(b.run.gelTimes, []);
+});

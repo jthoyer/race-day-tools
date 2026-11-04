@@ -117,3 +117,30 @@ test('low numbers still give a range, never one number (RD-05-A2)', () => {
   const fast = P.planPace({ ...example, distance: 'standard', css: 65, runThreshold: 180 });
   for (const leg of ['swim', 'bike', 'run']) assert.ok(fast[leg].minutes[0] < fast[leg].minutes[1]);
 });
+
+test('kmAt gives about how far into a leg a time is, at an even pace, to the whole km (RD-025)', () => {
+  // The start is 0 km and the end is the whole leg, for both distances and both legs.
+  assert.equal(P.kmAt('70.3', 'bike', 0, 161), 0);
+  assert.equal(P.kmAt('70.3', 'bike', 161, 161), 90);
+  assert.equal(P.kmAt('70.3', 'run', 0, 114), 0);
+  assert.equal(P.kmAt('70.3', 'run', 114, 114), 21);
+  assert.equal(P.kmAt('standard', 'bike', 0, 70), 0);
+  assert.equal(P.kmAt('standard', 'bike', 70, 70), 40);
+  assert.equal(P.kmAt('standard', 'run', 0, 45), 0);
+  assert.equal(P.kmAt('standard', 'run', 45, 45), 10);
+  // The middle of a leg is half the distance. 40 min of a 161 min, 90 km bike is about 22 km.
+  assert.equal(P.kmAt('70.3', 'bike', 80.5, 161), 45);
+  assert.equal(P.kmAt('70.3', 'bike', 40, 161), 22);
+  assert.equal(P.kmAt('standard', 'run', 22.5, 45), 5);
+});
+
+test('kmAt never passes the leg distance, and a blank or unreadable value gives no km (RD-025)', () => {
+  // A time past the end of the leg is held at the whole leg.
+  assert.equal(P.kmAt('70.3', 'bike', 999, 161), 90);
+  // A blank is not zero: null, undefined, NaN, a string, zero and a negative leg time never give a km.
+  for (const bad of [null, undefined, NaN, Infinity, '161', 0, -5]) assert.equal(P.kmAt('70.3', 'bike', 40, bad), null, String(bad));
+  for (const bad of [null, undefined, NaN, '40', -1]) assert.equal(P.kmAt('70.3', 'bike', bad, 161), null, String(bad));
+  // An unknown distance or leg gives no km. So does a name that only exists on every object.
+  for (const d of ['sprint', null, undefined, 'constructor', 'toString']) assert.equal(P.kmAt(d, 'bike', 40, 161), null, String(d));
+  for (const l of ['swim', 'toString', undefined]) assert.equal(P.kmAt('70.3', l, 40, 161), null, String(l));
+});
