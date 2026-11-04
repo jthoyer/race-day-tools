@@ -14,7 +14,7 @@
       fitness: { mode: 'power', css: null, ftp: null, ftpRecent: true, runThreshold: null, bikeLthr: null, runLthr: null, steadySpeed: null },
       race: null, // { name, distance, date, start, transitionOpens, course, heat, pace, fuel, splits, splitsByHand }
       solo: null, // the fuel tool used with no race: { distance, bikeMin, runMin, heat }
-      products: null, // null means the typical defaults
+      products: null, // null means the generic starter products
       choice: { gel: 'gel', drink: 'drink', gelCarbs: null, drinkCarbs: null }
     };
   }
@@ -34,7 +34,10 @@
       } else if (k === 'race' || k === 'solo') {
         base[k] = isObj(v) ? v : null;
       } else if (k === 'products') {
-        base[k] = Array.isArray(v) ? v.filter(isObj) : null;
+        // An older save names the starters "Gel (typical)": drop the tag, so every list reads the same.
+        base[k] = Array.isArray(v) ? v.filter(isObj).map(function (p) {
+          return typeof p.name === 'string' ? Object.assign({}, p, { name: p.name.replace(/ \(typical\)$/, '') }) : p;
+        }) : null;
       } else if (v === null || typeof v !== 'object') {
         base[k] = v;
       }

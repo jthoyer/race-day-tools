@@ -36,7 +36,7 @@
   var BOTTLE_L = 0.75;
   var BOTTLES_ON_BIKE = 2;
 
-  // Generic starting products. People should enter their own (RD-02-A3, RD-02-W2).
+  // Generic starting products, not any brand. They show as starters until the person edits their products (RD-02-A3, RD-02-W2).
   var DEFAULT_PRODUCTS = [
     { id: 'gel', name: 'Gel', kind: 'gel', carbs: 25, sodium: 50, serveMl: 0 },
     { id: 'drink', name: 'Sports drink', kind: 'drink', carbs: 30, sodium: 250, serveMl: 500 },

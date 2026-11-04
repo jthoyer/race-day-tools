@@ -216,13 +216,20 @@ const tiles = await page.locator('.fromplan .stat').allInnerTexts();
 check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && /~\d:\d\d \/100m/.test(tiles[0]) && /~\d+ km\/h/.test(tiles[1]) && /~\d:\d\d \/km/.test(tiles[2]), 'Fuel shows the pace splits as three tiles');
 const bikeTile = (/(\d:\d\d)/.exec(tiles[1]) || [])[1];
 check(!!bikeTile && new RegExp('Bike · ' + bikeTile).test(fuelText), 'The bike tile is the time the fuel plan uses');
-// The carry list is the first card of the plan. The cap and safety note stays last.
+// The pickers, the line that says what the plan uses and the carry list share one "Your fuel" card.
+// The legs come after it, and the cap and safety note stays last.
 const topOf = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
 const carryTop = await topOf(page.getByText('Carry list', { exact: true }));
 const swimTop = await topOf(page.getByRole('heading', { name: 'Before the swim' }));
 const capTop = await topOf(page.getByText(/Capped at what your gut has trained/));
 const runTop = await topOf(page.getByRole('heading', { name: /^Run · / }));
-check(carryTop < swimTop && swimTop < runTop && runTop < capTop, 'The carry list comes first and the cap and safety note stays last');
+check(carryTop < swimTop && swimTop < runTop && runTop < capTop, 'The carry list sits above the legs and the cap and safety note stays last');
+const fuelCard = page.locator('section.card', { has: page.getByText('Your fuel', { exact: true }) });
+check((await fuelCard.count()) === 1 && (await fuelCard.locator('select').count()) === 2 && (await fuelCard.getByText('Carry list', { exact: true }).count()) === 1,
+  'One "Your fuel" card holds both pickers and the carry list');
+check((await page.getByText('What you use', { exact: true }).count()) === 0, 'The old "What you use" card is gone');
+check(!/typical/i.test(await fuelCard.innerText()), 'No product name says "typical"');
+check(/generic starter products/.test(await fuelCard.innerText()), 'The card says the products are generic starters until you edit them');
 // A line right under the product choice says what the plan uses, with the carbs per serve.
 check(/The plan uses Gel at 25g a serve and Sports drink at 30g per 500 ml\./.test(fuelText), 'The fuel step says which gel and drink the plan uses, with their carbs');
 const useTop = await topOf(page.getByText(/The plan uses /));
@@ -328,6 +335,7 @@ check((await carbsList.last().locator('option').allInnerTexts()).join(',') === '
 await carbsList.last().selectOption({ label: '40 g' });
 await page.getByRole('link', { name: 'Done' }).click();
 await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
+check(!/generic starter products/.test(await page.locator('.app').innerText()), 'Once the person has their own products the starter note goes');
 check((await page.locator('select').first().locator('option').allInnerTexts()).join(',') === '20g,25g,30g,40g', 'The fuel step offers the gel carb loads 20g, 25g, 30g and 40g, with the unit in the label');
 check((await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).products.slice(-1)[0].carbs)) === 40, 'Picking 40 g from the list saves exactly 40');
 // A figure off the list is typed under Other, kept, and shown as typed after a reload. It is never rounded to a step.

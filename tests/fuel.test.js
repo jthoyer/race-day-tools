@@ -169,6 +169,11 @@ test('describeProducts never shows a blank as 0 or null (RD-026)', () => {
   assert.equal(F.describeProducts(null, null), 'The plan uses no gel or chew, with water only.');
 });
 
+test('the starter products are generic and carry no "typical" tag in their names', () => {
+  F.DEFAULT_PRODUCTS.forEach((p) => assert.ok(!/typical/i.test(p.name), p.name));
+  assert.deepEqual(F.DEFAULT_PRODUCTS.map((p) => p.name), ['Gel', 'Sports drink', 'Chews, 3 pieces']);
+});
+
 test('every carb pick on the fuel step stays under the gut figure (RD-009)', () => {
   const base = { distance: '70.3', bikeMin: 160, runMin: 100, heat: 'warm', sweat: null };
   const gelBase = F.DEFAULT_PRODUCTS[0];
