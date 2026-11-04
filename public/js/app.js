@@ -709,10 +709,19 @@
       fuelSec);
   }
 
-  // The pace range for one leg as h:mm–h:mm, or 'h:mm' when the race has no readable range.
-  function legRange(r, leg) {
-    var m = r && r.pace && r.pace[leg] && r.pace[leg].minutes;
-    return m && isFinite(m[0]) && isFinite(m[1]) ? hm(m) : 'h:mm';
+  // The pace behind one leg of the pace plan, in the middle of its range: "~1:45 /100m", "~34 km/h", "~4:50 /km" (RD-030).
+  // Falls back to 'h:mm' when the plan holds no readable pace, so a blank is never shown as zero.
+  function legPace(r, leg) {
+    function isNum(v) { return typeof v === 'number' && isFinite(v) && v > 0; }
+    var p = r && r.pace && r.pace[leg];
+    if (leg === 'bike') {
+      var km = RD.pace.LEGS[r && r.distance] && RD.pace.LEGS[r.distance].bike;
+      var min = r && r.splits && r.splits.bike;
+      return isNum(km) && isNum(min) ? '~' + Math.round(km / (min / 60)) + ' km/h' : 'h:mm';
+    }
+    var pace = p && p.pace;
+    if (!pace || !isNum(pace[0]) || !isNum(pace[1])) return 'h:mm';
+    return '~' + T.fmtPace((pace[0] + pace[1]) / 2) + (leg === 'swim' ? ' /100m' : ' /km');
   }
   function stat(name, value, unit) {
     return h('div', { class: 'stat' }, h('span', null, name), h('b', null, value), h('span', null, unit));
@@ -812,9 +821,9 @@
       splitsBox = h('section', { class: 'fromplan' },
         h('p', { class: 'label' }, 'From your pace plan'),
         // The same tiles as the race card. The big time is the middle of each pace range, which is what the fuel plan uses.
-        // The small line is the range it came from (RD-028). A plan saved before ranges were kept shows the unit instead.
-        h('div', { class: 'stats' }, stat('Swim', T.fmtHM(r.splits.swim), legRange(r, 'swim')), stat('Bike', T.fmtHM(r.splits.bike), legRange(r, 'bike')), stat('Run', T.fmtHM(r.splits.run), legRange(r, 'run'))),
-        h('p', { class: 'help' }, 'Times are h:mm. The big time is the middle of each range in your pace plan.'),
+        // The small line is the pace it came from (RD-030).
+        h('div', { class: 'stats' }, stat('Swim', T.fmtHM(r.splits.swim), legPace(r, 'swim')), stat('Bike', T.fmtHM(r.splits.bike), legPace(r, 'bike')), stat('Run', T.fmtHM(r.splits.run), legPace(r, 'run'))),
+        h('p', { class: 'help' }, 'Times are h:mm. The big time is the middle of each range in your pace plan, and the small line is its pace.'),
         h('button', {
           type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () {
             r.splitsByHand = { bike: r.splits.bike, run: r.splits.run }; commit(); refresh();
