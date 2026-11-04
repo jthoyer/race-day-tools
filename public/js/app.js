@@ -709,6 +709,20 @@
       fuelSec);
   }
 
+  // The pace behind one leg of the pace plan, in the middle of its range: "~1:45 /100m", "~34 km/h", "~4:50 /km" (RD-030).
+  // Falls back to 'h:mm' when the plan holds no readable pace, so a blank is never shown as zero.
+  function legPace(r, leg) {
+    function isNum(v) { return typeof v === 'number' && isFinite(v) && v > 0; }
+    var p = r && r.pace && r.pace[leg];
+    if (leg === 'bike') {
+      var km = RD.pace.LEGS[r && r.distance] && RD.pace.LEGS[r.distance].bike;
+      var min = r && r.splits && r.splits.bike;
+      return isNum(km) && isNum(min) ? '~' + Math.round(km / (min / 60)) + ' km/h' : 'h:mm';
+    }
+    var pace = p && p.pace;
+    if (!pace || !isNum(pace[0]) || !isNum(pace[1])) return 'h:mm';
+    return '~' + T.fmtPace((pace[0] + pace[1]) / 2) + (leg === 'swim' ? ' /100m' : ' /km');
+  }
   function stat(name, value, unit) {
     return h('div', { class: 'stat' }, h('span', null, name), h('b', null, value), h('span', null, unit));
   }
@@ -754,6 +768,7 @@
 
   // Everything the fuel plan depends on, read from the store. The fuel step plans from it, and the
   // card compares it with what a saved plan was made from, to say when the plan is out of date.
+  function pickedCarbs(v) { return typeof v === 'number' && isFinite(v) && v > 0; }
   function fuelInput() {
     var r = S.race;
     var solo = !r;
@@ -765,6 +780,10 @@
     var drinks = list.filter(function (p) { return p.kind === 'drink'; });
     var gel = findIn(gels, S.choice.gel) || gels[0] || null;
     var drink = S.choice.drink === 'none' ? null : findIn(drinks, S.choice.drink) || drinks[0] || null;
+    // The carbs picked on the fuel step replace the product's own figure. The name and sodium stay the product's (RD-009).
+    // A blank or unreadable pick is ignored, never read as 0.
+    if (gel && pickedCarbs(S.choice.gelCarbs)) gel = Object.assign({}, gel, { carbs: S.choice.gelCarbs });
+    if (drink && pickedCarbs(S.choice.drinkCarbs)) drink = Object.assign({}, drink, { carbs: S.choice.drinkCarbs });
     var d = S.details;
     return {
       fromPlan: fromPlan, gels: gels, drinks: drinks,
@@ -801,9 +820,10 @@
     if (fromPlan) {
       splitsBox = h('section', { class: 'fromplan' },
         h('p', { class: 'label' }, 'From your pace plan'),
-        // The same tiles as the race card. These are the middle of each pace range, which is what the fuel plan uses.
-        h('div', { class: 'stats' }, stat('Swim', T.fmtHM(r.splits.swim), 'h:mm'), stat('Bike', T.fmtHM(r.splits.bike), 'h:mm'), stat('Run', T.fmtHM(r.splits.run), 'h:mm')),
-        h('p', { class: 'help' }, 'The middle of each range in your pace plan.'),
+        // The same tiles as the race card. The big time is the middle of each pace range, which is what the fuel plan uses.
+        // The small line is the pace it came from (RD-030).
+        h('div', { class: 'stats' }, stat('Swim', T.fmtHM(r.splits.swim), legPace(r, 'swim')), stat('Bike', T.fmtHM(r.splits.bike), legPace(r, 'bike')), stat('Run', T.fmtHM(r.splits.run), legPace(r, 'run'))),
+        h('p', { class: 'help' }, 'Times are h:mm. The big time is the middle of each range in your pace plan, and the small line is its pace.'),
         h('button', {
           type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () {
             r.splitsByHand = { bike: r.splits.bike, run: r.splits.run }; commit(); refresh();
@@ -838,16 +858,32 @@
 
     // One card for the choice and what to pack. The carry list sits right under the choice that changes it.
     var starter = !Array.isArray(S.products);
+    // One selector per product: the carbs in a gel, and the carbs in a serve of drink. The unit is in the label (RD-009).
+    function carbPick(kind, label, product, key) {
+      return h('label', { class: 'field' }, label,
+        h('select', { onchange: function (e) { set('choice.' + key, e.target.value === '' ? null : Number(e.target.value)); refresh(); } },
+          RD.fuel.pickOptions(kind, product.carbs).map(function (g) {
+            return h('option', { value: String(g), selected: g === product.carbs ? 'selected' : null }, g + 'g');
+          })));
+    }
+    var drinkSelect = null;
+    if (drinks.length) {
+      drinkSelect = h('label', { class: 'field' }, 'Bike drink, carbs per ' + (drink ? drink.serveMl : drinks[0].serveMl) + ' ml',
+        h('select', { onchange: function (e) {
+          if (e.target.value === 'none') set('choice.drink', 'none');
+          else { set('choice.drink', drinks[0].id); set('choice.drinkCarbs', Number(e.target.value)); }
+          refresh();
+        } },
+          RD.fuel.pickOptions('drink', drink ? drink.carbs : drinks[0].carbs).map(function (g) {
+            return h('option', { value: String(g), selected: drink && g === drink.carbs ? 'selected' : null }, g + 'g');
+          }),
+          h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')));
+    }
     var productsBox = h('section', { class: 'card' },
       h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Your fuel'), h('a', { href: '#/products' }, 'Edit my products')),
       h('div', { class: 'two' },
-        h('label', { class: 'field' }, 'Gel or chew',
-          h('select', { onchange: function (e) { set('choice.gel', e.target.value); refresh(); } },
-            gels.map(function (p) { return h('option', { value: p.id, selected: gel && p.id === gel.id ? 'selected' : null }, p.name); }))),
-        h('label', { class: 'field' }, 'Bike drink',
-          h('select', { onchange: function (e) { set('choice.drink', e.target.value); refresh(); } },
-            drinks.map(function (p) { return h('option', { value: p.id, selected: drink && p.id === drink.id ? 'selected' : null }, p.name); }),
-            h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')))),
+        gel ? carbPick('gel', 'Gel or chew, carbs per serve', gel, 'gelCarbs') : null,
+        drinkSelect),
       // Says what the choice does, right under the choice, with the carbs per serve the plan will use.
       h('p', { class: 'help' }, RD.fuel.describeProducts(gel, drink)),
       starter ? h('p', { class: 'help' }, 'These are generic starter products, not a brand. Add the ones you race with under Edit my products.') : null,

@@ -52,12 +52,24 @@
     return out;
   }
 
+  // UNCHECKED. The carbs-per-serve loads offered on the fuel step, in grams: gels, and drinks per serve (RD-009).
+  // The athlete's own figure from My products is always offered too, so a label that says 22g stays selectable.
+  var FUEL_PICK = { gel: [20, 25, 30, 40], drink: [20, 30, 40, 60] };
+  function pickOptions(kind, current) {
+    var list = (FUEL_PICK[kind] || []).slice();
+    if (typeof current === 'number' && isFinite(current) && current > 0 && list.indexOf(current) < 0) {
+      list.push(current);
+      list.sort(function (a, b) { return a - b; });
+    }
+    return list;
+  }
+
   // One plain line on what the plan is built from, for the fuel step: the gel or chew and the drink the person picked,
   // with their carbs. A blank or unreadable figure is left out, never shown as 0 or "null" (RD-026).
   function describeProducts(gel, drink) {
     function isNum(v) { return typeof v === 'number' && isFinite(v); }
-    var g = gel ? (gel.name || 'your gel or chew') + (isNum(gel.carbs) && gel.carbs > 0 ? ' at ' + gel.carbs + ' g a serve' : '') : 'no gel or chew';
-    var d = drink ? (drink.name || 'your drink') + (isNum(drink.carbs) && drink.carbs >= 0 && isNum(drink.serveMl) && drink.serveMl > 0 ? ' at ' + drink.carbs + ' g per ' + drink.serveMl + ' ml' : '') : '';
+    var g = gel ? (gel.name || 'your gel or chew') + (isNum(gel.carbs) && gel.carbs > 0 ? ' at ' + gel.carbs + 'g a serve' : '') : 'no gel or chew';
+    var d = drink ? (drink.name || 'your drink') + (isNum(drink.carbs) && drink.carbs >= 0 && isNum(drink.serveMl) && drink.serveMl > 0 ? ' at ' + drink.carbs + 'g per ' + drink.serveMl + ' ml' : '') : '';
     return 'The plan uses ' + g + (drink ? ' and ' + d : ', with water only') + '.';
   }
 
@@ -226,6 +238,8 @@
     TYPICAL_SWEAT: TYPICAL_SWEAT,
     DEFAULT_PRODUCTS: DEFAULT_PRODUCTS,
     CARB_PICK: CARB_PICK,
+    FUEL_PICK: FUEL_PICK,
+    pickOptions: pickOptions,
     carbSteps: carbSteps,
     describeProducts: describeProducts,
     spread: spread,

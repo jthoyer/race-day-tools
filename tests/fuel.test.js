@@ -148,9 +148,9 @@ test('every carb step is a plannable gel and drink, and the gut cap still holds 
 });
 
 test('describeProducts says what the plan uses, with carbs, and leaves out what it cannot read (RD-026)', () => {
-  assert.equal(F.describeProducts(GEL, DRINK), 'The plan uses Gel at 25 g a serve and Sports drink at 30 g per 500 ml.');
-  assert.equal(F.describeProducts(GEL, null), 'The plan uses Gel at 25 g a serve, with water only.');
-  assert.equal(F.describeProducts(CHEWS, DRINK), 'The plan uses Chews, 3 pieces at 24 g a serve and Sports drink at 30 g per 500 ml.');
+  assert.equal(F.describeProducts(GEL, DRINK), 'The plan uses Gel at 25g a serve and Sports drink at 30g per 500 ml.');
+  assert.equal(F.describeProducts(GEL, null), 'The plan uses Gel at 25g a serve, with water only.');
+  assert.equal(F.describeProducts(CHEWS, DRINK), 'The plan uses Chews, 3 pieces at 24g a serve and Sports drink at 30g per 500 ml.');
 });
 
 test('describeProducts never shows a blank as 0 or null (RD-026)', () => {
@@ -161,15 +161,37 @@ test('describeProducts never shows a blank as 0 or null (RD-026)', () => {
   const blankDrink = { ...DRINK, carbs: null, serveMl: null };
   const t2 = F.describeProducts(GEL, blankDrink);
   assert.ok(!/null|NaN|undefined/.test(t2), t2);
-  assert.equal(t2, 'The plan uses Gel at 25 g a serve and Sports drink.');
+  assert.equal(t2, 'The plan uses Gel at 25g a serve and Sports drink.');
   // A drink with no carbs (an electrolyte drink) is a real 0, so it is shown.
-  assert.equal(F.describeProducts(GEL, { ...DRINK, carbs: 0 }), 'The plan uses Gel at 25 g a serve and Sports drink at 0 g per 500 ml.');
+  assert.equal(F.describeProducts(GEL, { ...DRINK, carbs: 0 }), 'The plan uses Gel at 25g a serve and Sports drink at 0g per 500 ml.');
   // A gel with 0 carbs is not a plannable gel, so its figure is left out.
-  assert.ok(!/ 0 g a serve/.test(F.describeProducts({ ...GEL, carbs: 0 }, DRINK)));
+  assert.ok(!/ 0g a serve/.test(F.describeProducts({ ...GEL, carbs: 0 }, DRINK)));
   assert.equal(F.describeProducts(null, null), 'The plan uses no gel or chew, with water only.');
 });
 
 test('the starter products are generic and carry no "typical" tag in their names', () => {
   F.DEFAULT_PRODUCTS.forEach((p) => assert.ok(!/typical/i.test(p.name), p.name));
   assert.deepEqual(F.DEFAULT_PRODUCTS.map((p) => p.name), ['Gel', 'Sports drink', 'Chews, 3 pieces']);
+});
+
+test('every carb pick on the fuel step stays under the gut figure (RD-009)', () => {
+  const base = { distance: '70.3', bikeMin: 160, runMin: 100, heat: 'warm', sweat: null };
+  const gelBase = F.DEFAULT_PRODUCTS[0];
+  const drinkBase = F.DEFAULT_PRODUCTS[1];
+  for (const gut of [30, 45, 60, 90]) {
+    for (const g of F.pickOptions('gel', 22)) {
+      for (const d of F.pickOptions('drink', 33)) {
+        const p = F.planFuel({ ...base, gut, gel: { ...gelBase, carbs: g }, drink: { ...drinkBase, carbs: d } });
+        assert.ok(p.ok, 'plan ok for gut ' + gut);
+        assert.ok(p.bike.carbsPerHour <= gut, 'bike ' + p.bike.carbsPerHour + ' over gut ' + gut + ' with gel ' + g + ' drink ' + d);
+        assert.ok(p.run.carbsPerHour <= gut, 'run ' + p.run.carbsPerHour + ' over gut ' + gut + ' with gel ' + g + ' drink ' + d);
+      }
+    }
+  }
+});
+
+test('pickOptions offers the loads and keeps an off-list figure, and ignores a blank (RD-009)', () => {
+  assert.deepEqual(F.pickOptions('gel', 25), [20, 25, 30, 40]);
+  assert.deepEqual(F.pickOptions('gel', 22), [20, 22, 25, 30, 40]);
+  for (const bad of [null, undefined, NaN, 0, -5, '25']) assert.deepEqual(F.pickOptions('drink', bad), [20, 30, 40, 60]);
 });
