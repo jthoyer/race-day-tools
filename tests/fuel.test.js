@@ -168,3 +168,25 @@ test('describeProducts never shows a blank as 0 or null (RD-026)', () => {
   assert.ok(!/ 0 g a serve/.test(F.describeProducts({ ...GEL, carbs: 0 }, DRINK)));
   assert.equal(F.describeProducts(null, null), 'The plan uses no gel or chew, with water only.');
 });
+
+test('every carb pick on the fuel step stays under the gut figure (RD-009)', () => {
+  const base = { distance: '70.3', bikeMin: 160, runMin: 100, heat: 'warm', sweat: null };
+  const gelBase = F.DEFAULT_PRODUCTS[0];
+  const drinkBase = F.DEFAULT_PRODUCTS[1];
+  for (const gut of [30, 45, 60, 90]) {
+    for (const g of F.pickOptions('gel', 22)) {
+      for (const d of F.pickOptions('drink', 33)) {
+        const p = F.planFuel({ ...base, gut, gel: { ...gelBase, carbs: g }, drink: { ...drinkBase, carbs: d } });
+        assert.ok(p.ok, 'plan ok for gut ' + gut);
+        assert.ok(p.bike.carbsPerHour <= gut, 'bike ' + p.bike.carbsPerHour + ' over gut ' + gut + ' with gel ' + g + ' drink ' + d);
+        assert.ok(p.run.carbsPerHour <= gut, 'run ' + p.run.carbsPerHour + ' over gut ' + gut + ' with gel ' + g + ' drink ' + d);
+      }
+    }
+  }
+});
+
+test('pickOptions offers the loads and keeps an off-list figure, and ignores a blank (RD-009)', () => {
+  assert.deepEqual(F.pickOptions('gel', 25), [20, 25, 30, 40]);
+  assert.deepEqual(F.pickOptions('gel', 22), [20, 22, 25, 30, 40]);
+  for (const bad of [null, undefined, NaN, 0, -5, '25']) assert.deepEqual(F.pickOptions('drink', bad), [20, 30, 40, 60]);
+});

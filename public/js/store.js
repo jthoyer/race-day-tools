@@ -15,7 +15,7 @@
       race: null, // { name, distance, date, start, transitionOpens, course, heat, pace, fuel, splits, splitsByHand }
       solo: null, // the fuel tool used with no race: { distance, bikeMin, runMin, heat }
       products: null, // null means the typical defaults
-      choice: { gel: 'gel', drink: 'drink' }
+      choice: { gel: 'gel', drink: 'drink', gelCarbs: null, drinkCarbs: null }
     };
   }
 
