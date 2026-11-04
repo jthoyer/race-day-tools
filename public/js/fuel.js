@@ -38,9 +38,9 @@
 
   // Generic starting products. People should enter their own (RD-02-A3, RD-02-W2).
   var DEFAULT_PRODUCTS = [
-    { id: 'gel', name: 'Gel (typical)', kind: 'gel', carbs: 25, sodium: 50, serveMl: 0 },
-    { id: 'drink', name: 'Sports drink (typical)', kind: 'drink', carbs: 30, sodium: 250, serveMl: 500 },
-    { id: 'chews', name: 'Chews, 3 pieces (typical)', kind: 'chew', carbs: 24, sodium: 60, serveMl: 0 }
+    { id: 'gel', name: 'Gel', kind: 'gel', carbs: 25, sodium: 50, serveMl: 0 },
+    { id: 'drink', name: 'Sports drink', kind: 'drink', carbs: 30, sodium: 250, serveMl: 500 },
+    { id: 'chews', name: 'Chews, 3 pieces', kind: 'chew', carbs: 24, sodium: 60, serveMl: 0 }
   ];
 
   // UNCHECKED. The carbs-per-serve choices offered on the My products screen, in grams: a floor, a ceiling and a
@@ -56,8 +56,8 @@
   // with their carbs. A blank or unreadable figure is left out, never shown as 0 or "null" (RD-026).
   function describeProducts(gel, drink) {
     function isNum(v) { return typeof v === 'number' && isFinite(v); }
-    var g = gel ? (gel.name || 'your gel or chew') + (isNum(gel.carbs) && gel.carbs > 0 ? ' at ' + gel.carbs + ' g a serve' : '') : 'no gel or chew';
-    var d = drink ? (drink.name || 'your drink') + (isNum(drink.carbs) && drink.carbs >= 0 && isNum(drink.serveMl) && drink.serveMl > 0 ? ' at ' + drink.carbs + ' g per ' + drink.serveMl + ' ml' : '') : '';
+    var g = gel ? (gel.name || 'your gel or chew') + (isNum(gel.carbs) && gel.carbs > 0 ? ' at ' + gel.carbs + ' grams a serve' : '') : 'no gel or chew';
+    var d = drink ? (drink.name || 'your drink') + (isNum(drink.carbs) && drink.carbs >= 0 && isNum(drink.serveMl) && drink.serveMl > 0 ? ' at ' + drink.carbs + ' grams per ' + drink.serveMl + ' ml' : '') : '';
     return 'The plan uses ' + g + (drink ? ' and ' + d : ', with water only') + '.';
   }
 
