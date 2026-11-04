@@ -269,8 +269,10 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
-check(/Gel at \d/.test(card) && /Sip about \d+ ml of (Sports drink( and water)?|water) every 15 min/.test(card), 'Race card names the gel and the drink');
-check(/Gel at \d+:\d\d \(~\d+ km\)/.test(card) && /Go by the clock/.test(card), 'Race card shows km beside the gel times, with the go-by-the-clock line');
+const gelRow = await page.locator('.racecard .tl .tlrow').first().innerText();
+check(/^\d+:\d\d\s+Gel\b/.test(gelRow) && /Sip about \d+ ml of (Sports drink( and water)?|water) every 15 min/.test(card), 'Race card lists each gel as a row and names the drink');
+check(/~\d+ km/.test(gelRow) && /Go by the clock/.test(card), 'Race card shows km beside the gel times, with the go-by-the-clock line');
+check(!/typical/i.test(card), 'Race card has no "typical" in it');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
 check(card.includes('· about ' + wantClock(6 * 60 + 40)), 'Race card shows the finish as a time of day');
@@ -293,6 +295,18 @@ await page.reload();
 await page.locator('.racecard').waitFor();
 check(/175–185/.test(await page.locator('.racecard').innerText()), 'Race card survives a reload');
 
+// A plan saved before the " (typical)" tag was dropped still holds the tagged names: the card shows them plain
+await page.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem('race-day-tools.v1'));
+  s.race.fuel.carry.gelName = 'Gel (typical)';
+  if (s.race.fuel.carry.drink) s.race.fuel.carry.drink = 'Sports drink (typical)';
+  localStorage.setItem('race-day-tools.v1', JSON.stringify(s));
+});
+await page.reload();
+await page.locator('.racecard').waitFor();
+const oldSave = await page.locator('.racecard').innerText();
+check(!/typical/i.test(oldSave) && /Gel/.test(oldSave), 'A plan saved with "(typical)" in its names shows them plain on the card');
+
 // Home with a race
 await page.goto(base + '/index.html#/');
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
@@ -310,7 +324,7 @@ await page.goto(base + '/index.html#/fuel');
 await page.getByRole('button', { name: 'Update my race card' }).click();
 await page.locator('.racecard').waitFor();
 const updated = await page.locator('.racecard').innerText();
-const bikeG = Number((/Bike (\d+) g\/hr/.exec(updated) || [])[1]);
+const bikeG = Number((/Bike\s+(\d+) g\/hr/.exec(updated) || [])[1]);
 check(!/changed since this plan/.test(updated) && bikeG > 0 && bikeG <= 50, `Updating fuel clears the flag and keeps under the new gut figure (${bikeG} g/hr)`);
 
 // Both times are optional. Clearing them saves blanks, never midnight, and the plan still shows.

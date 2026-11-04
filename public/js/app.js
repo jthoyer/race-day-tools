@@ -706,10 +706,10 @@
     if (f) {
       fuelSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('a', { href: '#/fuel' }, 'Edit')),
-        fuelStale(r) ? h('p', { class: 'error' }, 'Your splits, details or products changed since this plan. Open Fuel to update it.') : null,
-        h('p', null, h('b', null, 'Bike ' + f.bike.carbsPerHour + ' g/hr. '), bikeLine(f)),
-        h('p', null, h('b', null, 'Run ' + f.run.carbsPerHour + ' g/hr. '), runLine(f)),
-        showsKm(f, 'bike') || showsKm(f, 'run') ? h('p', { class: 'small' }, RD.pace.KM_NOTE) : null);
+        fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Fuel to update it.') : null,
+        fuelLeg('Bike', f, 'bike'),
+        fuelLeg('Run', f, 'run'),
+        showsKm(f, 'bike') || showsKm(f, 'run') ? h('p', { class: 'notice go' }, RD.pace.KM_NOTE) : null);
     } else {
       fuelSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('span', { class: 'later' }, p ? 'Next' : '')),
@@ -747,25 +747,32 @@
   }
   // The gel or chew and the drink a plan was made with, by the names the person chose or typed.
   // The plan holds them (carry.gelName, carry.drink). A null drink means water only.
-  function gelName(f) { return (f.carry && f.carry.gelName) || 'gel or chews'; }
-  function drinkName(f) { return f.carry && f.carry.drink ? f.carry.drink : null; }
+  // Both read through plainName, so a plan saved before the " (typical)" tag was dropped shows the plain name.
+  function gelName(f) { return RD.fuel.plainName(f.carry && f.carry.gelName) || 'gel or chews'; }
+  function drinkName(f) { return f.carry && f.carry.drink ? RD.fuel.plainName(f.carry.drink) : null; }
   // What the bike sips are made of: water, the drink on its own, or the drink mixed with water.
   function sipKind(f) {
     var dn = drinkName(f);
     var share = f.bike.drinkShare;
     return !dn || share <= 0 ? 'water' : share < 1 ? dn + ' and water' : dn;
   }
-  function bikeLine(f) {
-    var parts = ['Sip about ' + f.bike.sipMl + ' ml of ' + sipKind(f) + ' every 15 min.'];
-    if (f.bike.gels) parts.push(gelName(f) + ' at ' + gelTimesText(f, 'bike') + '.');
-    return parts.join(' ');
-  }
-  function runLine(f) {
-    var parts = [];
-    if (f.run.gels) parts.push(gelName(f) + ' at ' + gelTimesText(f, 'run') + '.');
-    else parts.push('No gels needed; sports drink at aid stations if you want it.');
-    parts.push('Water at each aid station.');
-    return parts.join(' ');
+  // One leg of the fuel plan on the race card: the leg and its carbs an hour, then each gel as a row with its time
+  // first and its km beside it (RD-025), as the 4 Nov 2026 timeline blueprint. The words match the old paragraph.
+  function fuelLeg(name, f, leg) {
+    var L = f[leg];
+    var gel = gelName(f);
+    var kids = [h('header', null, h('h3', null, name), h('span', { class: 'badge' }, L.carbsPerHour + ' g/hr'))];
+    if (leg === 'bike') kids.push(h('p', { class: 'tlline' }, 'Sip about ' + L.sipMl + ' ml of ' + sipKind(f) + ' every 15 min.'));
+    if (L.gels) {
+      L.gelTimes.forEach(function (t) {
+        var k = kmOf(f, leg, t);
+        kids.push(h('div', { class: 'tlrow' }, h('b', null, T.fmtHM(t)), h('span', null, gel.charAt(0).toUpperCase() + gel.slice(1)), k ? h('span', { class: 'km' }, k) : null));
+      });
+    } else if (leg === 'run') {
+      kids.push(h('p', { class: 'tlline' }, 'No gels needed; sports drink at aid stations if you want it.'));
+    }
+    if (leg === 'run') kids.push(h('p', { class: 'tlline' }, 'Water at each aid station.'));
+    return h('div', { class: 'tl' }, kids);
   }
   function printButton() {
     return h('button', { type: 'button', class: 'btn ghost', onclick: function () { root.print(); } },
@@ -1006,9 +1013,9 @@
     return h('div', { class: 'stack' },
       h('p', { class: 'label' }, 'Carry list'),
       h('ul', { class: 'carry' },
-        h('li', null, p.carry.bikeGels + ' × ' + p.carry.gelName + ' on the bike'),
-        h('li', null, p.carry.runGels + ' × ' + p.carry.gelName + ' for the run (T2 bag or race belt)'),
-        h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (p.carry.drink && p.bike.drinkShare > 0 ? ' (' + p.carry.drink + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
+        h('li', null, p.carry.bikeGels + ' × ' + gelName(p) + ' on the bike'),
+        h('li', null, p.carry.runGels + ' × ' + gelName(p) + ' for the run (T2 bag or race belt)'),
+        h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (drinkName(p) && p.bike.drinkShare > 0 ? ' (' + drinkName(p) + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
         p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null));
   }
   function prow(a, b) { return h('div', { class: 'prow' }, h('span', null, a), h('span', null, b)); }
