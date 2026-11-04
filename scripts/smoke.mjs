@@ -216,6 +216,15 @@ const tiles = await page.locator('.fromplan .stat').allInnerTexts();
 check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && /~\d:\d\d \/100m/.test(tiles[0]) && /~\d+ km\/h/.test(tiles[1]) && /~\d:\d\d \/km/.test(tiles[2]), 'Fuel shows the pace splits as three tiles');
 const bikeTile = (/(\d:\d\d)/.exec(tiles[1]) || [])[1];
 check(!!bikeTile && new RegExp('Bike · ' + bikeTile).test(fuelText), 'The bike tile is the time the fuel plan uses');
+// RD-025. Each gel time shows about how far into the leg it is. The time comes first, and the km is worked out
+// here from the leg time on screen and the 70.3 bike distance (90 km), not by calling the app's own helper.
+const bikeGelRow = await page.locator('.prow', { hasText: '1 serve of' }).first().innerText();
+const bikeLegMin = Number(bikeTile.split(':')[0]) * 60 + Number(bikeTile.split(':')[1]);
+const gelKm = [...bikeGelRow.matchAll(/(\d+):(\d\d)\s+~(\d+) km/g)];
+check(gelKm.length >= 1 && gelKm.every((m) => Number(m[3]) === Math.round(((Number(m[1]) * 60 + Number(m[2])) / bikeLegMin) * 90)), 'Each bike gel time shows its km, worked out from the leg time and 90 km');
+check(gelKm.length >= 1 && /^\d+:\d\d\s+~/.test(bikeGelRow), 'The time comes first and the km second');
+check(!/NaN|undefined|null/.test(fuelText), 'The fuel plan shows no NaN, undefined or null');
+check((await page.getByText(/Go by the clock: never take a gel earlier than its time\./).count()) >= 1, 'The fuel plan says to go by the clock beside the km');
 // The pickers, the line that says what the plan uses and the carry list share one "Your fuel" card.
 // The legs come after it, and the cap and safety note stays last.
 const topOf = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
@@ -261,6 +270,7 @@ await page.locator('.racecard').waitFor();
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pace and fuel');
 check(/Gel at \d/.test(card) && /Sip about \d+ ml of (Sports drink( and water)?|water) every 15 min/.test(card), 'Race card names the gel and the drink');
+check(/Gel at \d+:\d\d \(~\d+ km\)/.test(card) && /Go by the clock/.test(card), 'Race card shows km beside the gel times, with the go-by-the-clock line');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
 check(card.includes('· about ' + wantClock(6 * 60 + 40)), 'Race card shows the finish as a time of day');
@@ -271,6 +281,7 @@ await page.emulateMedia({ media: 'print' });
 await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
 const tt = await page.locator('.tt').textContent();
 check(/Bike fuel/.test(tt) && /175–185 W/.test(tt), 'Print card has pace and fuel');
+check(/at ~\d+ km/.test(tt) && /Go by the clock/.test(tt) && /Gel \d+:\d\d/.test(tt), 'Print card keeps the times and adds the km and the go-by-the-clock line');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
 check(/Transition opens 5:30am/.test(tt), 'Print card shows when the transition opens');
 check(tt.includes('About ' + wantClock(6 * 60 + 40)), 'Print card shows the finish as a time of day');
@@ -385,6 +396,8 @@ check(saved.fitness.ftp === 240 && saved.race.course === 'hilly', 'Guide carries
 // Fuel guide works with no race and no typing
 await g.goto(base + '/guides/race-fuel.html');
 check(/g\/hr/.test(await g.locator('.tool').innerText()), 'Fuel guide shows a plan from its defaults');
+const guideTool = await g.locator('.tool').innerText();
+check(/at \d+:\d\d \(~\d+ km\)/.test(guideTool) && /Go by the clock/.test(guideTool) && !/NaN/.test(guideTool), 'Fuel guide shows km beside the run gel times, with the go-by-the-clock line');
 if (SHOTS) await g.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, '0')}-guide-fuel.png`, fullPage: true });
 
 await browser.close();

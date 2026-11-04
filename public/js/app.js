@@ -80,6 +80,24 @@
     return name + ' · ' + dist;
   }
   function minutesList(times) { return times.map(T.fmtHM).join(' · '); }
+  // RD-025. A gel time with about how far into the leg it is: "0:40 (~22 km)". The time comes first and is the rule;
+  // the km is a guide from an even pace. A leg time that cannot be read gives the time alone.
+  function kmOf(p, leg, t) { var k = RD.pace.kmAt(p.distance, leg, t, p[leg].minutes); return k == null ? '' : '~' + k + ' km'; }
+  function gelTimesText(p, leg) {
+    return p[leg].gelTimes.map(function (t) { var k = kmOf(p, leg, t); return T.fmtHM(t) + (k ? ' (' + k + ')' : ''); }).join(' · ');
+  }
+  // The km alone, in the same order as the times, for the 70 mm print card: "~22 km · ~64 km".
+  function kmList(p, leg) { return p[leg].gelTimes.map(function (t) { return kmOf(p, leg, t) || '?'; }).join(' · '); }
+  function showsKm(p, leg) { return p[leg].gels > 0 && p[leg].gelTimes.some(function (t) { return !!kmOf(p, leg, t); }); }
+  // The same times as rows: each time on its own line, with its km beside it in a quieter style.
+  function gelTimesNode(p, leg) {
+    var kids = [];
+    p[leg].gelTimes.forEach(function (t) {
+      var k = kmOf(p, leg, t);
+      kids.push(h('span', { class: 'gt' }, T.fmtHM(t), k ? h('span', { class: 'km' }, ' ' + k) : null));
+    });
+    return h('span', { class: 'gtimes' }, kids);
+  }
 
   // The finish as a time of day, such as "11:51am–12:05pm": the start time plus the finish range shown, to the
   // minute. After midnight it says so. With no start time it gives '' and nothing is shown, never a made-up time.
@@ -690,7 +708,8 @@
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('a', { href: '#/fuel' }, 'Edit')),
         fuelStale(r) ? h('p', { class: 'error' }, 'Your splits, details or products changed since this plan. Open Fuel to update it.') : null,
         h('p', null, h('b', null, 'Bike ' + f.bike.carbsPerHour + ' g/hr. '), bikeLine(f)),
-        h('p', null, h('b', null, 'Run ' + f.run.carbsPerHour + ' g/hr. '), runLine(f)));
+        h('p', null, h('b', null, 'Run ' + f.run.carbsPerHour + ' g/hr. '), runLine(f)),
+        showsKm(f, 'bike') || showsKm(f, 'run') ? h('p', { class: 'small' }, RD.pace.KM_NOTE) : null);
     } else {
       fuelSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('span', { class: 'later' }, p ? 'Next' : '')),
@@ -738,12 +757,12 @@
   }
   function bikeLine(f) {
     var parts = ['Sip about ' + f.bike.sipMl + ' ml of ' + sipKind(f) + ' every 15 min.'];
-    if (f.bike.gels) parts.push(gelName(f) + ' at ' + minutesList(f.bike.gelTimes) + '.');
+    if (f.bike.gels) parts.push(gelName(f) + ' at ' + gelTimesText(f, 'bike') + '.');
     return parts.join(' ');
   }
   function runLine(f) {
     var parts = [];
-    if (f.run.gels) parts.push(gelName(f) + ' at ' + minutesList(f.run.gelTimes) + '.');
+    if (f.run.gels) parts.push(gelName(f) + ' at ' + gelTimesText(f, 'run') + '.');
     else parts.push('No gels needed; sports drink at aid stations if you want it.');
     parts.push('Water at each aid station.');
     return parts.join(' ');
@@ -953,13 +972,13 @@
       // The rows name the products the person chose, so the choice shows where it is used.
       prow('Every 15 min', 'About ' + b.sipMl + ' ml of ' + (!drinkName(p) || b.drinkShare <= 0 ? 'water' : b.drinkShare < 1 ? 'fluid' : drinkName(p))),
       b.drinkShare > 0 && b.drinkShare < 1 && drinkName(p) ? prow('Mix', Math.round(b.drinkShare * 100) + '% ' + drinkName(p) + ', the rest water') : null,
-      b.gels ? prow(minutesList(b.gelTimes), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed: the drink covers it'),
+      b.gels ? prow(gelTimesNode(p, 'bike'), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed: the drink covers it'),
       prow('Bottles', 'Start with ' + b.bottlesAtStart + (b.refills ? '; pick up ' + b.refills + ' more at aid stations' : '')),
       prow('Sodium', '~' + b.sodiumTarget + ' mg/hr (' + b.sodiumFromProducts + ' from your products)'),
       b.sodiumShort ? prow('Top up', '~' + b.sodiumShort + ' mg/hr more: a salt capsule or salty snack you have tried') : null
     ];
     var runRows = [
-      rn.gels ? prow(minutesList(rn.gelTimes), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed for this run'),
+      rn.gels ? prow(gelTimesNode(p, 'run'), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed for this run'),
       prow('Each aid station', 'Water, a few sips: about ' + Math.round(rn.fluidPerHour * 1000) + ' ml an hour'),
       prow('Sodium', '~' + rn.sodiumTarget + ' mg/hr (' + rn.sodiumFromProducts + ' from your gels)'),
       rn.sodiumShort ? prow('Top up', '~' + rn.sodiumShort + ' mg/hr more, or cola or sports drink at aid stations') : null
@@ -970,10 +989,12 @@
         h('p', { class: 'help', style: 'padding-bottom:8px' }, p.preRace)),
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Bike · ' + T.fmtHM(b.minutes)), h('span', { class: 'badge' }, b.carbsPerHour + ' g/hr')),
-        bikeRows),
+        bikeRows,
+        showsKm(p, 'bike') ? h('p', { class: 'help kmnote' }, RD.pace.KM_NOTE) : null),
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Run · ' + T.fmtHM(rn.minutes)), h('span', { class: 'badge' }, rn.carbsPerHour + ' g/hr')),
-        runRows),
+        runRows,
+        showsKm(p, 'run') ? h('p', { class: 'help kmnote' }, RD.pace.KM_NOTE) : null),
       h('div', { class: 'info warn' },
         h('div', null,
           h('p', null, 'Capped at what your gut has trained: ' + p.gut + ' g an hour. Fluid stays under your ' + (p.sweatTypical ? 'typical ' : '') + 'sweat rate of ' + p.sweat + ' L an hour.'),
@@ -1093,11 +1114,13 @@
       kids.push(h('h3', null, 'Bike fuel · ' + f.bike.carbsPerHour + ' g/hr'),
         h('p', null, 'Sip ~' + f.bike.sipMl + ' ml every 15 min'),
         f.bike.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.bike.gelTimes))) : null,
+        showsKm(f, 'bike') ? h('p', { class: 'fine' }, 'at ' + kmList(f, 'bike')) : null,
         h('h3', null, 'Run fuel · ' + f.run.carbsPerHour + ' g/hr'),
         f.run.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.run.gelTimes))) : null,
+        showsKm(f, 'run') ? h('p', { class: 'fine' }, 'at ' + kmList(f, 'run')) : null,
         h('p', null, 'Water at each aid station'));
     }
-    kids.push(h('p', { class: 'fine' }, 'Times are from the start of each leg. Typical ranges, not medical advice.'));
+    kids.push(h('p', { class: 'fine' }, 'Times are from the start of each leg. ' + (f && f.ok !== false && (showsKm(f, 'bike') || showsKm(f, 'run')) ? RD.pace.KM_NOTE + ' ' : '') + 'Typical ranges, not medical advice.'));
     pr.appendChild(h('div', { class: 'tt' }, kids));
   }
 

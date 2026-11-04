@@ -216,9 +216,22 @@
     function mid(r) { return Math.round((r[0] + r[1]) / 2); }
     return { swim: mid(plan.swim.minutes), bike: mid(plan.bike.minutes), run: mid(plan.run.minutes) };
   }
+  // RD-025. About how far into a leg a time is, at an even pace: time / leg time x leg distance, to the whole km.
+  // It is a guide only. Time is the rule for fuel, so nothing in the plan is worked out from this number.
+  // A blank, unreadable or zero leg time gives null, never a km. A time past the end is held at the whole leg.
+  var KM_NOTE = 'Km are a guide, from an even pace. Go by the clock: never take a gel earlier than its time.'; // wording awaits the owner's OK (RD-025)
+  function kmAt(distance, leg, minutesIn, legMinutes) {
+    function isNum(v) { return typeof v === 'number' && isFinite(v); }
+    if (!Object.prototype.hasOwnProperty.call(LEGS, distance) || (leg !== 'bike' && leg !== 'run')) return null;
+    if (!isNum(minutesIn) || !isNum(legMinutes) || minutesIn < 0 || legMinutes <= 0) return null;
+    return Math.round(Math.min(minutesIn / legMinutes, 1) * LEGS[distance][leg]);
+  }
+
 
   var api = {
     LEGS: LEGS,
+    kmAt: kmAt,
+    KM_NOTE: KM_NOTE,
     LIMITS: LIMITS,
     BIKE_IF: BIKE_IF,
     bikeSpeed: bikeSpeed,

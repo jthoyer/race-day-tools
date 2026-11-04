@@ -128,7 +128,7 @@
               h('div', { class: 'result' }, h('span', { class: 'k' }, 'BIKE'), h('span', { class: 'v' }, p.bike.carbsPerHour + ' g/hr')),
               h('p', { class: 'help' }, p.bike.gels + ' gels on the bike, plus about ' + p.bike.sipMl + ' ml of sports drink every 15 minutes.'),
               h('div', { class: 'result' }, h('span', { class: 'k' }, 'RUN'), h('span', { class: 'v' }, p.run.carbsPerHour + ' g/hr')),
-              h('p', { class: 'help' }, p.run.gels ? p.run.gels + ' gels on the run, at ' + p.run.gelTimes.map(T.fmtHM).join(', ') + '. Water at each aid station.' : 'No gels needed on the run. Water at each aid station.'),
+              h('p', { class: 'help' }, p.run.gels ? p.run.gels + ' gels on the run, at ' + p.run.gelTimes.map(function (t) { var k = RD.pace.kmAt(p.distance, 'run', t, p.run.minutes); return T.fmtHM(t) + (k == null ? '' : ' (~' + k + ' km)'); }).join(', ') + '. Water at each aid station.' + (RD.pace.kmAt(p.distance, 'run', p.run.gelTimes[0], p.run.minutes) == null ? '' : ' ' + RD.pace.KM_NOTE) : 'No gels needed on the run. Water at each aid station.'),
               h('p', { class: 'help' }, 'Capped at your gut figure. Uses a generic gel (25 g) and sports drink, and a typical sweat rate. Not medical advice.'))
             : h('p', { class: 'help', 'aria-live': 'polite' }, 'Enter your bike and run times as h:mm, and the carbs your gut handles, to see your plan.')),
         saveBox(function () {
