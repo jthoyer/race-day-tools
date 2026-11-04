@@ -52,6 +52,15 @@
     return out;
   }
 
+  // One plain line on what the plan is built from, for the fuel step: the gel or chew and the drink the person picked,
+  // with their carbs. A blank or unreadable figure is left out, never shown as 0 or "null" (RD-026).
+  function describeProducts(gel, drink) {
+    function isNum(v) { return typeof v === 'number' && isFinite(v); }
+    var g = gel ? (gel.name || 'your gel or chew') + (isNum(gel.carbs) && gel.carbs > 0 ? ' at ' + gel.carbs + ' g a serve' : '') : 'no gel or chew';
+    var d = drink ? (drink.name || 'your drink') + (isNum(drink.carbs) && drink.carbs >= 0 && isNum(drink.serveMl) && drink.serveMl > 0 ? ' at ' + drink.carbs + ' g per ' + drink.serveMl + ' ml' : '') : '';
+    return 'The plan uses ' + g + (drink ? ' and ' + d : ', with water only') + '.';
+  }
+
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function roundTo(v, step) { return Math.round(v / step) * step; }
   function floorTo(v, step) { return Math.floor(v / step + 1e-9) * step; }
@@ -218,6 +227,7 @@
     DEFAULT_PRODUCTS: DEFAULT_PRODUCTS,
     CARB_PICK: CARB_PICK,
     carbSteps: carbSteps,
+    describeProducts: describeProducts,
     spread: spread,
     validate: validate,
     planFuel: planFuel
