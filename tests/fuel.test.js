@@ -148,23 +148,23 @@ test('every carb step is a plannable gel and drink, and the gut cap still holds 
 });
 
 test('describeProducts says what the plan uses, with carbs, and leaves out what it cannot read (RD-026)', () => {
-  assert.equal(F.describeProducts(GEL, DRINK), 'The plan uses Gel (typical) at 25 g a serve and Sports drink (typical) at 30 g per 500 ml.');
-  assert.equal(F.describeProducts(GEL, null), 'The plan uses Gel (typical) at 25 g a serve, with water only.');
-  assert.equal(F.describeProducts(CHEWS, DRINK), 'The plan uses Chews, 3 pieces (typical) at 24 g a serve and Sports drink (typical) at 30 g per 500 ml.');
+  assert.equal(F.describeProducts(GEL, DRINK), 'The plan uses Gel at 25g a serve and Sports drink at 30g per 500 ml.');
+  assert.equal(F.describeProducts(GEL, null), 'The plan uses Gel at 25g a serve, with water only.');
+  assert.equal(F.describeProducts(CHEWS, DRINK), 'The plan uses Chews, 3 pieces at 24g a serve and Sports drink at 30g per 500 ml.');
 });
 
 test('describeProducts never shows a blank as 0 or null (RD-026)', () => {
   const blankGel = { ...GEL, carbs: null };
   const t = F.describeProducts(blankGel, DRINK);
   assert.ok(!/null|NaN|undefined| 0 g /.test(t), t);
-  assert.match(t, /^The plan uses Gel \(typical\) and Sports drink/);
+  assert.match(t, /^The plan uses Gel and Sports drink/);
   const blankDrink = { ...DRINK, carbs: null, serveMl: null };
   const t2 = F.describeProducts(GEL, blankDrink);
   assert.ok(!/null|NaN|undefined/.test(t2), t2);
-  assert.equal(t2, 'The plan uses Gel (typical) at 25 g a serve and Sports drink (typical).');
+  assert.equal(t2, 'The plan uses Gel at 25g a serve and Sports drink.');
   // A drink with no carbs (an electrolyte drink) is a real 0, so it is shown.
-  assert.equal(F.describeProducts(GEL, { ...DRINK, carbs: 0 }), 'The plan uses Gel (typical) at 25 g a serve and Sports drink (typical) at 0 g per 500 ml.');
+  assert.equal(F.describeProducts(GEL, { ...DRINK, carbs: 0 }), 'The plan uses Gel at 25g a serve and Sports drink at 0g per 500 ml.');
   // A gel with 0 carbs is not a plannable gel, so its figure is left out.
-  assert.ok(!/ 0 g a serve/.test(F.describeProducts({ ...GEL, carbs: 0 }, DRINK)));
+  assert.ok(!/ 0g a serve/.test(F.describeProducts({ ...GEL, carbs: 0 }, DRINK)));
   assert.equal(F.describeProducts(null, null), 'The plan uses no gel or chew, with water only.');
 });
