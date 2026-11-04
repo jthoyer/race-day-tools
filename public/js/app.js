@@ -741,7 +741,7 @@
 
   // ---------- fuel step (A2) ----------
 
-  // null means "never edited": use the typical products. An empty list means the athlete removed them all.
+  // null means "never edited": use the generic starter products. An empty list means the athlete removed them all.
   function productList() {
     if (!Array.isArray(S.products)) return RD.fuel.DEFAULT_PRODUCTS.map(function (p) { return Object.assign({}, p); });
     return S.products;
@@ -836,8 +836,10 @@
         !d.sweatTypical ? bound('details.sweat', 'num', { label: 'Sweat rate', unit: 'L an hour', live: refreshLater }) : null);
     }
 
+    // One card for the choice and what to pack. The carry list sits right under the choice that changes it.
+    var starter = !Array.isArray(S.products);
     var productsBox = h('section', { class: 'card' },
-      h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'What you use'), h('a', { href: '#/products' }, 'Edit my products')),
+      h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Your fuel'), h('a', { href: '#/products' }, 'Edit my products')),
       h('div', { class: 'two' },
         h('label', { class: 'field' }, 'Gel or chew',
           h('select', { onchange: function (e) { set('choice.gel', e.target.value); refresh(); } },
@@ -847,7 +849,10 @@
             drinks.map(function (p) { return h('option', { value: p.id, selected: drink && p.id === drink.id ? 'selected' : null }, p.name); }),
             h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')))),
       // Says what the choice does, right under the choice, with the carbs per serve the plan will use.
-      h('p', { class: 'help' }, RD.fuel.describeProducts(gel, drink)));
+      h('p', { class: 'help' }, RD.fuel.describeProducts(gel, drink)),
+      starter ? h('p', { class: 'help' }, 'These are generic starter products, not a brand. Add the ones you race with under Edit my products.') : null,
+      plan.ok ? h('hr', { class: 'divider' }) : null,
+      plan.ok ? carryList(plan) : null);
 
     var out;
     if (!plan.ok) {
@@ -924,14 +929,6 @@
       rn.sodiumShort ? prow('Top up', '~' + rn.sodiumShort + ' mg/hr more, or cola or sports drink at aid stations') : null
     ];
     return h('div', { class: 'stack' },
-      // The packing list comes first: it is what a person needs before they read the legs.
-      h('section', { class: 'card' },
-        h('p', { class: 'label' }, 'Carry list'),
-        h('ul', { class: 'carry' },
-          h('li', null, p.carry.bikeGels + ' × ' + p.carry.gelName + ' on the bike'),
-          h('li', null, p.carry.runGels + ' × ' + p.carry.gelName + ' for the run (T2 bag or race belt)'),
-          h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (p.carry.drink && p.bike.drinkShare > 0 ? ' (' + p.carry.drink + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
-          p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null)),
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Before the swim'), null),
         h('p', { class: 'help', style: 'padding-bottom:8px' }, p.preRace)),
@@ -946,6 +943,16 @@
           h('p', null, 'Capped at what your gut has trained: ' + p.gut + ' g an hour. Fluid stays under your ' + (p.sweatTypical ? 'typical ' : '') + 'sweat rate of ' + p.sweat + ' L an hour.'),
           p.warnings.length ? h('ul', null, p.warnings.map(function (w) { return h('li', null, w); })) : null,
           h('p', null, h('b', null, 'Typical ranges, not medical advice.'), ' Practise this plan in training first. Never drink more than you sweat.'))));
+  }
+  // The packing list. It lives in the "Your fuel" card, under the choice that changes it.
+  function carryList(p) {
+    return h('div', { class: 'stack' },
+      h('p', { class: 'label' }, 'Carry list'),
+      h('ul', { class: 'carry' },
+        h('li', null, p.carry.bikeGels + ' × ' + p.carry.gelName + ' on the bike'),
+        h('li', null, p.carry.runGels + ' × ' + p.carry.gelName + ' for the run (T2 bag or race belt)'),
+        h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (p.carry.drink && p.bike.drinkShare > 0 ? ' (' + p.carry.drink + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
+        p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null));
   }
   function prow(a, b) { return h('div', { class: 'prow' }, h('span', null, a), h('span', null, b)); }
 
@@ -1003,7 +1010,7 @@
             list.push({ id: 'p' + Date.now(), name: 'My product', kind: 'gel', carbs: 25, sodium: 0, serveMl: 0 }); commit(); refresh();
           }
         }, 'Add a product'),
-        h('button', { type: 'button', class: 'btn ghost', onclick: function () { S.products = null; commit(); refresh(); } }, 'Back to typical products'),
+        h('button', { type: 'button', class: 'btn ghost', onclick: function () { S.products = null; commit(); refresh(); } }, 'Back to the starter products'),
         h('a', { class: 'btn', href: '#/fuel' }, 'Done')));
   }
   // A blank or unreadable number is stored as null, never as 0, and the fuel plan refuses it.

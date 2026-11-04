@@ -1084,3 +1084,6 @@ details.test p {
     margin-top: 3mm;
   }
 }
+
+/* The rule between the product choice and the carry list inside the "Your fuel" card. */
+.divider { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; width: 100%; }

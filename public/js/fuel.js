@@ -36,11 +36,11 @@
   var BOTTLE_L = 0.75;
   var BOTTLES_ON_BIKE = 2;
 
-  // Generic starting products. People should enter their own (RD-02-A3, RD-02-W2).
+  // Generic starting products, not any brand. They show as starters until the person edits their products (RD-02-A3, RD-02-W2).
   var DEFAULT_PRODUCTS = [
-    { id: 'gel', name: 'Gel (typical)', kind: 'gel', carbs: 25, sodium: 50, serveMl: 0 },
-    { id: 'drink', name: 'Sports drink (typical)', kind: 'drink', carbs: 30, sodium: 250, serveMl: 500 },
-    { id: 'chews', name: 'Chews, 3 pieces (typical)', kind: 'chew', carbs: 24, sodium: 60, serveMl: 0 }
+    { id: 'gel', name: 'Gel', kind: 'gel', carbs: 25, sodium: 50, serveMl: 0 },
+    { id: 'drink', name: 'Sports drink', kind: 'drink', carbs: 30, sodium: 250, serveMl: 500 },
+    { id: 'chews', name: 'Chews, 3 pieces', kind: 'chew', carbs: 24, sodium: 60, serveMl: 0 }
   ];
 
   // UNCHECKED. The carbs-per-serve choices offered on the My products screen, in grams: a floor, a ceiling and a

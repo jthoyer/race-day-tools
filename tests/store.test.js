@@ -40,3 +40,9 @@ test('blocked storage still loads the defaults', () => {
     assert.equal(store.save({}), false);
   } finally { console.warn = warn; }
 });
+
+test('an older save with "(typical)" in a product name loads without the tag', () => {
+  const store = withStorage({ products: [{ id: 'gel', name: 'Gel (typical)' }, { id: 'x', name: 'Typical Bars' }, { id: 'y' }] });
+  const S = store.load();
+  assert.deepEqual(S.products.map((p) => p.name), ['Gel', 'Typical Bars', undefined]);
+});
