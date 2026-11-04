@@ -213,8 +213,10 @@ check(/Capped at what your gut has trained: 70 g an hour/.test(fuelText), 'Fuel 
 check(/not medical advice/i.test(fuelText), 'Fuel shows not medical advice');
 // The splits show as the same tiles as the race card, and they are the numbers the plan uses.
 const tiles = await page.locator('.fromplan .stat').allInnerTexts();
-check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && tiles.every((t) => /h:mm/.test(t)), 'Fuel shows the pace splits as three tiles');
+check(tiles.length === 3 && /Swim/.test(tiles[0]) && /Bike/.test(tiles[1]) && /Run/.test(tiles[2]) && tiles.every((t) => /\d:\d\d–\d:\d\d/.test(t)), 'Fuel shows the pace splits as three tiles');
 const bikeTile = (/(\d:\d\d)/.exec(tiles[1]) || [])[1];
+const bikeRange = /(\d:\d\d)–(\d:\d\d)/.exec(tiles[1]) || [];
+check(bikeRange.length === 3 && bikeRange[1] <= bikeTile && bikeTile <= bikeRange[2], 'The bike tile sits inside its range');
 check(!!bikeTile && new RegExp('Bike · ' + bikeTile).test(fuelText), 'The bike tile is the time the fuel plan uses');
 // The carry list is the first card of the plan. The cap and safety note stays last.
 const topOf = (loc) => loc.evaluate((e) => e.getBoundingClientRect().top);
