@@ -884,6 +884,63 @@ details.test p {
   margin: 0;
   font-size: 15px;
 }
+/* Fuel on the race card: a notice, then one card per leg with each gel as a row (time, name, km). */
+.notice {
+  padding: 12px 14px;
+  border-radius: var(--r);
+  line-height: 1.4;
+}
+.sec p.notice.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 14px;
+  font-weight: 700;
+}
+.sec p.notice.go {
+  background: var(--accent-bg);
+  color: var(--accent-ink);
+}
+.tl {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  overflow: hidden;
+}
+.tl header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+}
+.tl h3 {
+  margin: 0;
+  font: 700 18px var(--display);
+}
+.tl .tlline {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 15px;
+}
+.tl .tlrow {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 16px;
+}
+.tl .tlrow b {
+  font: 700 22px/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.tl .tlrow .km {
+  color: var(--muted);
+  font-size: 15px;
+  white-space: nowrap;
+}
 .later {
   color: var(--muted);
   font-size: 13px;

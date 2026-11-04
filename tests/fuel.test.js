@@ -206,3 +206,12 @@ test('the gel times and their count are what they were before km was shown besid
   assert.deepEqual(b.bike.gelTimes, [35]);
   assert.deepEqual(b.run.gelTimes, []);
 });
+
+test('plainName drops a trailing "(typical)" tag from a name saved by an older version', () => {
+  assert.equal(F.plainName('Gel (typical)'), 'Gel');
+  assert.equal(F.plainName('Sports drink (typical)'), 'Sports drink');
+  assert.equal(F.plainName('Gel'), 'Gel');
+  assert.equal(F.plainName('Typical gel brand'), 'Typical gel brand');
+  assert.equal(F.plainName(null), null);
+  assert.equal(F.plainName(undefined), undefined);
+});

@@ -233,7 +233,14 @@
     };
   }
 
+  // A product name without the old " (typical)" tag. A plan saved before the tag was dropped still holds the tagged
+  // name, so every screen that prints a plan's product names reads them through this. Anything else is left alone.
+  function plainName(name) {
+    return typeof name === 'string' ? name.replace(/\s*\(typical\)\s*$/i, '') : name;
+  }
+
   var api = {
+    plainName: plainName,
     CARB_CEILING: CARB_CEILING,
     TYPICAL_SWEAT: TYPICAL_SWEAT,
     DEFAULT_PRODUCTS: DEFAULT_PRODUCTS,
