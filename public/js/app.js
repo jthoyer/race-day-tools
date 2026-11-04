@@ -759,6 +759,7 @@
 
   // Everything the fuel plan depends on, read from the store. The fuel step plans from it, and the
   // card compares it with what a saved plan was made from, to say when the plan is out of date.
+  function pickedCarbs(v) { return typeof v === 'number' && isFinite(v) && v > 0; }
   function fuelInput() {
     var r = S.race;
     var solo = !r;
@@ -770,6 +771,10 @@
     var drinks = list.filter(function (p) { return p.kind === 'drink'; });
     var gel = findIn(gels, S.choice.gel) || gels[0] || null;
     var drink = S.choice.drink === 'none' ? null : findIn(drinks, S.choice.drink) || drinks[0] || null;
+    // The carbs picked on the fuel step replace the product's own figure. The name and sodium stay the product's (RD-009).
+    // A blank or unreadable pick is ignored, never read as 0.
+    if (gel && pickedCarbs(S.choice.gelCarbs)) gel = Object.assign({}, gel, { carbs: S.choice.gelCarbs });
+    if (drink && pickedCarbs(S.choice.drinkCarbs)) drink = Object.assign({}, drink, { carbs: S.choice.drinkCarbs });
     var d = S.details;
     return {
       fromPlan: fromPlan, gels: gels, drinks: drinks,
@@ -842,16 +847,32 @@
         !d.sweatTypical ? bound('details.sweat', 'num', { label: 'Sweat rate', unit: 'L an hour', live: refreshLater }) : null);
     }
 
+    // One selector per product: the carbs in a gel, and the carbs in a serve of drink. The unit is in the label (RD-009).
+    function carbPick(kind, label, product, key) {
+      return h('label', { class: 'field' }, label,
+        h('select', { onchange: function (e) { set('choice.' + key, e.target.value === '' ? null : Number(e.target.value)); refresh(); } },
+          RD.fuel.pickOptions(kind, product.carbs).map(function (g) {
+            return h('option', { value: String(g), selected: g === product.carbs ? 'selected' : null }, g + 'g');
+          })));
+    }
+    var drinkSelect = null;
+    if (drinks.length) {
+      drinkSelect = h('label', { class: 'field' }, 'Bike drink, carbs per ' + (drink ? drink.serveMl : drinks[0].serveMl) + ' ml',
+        h('select', { onchange: function (e) {
+          if (e.target.value === 'none') set('choice.drink', 'none');
+          else { set('choice.drink', drinks[0].id); set('choice.drinkCarbs', Number(e.target.value)); }
+          refresh();
+        } },
+          RD.fuel.pickOptions('drink', drink ? drink.carbs : drinks[0].carbs).map(function (g) {
+            return h('option', { value: String(g), selected: drink && g === drink.carbs ? 'selected' : null }, g + 'g');
+          }),
+          h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')));
+    }
     var productsBox = h('section', { class: 'card' },
       h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'What you use'), h('a', { href: '#/products' }, 'Edit my products')),
       h('div', { class: 'two' },
-        h('label', { class: 'field' }, 'Gel or chew',
-          h('select', { onchange: function (e) { set('choice.gel', e.target.value); refresh(); } },
-            gels.map(function (p) { return h('option', { value: p.id, selected: gel && p.id === gel.id ? 'selected' : null }, p.name); }))),
-        h('label', { class: 'field' }, 'Bike drink',
-          h('select', { onchange: function (e) { set('choice.drink', e.target.value); refresh(); } },
-            drinks.map(function (p) { return h('option', { value: p.id, selected: drink && p.id === drink.id ? 'selected' : null }, p.name); }),
-            h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')))),
+        gel ? carbPick('gel', 'Gel or chew, carbs per serve', gel, 'gelCarbs') : null,
+        drinkSelect),
       // Says what the choice does, right under the choice, with the carbs per serve the plan will use.
       h('p', { class: 'help' }, RD.fuel.describeProducts(gel, drink)));
 

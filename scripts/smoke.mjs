@@ -330,7 +330,7 @@ check((await carbsList.last().locator('option').allInnerTexts()).join(',') === '
 await carbsList.last().selectOption({ label: '40 g' });
 await page.getByRole('link', { name: 'Done' }).click();
 await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
-check((await page.locator('select').first().innerText()).includes('Test gel 40'), 'A new product shows in the fuel step');
+check((await page.locator('select').first().locator('option').allInnerTexts()).join(',') === '20g,25g,30g,40g', 'The fuel step offers the gel carb loads 20g, 25g, 30g and 40g, with the unit in the label');
 check((await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).products.slice(-1)[0].carbs)) === 40, 'Picking 40 g from the list saves exactly 40');
 // A figure off the list is typed under Other, kept, and shown as typed after a reload. It is never rounded to a step.
 await page.goto(base + '/index.html#/products');
@@ -344,17 +344,19 @@ await carbsList.last().selectOption({ label: '40 g' });
 check((await page.getByLabel('Exact figure (g)').count()) === (await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).products.filter((p) => ![20, 25, 30, 35, 40, 45, 50].includes(p.carbs)).length)), 'Picking a step from Other hides the typed box again');
 await page.getByRole('link', { name: 'Done' }).click();
 await page.getByRole('heading', { name: 'Fuel plan' }).waitFor();
-// The product the person picks is named in the plan rows, so the choice shows where it is used.
-await page.locator('select').first().selectOption({ label: 'Test gel 40' });
+// The carbs the person picks are the carbs the plan uses, and the product's name stays in the rows (RD-009).
+await page.locator('select').first().selectOption({ label: '30g' });
 const planText = await page.locator('.app').innerText();
-check(/1 serve of Test gel 40/.test(planText) && !/1 serve of gel or chews/.test(planText), 'The plan rows name the gel the person picked');
-check(/The plan uses Test gel 40 at 40g a serve and /.test(planText), 'The "plan uses" line follows the gel the person picked, with its carbs');
+check(/1 serve of Gel/.test(planText) && !/1 serve of gel or chews/.test(planText), 'The plan rows still name the gel');
+check(/The plan uses Gel at 30g a serve and /.test(planText), 'The "plan uses" line follows the carbs the person picked');
+const savedChoice = await page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).choice);
+check(savedChoice.gelCarbs === 30, 'The picked gel carbs are saved exactly');
 const sipRow = await page.locator('.prow', { hasText: 'Every 15 min' }).innerText();
 const mixRow = (await page.locator('.prow', { hasText: 'Mix' }).count()) ? await page.locator('.prow', { hasText: 'Mix' }).first().innerText() : '';
 check(!/of drink\s*$/.test(sipRow.trim()) && /Sports drink|water/.test(sipRow + mixRow), 'The sip row names what is in the bottle');
 await page.locator('select').nth(1).selectOption({ label: 'Water only' });
 check(/ml of water/.test(await page.locator('.prow', { hasText: 'Every 15 min' }).innerText()), 'Water only shows as water in the sip row');
-check(/The plan uses Test gel 40 at 40g a serve, with water only\./.test(await page.locator('.app').innerText()), 'The "plan uses" line says water only when no drink is picked');
+check(/The plan uses Gel at 30g a serve, with water only\./.test(await page.locator('.app').innerText()), 'The "plan uses" line says water only when no drink is picked');
 
 // Guide: bike target works alone, then saves into a plan with FTP and course carried over
 const g = await browser.newPage({ viewport: { width: 390, height: 844 } });
