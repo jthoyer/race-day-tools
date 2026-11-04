@@ -56,8 +56,8 @@
   // with their carbs. A blank or unreadable figure is left out, never shown as 0 or "null" (RD-026).
   function describeProducts(gel, drink) {
     function isNum(v) { return typeof v === 'number' && isFinite(v); }
-    var g = gel ? (gel.name || 'your gel or chew') + (isNum(gel.carbs) && gel.carbs > 0 ? ' at ' + gel.carbs + ' grams a serve' : '') : 'no gel or chew';
-    var d = drink ? (drink.name || 'your drink') + (isNum(drink.carbs) && drink.carbs >= 0 && isNum(drink.serveMl) && drink.serveMl > 0 ? ' at ' + drink.carbs + ' grams per ' + drink.serveMl + ' ml' : '') : '';
+    var g = gel ? (gel.name || 'your gel or chew') + (isNum(gel.carbs) && gel.carbs > 0 ? ' at ' + gel.carbs + 'g a serve' : '') : 'no gel or chew';
+    var d = drink ? (drink.name || 'your drink') + (isNum(drink.carbs) && drink.carbs >= 0 && isNum(drink.serveMl) && drink.serveMl > 0 ? ' at ' + drink.carbs + 'g per ' + drink.serveMl + ' ml' : '') : '';
     return 'The plan uses ' + g + (drink ? ' and ' + d : ', with water only') + '.';
   }
 
