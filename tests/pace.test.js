@@ -144,3 +144,61 @@ test('kmAt never passes the leg distance, and a blank or unreadable value gives 
   for (const d of ['sprint', null, undefined, 'constructor', 'toString']) assert.equal(P.kmAt(d, 'bike', 40, 161), null, String(d));
   for (const l of ['swim', 'toString', undefined]) assert.equal(P.kmAt('70.3', l, 40, 161), null, String(l));
 });
+
+test('T1 and T2 split our old combined changeover range, so a plan with no times of its own is unchanged (RD-031)', () => {
+  for (const d of ['standard', '70.3']) {
+    assert.deepEqual(P.TRANSITIONS[d], [P.T1[d][0] + P.T2[d][0], P.T1[d][1] + P.T2[d][1]]);
+  }
+  assert.deepEqual(P.TRANSITIONS.standard, [3, 5]);
+  assert.deepEqual(P.TRANSITIONS['70.3'], [6, 9]);
+  const p = P.planPace(example);
+  assert.deepEqual(p.transitions, [6, 9]);
+  assert.deepEqual(p.t1, P.T1['70.3']);
+  assert.deepEqual(p.t2, P.T2['70.3']);
+  assert.equal(p.t1Own, false);
+});
+
+test('your own T1 and T2 are used, and the legs and changeovers still add up to the finish (RD-031, RP-05-W2)', () => {
+  for (const distance of ['standard', '70.3']) {
+    for (const t1 of [null, 1, 4, 12, 30]) {
+      for (const t2 of [null, 1, 3, 30]) {
+        const p = P.planPace({ ...example, distance, t1, t2 });
+        assert.ok(p.ok, JSON.stringify(p.errors));
+        if (t1 != null) assert.deepEqual(p.t1, [t1, t1]);
+        if (t2 != null) assert.deepEqual(p.t2, [t2, t2]);
+        assert.deepEqual(p.transitions, [p.t1[0] + p.t2[0], p.t1[1] + p.t2[1]]);
+        const lo = p.swim.minutes[0] + p.bike.minutes[0] + p.run.minutes[0] + p.transitions[0];
+        const hi = p.swim.minutes[1] + p.bike.minutes[1] + p.run.minutes[1] + p.transitions[1];
+        assert.deepEqual(p.finish, [lo, hi]);
+        assert.ok(p.finish[0] < p.finish[1], 'still a range, never one time (RD-05-A2)');
+      }
+    }
+  }
+  // A longer T1 moves both ends of the finish by the same minutes.
+  const a = P.planPace({ ...example, t1: 4, t2: 3 });
+  const b = P.planPace({ ...example, t1: 10, t2: 3 });
+  assert.deepEqual([b.finish[0] - a.finish[0], b.finish[1] - a.finish[1]], [6, 6]);
+});
+
+test('a T1 or T2 that is not whole minutes from 1 to 30 is refused, and a blank is never zero (RD-031)', () => {
+  for (const bad of [0, -2, 0.5, 31, NaN, Infinity, '4']) {
+    const p = P.planPace({ ...example, t1: bad });
+    assert.equal(p.ok, false, String(bad));
+    assert.ok(p.errors.some((e) => e.field === 't1'), String(bad));
+    assert.equal(P.planPace({ ...example, t2: bad }).ok, false, 't2 ' + String(bad));
+  }
+  // undefined and null are both "not set": our guide is used.
+  assert.deepEqual(P.planPace({ ...example, t1: undefined }).t1, P.T1['70.3']);
+  assert.deepEqual(P.planPace({ ...example, t1: null }).t1, P.T1['70.3']);
+});
+
+test('taperDays uses your own length when it is whole days in range, else the guide for the distance (RD-011)', () => {
+  assert.equal(P.taperDays('70.3', null), 14);
+  assert.equal(P.taperDays('standard', undefined), 10);
+  assert.equal(P.taperDays('70.3', 21), 21);
+  assert.equal(P.taperDays('standard', 7), 7);
+  // A blank, zero, a fraction, a string or a value out of range never sets the taper: the guide stays.
+  for (const bad of [0, -1, 2.5, 43, 365, NaN, '21']) assert.equal(P.taperDays('70.3', bad), 14, String(bad));
+  assert.equal(P.taperDays('sprint', null), 14);
+  P.TAPER.options.forEach((n) => assert.equal(P.taperDays('70.3', n), n));
+});

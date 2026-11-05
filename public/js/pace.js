@@ -42,8 +42,16 @@
   var RUN_FACTOR = { standard: [1.02, 1.06], '70.3': [1.08, 1.13] };
   var RUN_HEAT = { mild: 1.0, warm: 1.01, hot: 1.04 };
 
-  // UNCHECKED. Changeovers, T1 plus T2, in minutes.
-  var TRANSITIONS = { standard: [3, 5], '70.3': [6, 9] };
+  // UNCHECKED. Each changeover on its own, in whole minutes: T1 (swim to bike) and T2 (bike to run). They add up to
+  // the combined range this file used before (Standard 3-5, 70.3 6-9), so a plan with no times of its own is unchanged.
+  // The athlete can set their own T1 and T2 (RD-031); our range stays as the guide beside each field.
+  var T1 = { standard: [2, 3], '70.3': [4, 5] };
+  var T2 = { standard: [1, 2], '70.3': [2, 4] };
+  var TRANSITIONS = { standard: [T1.standard[0] + T2.standard[0], T1.standard[1] + T2.standard[1]], '70.3': [T1['70.3'][0] + T2['70.3'][0], T1['70.3'][1] + T2['70.3'][1]] };
+
+  // UNCHECKED. Taper length in days before race day: the guide for each distance, the lengths offered as one tap,
+  // and the shortest and longest we accept from a picked date (RD-011, RD-031). A coach's plan wins over the guide.
+  var TAPER = { guide: { standard: 10, '70.3': 14 }, options: [10, 14, 21], limits: [1, 42] };
 
   // Bike speed model: steady-state power balance on flat roads, then a time multiplier per course.
   // UNCHECKED. CdA 0.29 m2 suits an age-grouper on aero bars; Crr 0.005 suits good road tyres.
@@ -57,10 +65,21 @@
     runThreshold: [180, 540], // seconds per km
     weight: [35, 150], // kg
     lthr: [100, 210], // beats per minute
-    steadySpeed: [15, 50] // km/h
+    steadySpeed: [15, 50], // km/h
+    changeover: [1, 30] // whole minutes, for a T1 or T2 the athlete sets
   };
 
   function within(v, range) { return typeof v === 'number' && isFinite(v) && v >= range[0] && v <= range[1]; }
+  // A T1 or T2 the athlete set: whole minutes inside the limits. A blank (null) means "use our guide", never zero.
+  function goodChangeover(v) { return within(v, LIMITS.changeover) && Math.round(v) === v; }
+  var CHANGEOVER_MESSAGE = 'Enter whole minutes, 1 to 30, or leave it blank to use our guide.';
+
+  // The taper length to use, in days: the athlete's own if it is a whole number of days inside the limits, else the
+  // guide for the distance. A blank or unreadable value is never read as zero days.
+  function taperDays(distance, chosen) {
+    if (within(chosen, TAPER.limits) && Math.round(chosen) === chosen) return chosen;
+    return TAPER.guide[distance] || TAPER.guide['70.3'];
+  }
 
   // Speed in m/s for a power in watts, on flat road, by bisection.
   function bikeSpeed(watts, riderKg) {
@@ -106,6 +125,9 @@
       if (!within(input.bikeLthr, LIMITS.lthr)) errs.push({ field: 'bikeLthr', message: 'Enter a bike threshold heart rate between 100 and 210.' });
       if (!within(input.runLthr, LIMITS.lthr)) errs.push({ field: 'runLthr', message: 'Enter a run threshold heart rate between 100 and 210.' });
     }
+    // T1 and T2 are optional: null means our guide. Anything else must be whole minutes inside the limits.
+    if (input.t1 != null && !goodChangeover(input.t1)) errs.push({ field: 't1', message: 'T1: ' + CHANGEOVER_MESSAGE });
+    if (input.t2 != null && !goodChangeover(input.t2)) errs.push({ field: 't2', message: 'T2: ' + CHANGEOVER_MESSAGE });
     return errs;
   }
 
@@ -185,9 +207,13 @@
         (heat === 'hot' ? ', and slower again for the heat' : '') + '.'
     });
 
-    var t = TRANSITIONS[d];
+    // Changeovers: the athlete's own T1 and T2 where set (one time, so both ends are the same), else our guide range.
+    var t1 = input.t1 != null ? [input.t1, input.t1] : T1[d].slice();
+    var t2 = input.t2 != null ? [input.t2, input.t2] : T2[d].slice();
+    var t = [t1[0] + t2[0], t1[1] + t2[1]];
     var finish = [swimMin[0] + bikeMin[0] + runMin[0] + t[0], swimMin[1] + bikeMin[1] + runMin[1] + t[1]];
-    why.push({ leg: 'Finish', text: 'the three legs plus changeovers, with the fast and slow ends added up.' });
+    why.push({ leg: 'Finish', text: 'the three legs plus changeovers, with the fast and slow ends added up.' +
+      (input.t1 != null || input.t2 != null ? ' Your own changeover times are used where you set them.' : '') });
 
     return {
       ok: true,
@@ -200,6 +226,10 @@
       bike: { watts: bike.watts, hr: bike.hr, effort: bike.effort, minutes: bikeMin },
       run: { pace: runPace, hr: run.hr, effort: run.effort, minutes: runMin },
       transitions: t.slice(),
+      t1: t1,
+      t2: t2,
+      t1Own: input.t1 != null,
+      t2Own: input.t2 != null,
       finish: finish,
       why: why,
       warnings: warnings
@@ -233,6 +263,13 @@
     kmAt: kmAt,
     KM_NOTE: KM_NOTE,
     LIMITS: LIMITS,
+    T1: T1,
+    T2: T2,
+    TRANSITIONS: TRANSITIONS,
+    TAPER: TAPER,
+    taperDays: taperDays,
+    goodChangeover: goodChangeover,
+    CHANGEOVER_MESSAGE: CHANGEOVER_MESSAGE,
     BIKE_IF: BIKE_IF,
     bikeSpeed: bikeSpeed,
     bikeTarget: bikeTarget,
