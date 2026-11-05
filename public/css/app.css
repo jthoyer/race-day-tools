@@ -685,32 +685,56 @@ details.test p {
   font-weight: 600;
   font-size: 14px;
 }
-.stepnav {
+/* The floating step bar (RD-031): Race, Pacing, Fuel and Card. It stays in view as the page scrolls. */
+.stepbar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(24, 37, 66, 0.14);
 }
-.stepnav a,
-.stepnav span {
+.stepbar a {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   min-height: 52px;
-  border-radius: var(--r);
-  background: var(--seg-bg);
-  color: var(--muted);
-  font: 600 13px var(--body);
+  border-radius: 10px;
+  color: var(--ink);
+  font: 500 12px/1.2 var(--body);
   text-decoration: none;
-  text-align: center;
 }
-.stepnav .done {
-  background: var(--go-bg);
-  color: var(--go);
+.stepbar a:hover {
+  background: var(--seg-bg);
 }
-.stepnav [aria-current='step'] {
+.stepbar a.done::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 18px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--go);
+  border: 2px solid var(--surface);
+}
+.stepbar a[aria-current='step'] {
   background: var(--ink);
   color: #fff;
   font-weight: 700;
+}
+
+/* Gel timing on the fuel step (RD-031) */
+.timing {
+  gap: 8px;
 }
 
 /* Fuel (A2) */

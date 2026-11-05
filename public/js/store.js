@@ -12,10 +12,13 @@
     return {
       details: { weight: null, sweat: null, sweatTypical: true, gut: null },
       fitness: { mode: 'power', css: null, ftp: null, ftpRecent: true, runThreshold: null, bikeLthr: null, runLthr: null, steadySpeed: null },
-      race: null, // { name, distance, date, start, transitionOpens, course, heat, pace, fuel, splits, splitsByHand }
+      // race: { name, distance, date, start, transitionOpens, taperDays, t1, t2, course, heat, pace, fuel, splits, splitsByHand }
+      // taperDays, t1 and t2 are the athlete's own (RD-031); null or missing means our guide.
+      race: null,
       solo: null, // the fuel tool used with no race: { distance, bikeMin, runMin, heat }
       products: null, // null means the generic starter products
-      choice: { gel: 'gel', drink: 'drink', gelCarbs: null, drinkCarbs: null }
+      // timing: the athlete's own gel times per leg, { first, every } in minutes. Blank means our suggested times (RD-031).
+      choice: { gel: 'gel', drink: 'drink', gelCarbs: null, drinkCarbs: null, timing: { bike: { first: null, every: null }, run: { first: null, every: null } } }
     };
   }
 

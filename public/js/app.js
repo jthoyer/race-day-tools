@@ -32,8 +32,6 @@
     { value: 'rolling', label: 'Rolling', hint: 'Short climbs' },
     { value: 'hilly', label: 'Hilly', hint: 'Long climbs' }
   ];
-  var TAPER_DAYS = { standard: 10, '70.3': 14 }; // typical, unchecked
-
   function legsText(d) {
     var l = RD.pace.LEGS[d];
     return l ? 'Swim ' + l.swim + ' km · Bike ' + l.bike + ' km · Run ' + l.run + ' km' : '';
@@ -108,6 +106,31 @@
     var text = lo.time === hi.time && lo.days === hi.days ? startText(lo.time) : startText(lo.time) + '–' + startText(hi.time);
     return hi.days > 0 ? text + ', next day' : text;
   }
+  // ---------- taper (RD-011, RD-031) ----------
+
+  function isoOf(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  // When the taper starts, from the race date and the taper length: the athlete's own, else our guide (pace.js).
+  // null when there is no race date, so nothing is shown rather than a made-up date.
+  function taperInfo(r) {
+    if (!r || !r.date) return null;
+    var days = T.daysUntil(r.date);
+    var len = RD.pace.taperDays(r.distance, r.taperDays);
+    var start = T.addDays(r.date, -len);
+    if (days == null || !start) return null;
+    var longDay = start.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+    var shortDay = start.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    var tDays = T.daysUntil(isoOf(start));
+    return {
+      days: days, len: len, own: len === r.taperDays, iso: isoOf(start),
+      line: days < 0 ? 'This date has passed. Pick your next race.'
+        : tDays > 0 ? 'Your taper starts ' + longDay + '.'
+          : tDays === 0 ? 'Your taper starts today, ' + longDay + '.'
+            : 'You are in your taper. It started ' + longDay + '.',
+      // The short form for the race card band and the home screen. Nothing after race day.
+      short: days < 0 ? '' : tDays > 0 ? 'Taper starts ' + shortDay : 'In your taper'
+    };
+  }
+
   // Shown where a finish exists but there is no start time to add it to.
   function finishClockHint() {
     return h('span', null, h('a', { href: '#/setup/1' }, 'Add a start time'), ' to see your finish time of day.');
@@ -194,14 +217,40 @@
     return h('a', { class: 'back', href: href },
       svg('M15 5l-7 7 7 7'), text || 'Back');
   }
-  function svg(d) {
+  // A stroke icon from one path, or several (an array).
+  function svg(d, size) {
     var ns = 'http://www.w3.org/2000/svg';
     var s = document.createElementNS(ns, 'svg');
-    s.setAttribute('width', '18'); s.setAttribute('height', '18'); s.setAttribute('viewBox', '0 0 24 24');
+    var px = String(size || 18);
+    s.setAttribute('width', px); s.setAttribute('height', px); s.setAttribute('viewBox', '0 0 24 24');
     s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '2');
     s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.setAttribute('aria-hidden', 'true');
-    var p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); s.appendChild(p);
+    [].concat(d).forEach(function (one) { var p = document.createElementNS(ns, 'path'); p.setAttribute('d', one); s.appendChild(p); });
     return s;
+  }
+
+  // The floating step bar (RD-031): Race, Pacing, Fuel and Card, on every step of a race plan and on the race card.
+  // Any step opens from any other, so a person can change one thing and go straight back to the card.
+  // A step that is done has a green dot, and says so to a screen reader.
+  var STEP_ICONS = {
+    race: ['M5 21V4', 'M5 4h11l-2 4 2 4H5'],
+    pacing: ['M20 13a8 8 0 1 1-16 0a8 8 0 1 1 16 0', 'M12 9v4l2 2', 'M10 2h4'],
+    fuel: ['M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z'],
+    card: ['M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'M7 10h10', 'M7 14h6']
+  };
+  function stepBar(current) {
+    var r = S.race;
+    if (!r) return null;
+    var steps = [
+      { id: 'race', label: 'Race', href: '#/setup/1', done: !!r.date },
+      { id: 'pacing', label: 'Pacing', href: r.pace ? '#/setup/5' : '#/setup/2', done: !!r.pace },
+      { id: 'fuel', label: 'Fuel', href: '#/fuel', done: !!r.fuel },
+      { id: 'card', label: 'Card', href: '#/card', done: false }
+    ];
+    return h('nav', { class: 'stepbar noprint', 'aria-label': 'Race plan steps' }, steps.map(function (s) {
+      return h('a', { href: s.href, class: s.done ? 'done' : null, 'aria-current': s.id === current ? 'step' : null },
+        svg(STEP_ICONS[s.id], 20), h('span', null, s.label), s.done ? h('span', { class: 'sr-only' }, ', done') : null);
+    }));
   }
   function progress(n, of, label) {
     var segs = [];
@@ -358,6 +407,7 @@
         h('p', { class: 'k' }, 'YOUR NEXT RACE'),
         h('h1', { tabindex: '-1' }, raceTitle(r)),
         h('p', null, [longDate(r.date)].concat(timeParts(r)).filter(Boolean).join(' · ') || 'No date yet'),
+        taperInfo(r) && taperInfo(r).short ? h('p', null, taperInfo(r).short) : null,
         h('div', { class: 'meta' },
           days != null ? h('span', { class: 'chip' }, daysText(days)) : h('span'),
           h('a', { href: '#/setup/1' }, 'Change race'))),
@@ -402,19 +452,39 @@
     var r = ensureRace();
     var screens = { 1: setupRace, 2: setupYou, 3: setupFitness, 4: setupCourse, 5: setupTargets };
     var left = n === 1 ? h('a', { class: 'back', href: '#/' }, 'Cancel') : backLink('#/setup/' + (n - 1));
+    // Step 1 is the Race step. Steps 2 to 5 are the Pacing step, with their own progress under the step bar.
     return h('div', { class: 'app' },
       topBar(left, h('span', { class: 'racename' }, r.name || '')),
-      progress(n, 5),
+      stepBar(n === 1 ? 'race' : 'pacing'),
+      n === 1 ? null : progress(n - 1, 4, 'Pacing · ' + (n - 1) + ' of 4'),
       screens[n](r));
   }
 
-  function next(n, check) {
-    return function () {
-      errors = check ? check() : {};
-      if (Object.keys(errors).length) { refresh(); var first = view.querySelector('[aria-invalid="true"]'); if (first) first.focus(); return; }
-      go('setup/' + (n + 1));
-    };
+  // Runs a step's check. Returns true when it passes; otherwise shows the errors and puts focus on the first one.
+  function passes(check) {
+    errors = check ? check() : {};
+    if (Object.keys(errors).length) { refresh(); var first = view.querySelector('[aria-invalid="true"]'); if (first) first.focus(); return false; }
+    return true;
   }
+  function next(n, check) {
+    return function () { if (passes(check)) go('setup/' + (n + 1)); };
+  }
+
+  // "Save and back to race card" (RD-031). Details save as they are typed, but the pace targets are worked out from
+  // them, so a race that already has targets gets them worked out again here. If the numbers can't make a plan yet,
+  // the old targets stay and the card says they are out of date (paceStale).
+  function backToCard(check) {
+    return h('button', {
+      type: 'button', class: 'btn second', onclick: function () {
+        if (!passes(check)) return;
+        var r = S.race;
+        if (r && r.pace) { var p = RD.pace.planPace(paceInput()); if (p.ok) savePace(r, p); }
+        go('card');
+      }
+    }, 'Save and back to race card');
+  }
+  // Only once the card has something on it. On a first pass through the steps, Next is the way on.
+  function hasPlan(r) { return !!(r && (r.pace || r.fuel)); }
 
   // A small button that empties an optional time. The saved value becomes blank, never midnight.
   function clearTime(path, label) {
@@ -434,16 +504,16 @@
       var errNow = !!(errors['race.start'] || errors['race.transitionOpens']);
       if (clearNow !== clearShown || errNow !== errShown) refresh();
     }
-    var days = T.daysUntil(r.date);
-    var taper = r.date ? T.addDays(r.date, -(TAPER_DAYS[r.distance] || 14)) : null;
-    var taperLine = null;
-    if (days != null && taper) {
-      var taperDay = taper.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
-      var tDays = T.daysUntil(taper.getFullYear() + '-' + String(taper.getMonth() + 1).padStart(2, '0') + '-' + String(taper.getDate()).padStart(2, '0'));
-      taperLine = days < 0 ? 'This date has passed. Pick your next race.'
-        : tDays > 0 ? 'Your taper starts ' + taperDay + '.'
-          : tDays === 0 ? 'Your taper starts today, ' + taperDay + '.'
-            : 'You are in your taper. It started ' + taperDay + '.';
+    var tp = taperInfo(r);
+    var days = tp ? tp.days : null;
+    var taperLine = tp ? tp.line : null;
+    // An entry held back by the order check is not saved, so it must be fixed before moving on.
+    function checkRace() {
+      var e = {};
+      ['race.start', 'race.transitionOpens'].forEach(function (p) { if (unreadable(p)) e[p] = T.RACE_TIMES_MESSAGE; });
+      if (Object.keys(e).length) return e;
+      if (!r.name) set('race.name', 'My race');
+      return e;
     }
     return h('div', { class: 'stack' },
       title('Which race?', 'Add the date to see your days to go and when your taper starts. The times are optional.'),
@@ -472,16 +542,50 @@
       taperLine ? h('section', { class: 'countdown' },
         h('div', { style: 'flex:1' }, h('p', { class: 'k' }, 'COUNTDOWN'), h('p', { class: 'v' }, daysText(days))),
         h('p', { class: 'n' }, taperLine)) : null,
+      tp && days >= 0 ? taperPicker(r, tp) : null,
       h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn', onclick: next(1, function () {
-          // An entry held back by the order check is not saved, so it must be fixed before moving on.
-          var e = {};
-          ['race.start', 'race.transitionOpens'].forEach(function (p) { if (unreadable(p)) e[p] = T.RACE_TIMES_MESSAGE; });
-          if (Object.keys(e).length) return e;
-          if (!r.name) set('race.name', 'My race');
-          return e;
-        }) }, 'Next: about you'),
+        h('button', { type: 'button', class: 'btn', onclick: next(1, checkRace) }, 'Next: about you'),
+        hasPlan(r) ? backToCard(checkRace) : null,
         h('p', { class: 'small center' }, 'Saved on this phone as you go. No account.')));
+  }
+
+  // Taper length (RD-011, RD-031): one tap for 10, 14 or 21 days, or pick the day it starts. Our guide is marked.
+  // A picked day must fall 1 to 42 days before race day (pace.js, TAPER.limits); anything else is refused, not saved.
+  function taperPicker(r, tp) {
+    var T_ = RD.pace.TAPER;
+    var guide = RD.pace.taperDays(r.distance, null);
+    var opts = T_.options.slice();
+    if (opts.indexOf(guide) < 0) { opts.push(guide); opts.sort(function (a, b) { return a - b; }); }
+    var picked = opts.indexOf(tp.len) >= 0 ? tp.len : null;
+    var dateErr = errors['race.taperDate'];
+    return h('section', { class: 'card' },
+      h('p', { class: 'label' }, 'Taper length'),
+      RD.ui.choice(opts.map(function (n) { return { value: n, label: n + ' days' + (n === guide ? ' (our guide)' : '') }; }), picked,
+        function (v) { delete errors['race.taperDate']; delete raw['race.taperDate']; set('race.taperDays', v === guide ? null : v); refresh(); }, 'pill', 'Taper length'),
+      h('div', { class: 'row-wrap' },
+        h('label', { class: 'field', for: 'f-race-taperDate' }, 'Or pick the day your taper starts',
+          h('input', {
+            // A refused day stays on screen beside its message, so the person can see what was refused.
+            id: 'f-race-taperDate', type: 'date', value: dateErr && raw['race.taperDate'] ? raw['race.taperDate'] : tp.iso, max: r.date,
+            'aria-invalid': dateErr ? 'true' : null, 'aria-describedby': dateErr ? 'f-race-taperDate-err' : null,
+            onchange: function (e) {
+              var day = T.addDays(e.target.value, 0);
+              var len = day ? T.daysUntil(r.date, day) : null;
+              var lim = T_.limits;
+              if (len == null || len < lim[0] || len > lim[1]) {
+                raw['race.taperDate'] = e.target.value;
+                errors['race.taperDate'] = 'Pick a day ' + lim[0] + ' to ' + lim[1] + ' days before race day.';
+                refresh(); return;
+              }
+              delete errors['race.taperDate'];
+              delete raw['race.taperDate'];
+              set('race.taperDays', len === guide ? null : len);
+              refresh();
+            }
+          })),
+        dateErr ? h('p', { class: 'error', id: 'f-race-taperDate-err', role: 'alert' }, dateErr) : null),
+      h('p', { class: 'help' }, 'We count back from race day. Our guide is ' + guide + ' days for a ' + (DIST_LABEL[r.distance] || '70.3') +
+        (tp.own ? '. You chose ' + tp.len + '.' : '.') + ' If your coach says otherwise, go with your coach.'));
   }
 
   function setupYou() {
@@ -506,6 +610,7 @@
         h('p', { class: 'help' }, 'The most you have taken on long rides without trouble. Your fuel plan never goes above it.')),
       h('div', { class: 'actions' },
         h('button', { type: 'button', class: 'btn', onclick: next(2, checkYou) }, 'Next: fitness numbers'),
+        hasPlan(S.race) ? backToCard(checkYou) : null,
         h('p', { class: 'small center' }, 'Saved on this phone only. Not medical advice.')));
   }
 
@@ -563,6 +668,7 @@
           h('p', { class: 'help' }, 'Run 30 minutes solo as hard as you can hold evenly. Your average pace for the last 20 minutes is your threshold pace. A recent 10 km race pace is close enough.'))),
       h('div', { class: 'actions' },
         h('button', { type: 'button', class: 'btn', onclick: next(3, checkFitness) }, 'Next: course and heat'),
+        hasPlan(S.race) ? backToCard(checkFitness) : null,
         h('p', { class: 'small center' }, mode === 'effort' ? 'Effort mode gives targets out of 10, with a talk test.' : 'Don’t know a number? Choose Effort.')));
   }
 
@@ -572,8 +678,32 @@
     return {
       distance: r.distance, mode: f.mode || 'power', css: f.css, ftp: f.ftp, ftpRecent: f.ftpRecent !== false,
       runThreshold: f.runThreshold, weight: S.details.weight, bikeLthr: f.bikeLthr, runLthr: f.runLthr,
-      steadySpeed: f.steadySpeed, course: r.course, heat: r.heat
+      steadySpeed: f.steadySpeed, course: r.course, heat: r.heat,
+      // The athlete's own changeovers, only when they can be used. A blank or bad entry is our guide, and the
+      // targets screen shows the message by the field (RD-031).
+      t1: RD.pace.goodChangeover(r.t1) ? r.t1 : null,
+      t2: RD.pace.goodChangeover(r.t2) ? r.t2 : null
     };
+  }
+
+  // Saves pace targets to the race card, with what they were worked out from, so the card can say when they are out
+  // of date (paceStale). The pace plan now sets the splits; a saved fuel plan shows as out of date if they changed.
+  function savePace(r, p) {
+    r.pace = p;
+    r.pace.inputKey = JSON.stringify(paceInput());
+    r.splits = RD.pace.midSplits(p);
+    r.splitsByHand = null;
+    commit();
+  }
+  // True when the details, fitness, course, heat or changeovers changed since the targets were saved. A plan saved
+  // before this check existed has no key, and is never called out of date for that alone.
+  function paceStale(r) { return !!(r && r.pace && r.pace.inputKey && r.pace.inputKey !== JSON.stringify(paceInput())); }
+
+  // A T1 or T2 the athlete typed that can't be used, as a message for the field, or ''.
+  function changeoverError(path) {
+    var v = get(path);
+    if (unreadable(path) || (v != null && !RD.pace.goodChangeover(v))) return RD.pace.CHANGEOVER_MESSAGE;
+    return '';
   }
 
   function checkFitness() {
@@ -600,7 +730,8 @@
         RD.ui.choice(HEAT, r.heat, function (v) { set('race.heat', v); refresh(); }, 'opt', 'Forecast heat'),
         h('p', { class: 'help' }, 'Check it again in race week. You can change it any time.')),
       h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn', onclick: next(4) }, 'See my pace targets')));
+        h('button', { type: 'button', class: 'btn', onclick: next(4) }, 'See my pace targets'),
+        hasPlan(r) ? backToCard() : null));
   }
 
   function targetsBlock(p, r) {
@@ -618,7 +749,9 @@
       leg('Swim', pace(p.swim.pace) + ' /100m', null, hm(p.swim.minutes)),
       leg('Bike', bikeT, bikeSub, hm(p.bike.minutes)),
       leg('Run', pace(p.run.pace) + ' /km', runSub, hm(p.run.minutes)),
-      leg('Changes', 'T1 and T2', null, hm(p.transitions)),
+      // Each changeover on its own row (RD-031). A plan saved before T1 and T2 were split shows them together.
+      p.t1 ? leg('T1', 'Swim to bike', p.t1Own ? 'Your time' : 'Our guide', hm(p.t1)) : leg('Changes', 'T1 and T2', null, hm(p.transitions)),
+      p.t2 ? leg('T2', 'Bike to run', p.t2Own ? 'Your time' : 'Our guide', hm(p.t2)) : null,
       h('div', { class: 'finish' }, h('span', { class: 'k' }, 'FINISH'), h('span', { class: 'v' }, hm(p.finish))),
       h('p', { class: 'fclock' }, clock ? 'About ' + clock : finishClockHint()));
   }
@@ -632,9 +765,20 @@
         h('div', { class: 'actions' }, h('a', { class: 'btn', href: p.errors.some(function (e) { return e.field === 'weight'; }) ? '#/setup/2' : '#/setup/3' }, 'Fix my numbers')));
     }
     currentPrint = { race: r, pace: p, fuel: r.fuel };
+    // The changeover fields show their message as soon as an entry can't be used. The plan above uses our guide
+    // for that changeover until it can, and Save waits for it.
+    ['race.t1', 'race.t2'].forEach(function (path) { var m = changeoverError(path); if (m) errors[path] = m; else delete errors[path]; });
+    var guide = RD.pace.T1[r.distance] ? r.distance : '70.3';
     return h('div', { class: 'stack' },
       title('Your pace targets', 'Hold these and you finish strong. Each is a range, not one number.'),
       targetsBlock(p, r),
+      h('section', { class: 'card' },
+        h('p', { class: 'label' }, 'Your changeovers'),
+        h('div', { class: 'two' },
+          bound('race.t1', 'num', { label: 'T1, swim to bike', unit: 'min', placeholder: range(RD.pace.T1[guide][0], RD.pace.T1[guide][1]), live: refreshLater }),
+          bound('race.t2', 'num', { label: 'T2, bike to run', unit: 'min', placeholder: range(RD.pace.T2[guide][0], RD.pace.T2[guide][1]), live: refreshLater })),
+        h('p', { class: 'help' }, 'Our guide: T1 ' + range(RD.pace.T1[guide][0], RD.pace.T1[guide][1]) + ' min, T2 ' + range(RD.pace.T2[guide][0], RD.pace.T2[guide][1]) +
+          ' min. Type your own in whole minutes, or leave a box blank to use our guide. Your finish updates and the legs still add up to it.')),
       p.warnings.length ? h('div', { class: 'info warn' }, h('ul', null, p.warnings.map(function (w) { return h('li', null, w); }))) : null,
       h('details', { class: 'why', open: true },
         h('summary', null, 'How we got these'),
@@ -643,11 +787,15 @@
       h('div', { class: 'actions' },
         h('button', {
           type: 'button', class: 'btn', onclick: function () {
-            r.pace = p;
-            r.splits = RD.pace.midSplits(p);
-            r.splitsByHand = null; // the pace plan now sets the splits; a saved fuel plan shows as out of date if they changed
-            commit();
-            go('saved');
+            if (!passes(function () {
+              var e = {};
+              ['race.t1', 'race.t2'].forEach(function (path) { var m = changeoverError(path); if (m) e[path] = m; });
+              return e;
+            })) return;
+            var first = !r.pace && !r.fuel;
+            savePace(r, p);
+            // The first time through, F6 says it was saved and offers fuel. After that, back to the card.
+            go(first ? 'saved' : 'card');
           }
         }, 'Save to my race card'),
         h('a', { class: 'btn second', href: '#/setup/3' }, 'Change a number')));
@@ -661,6 +809,7 @@
     currentPrint = { race: r, pace: r.pace, fuel: r.fuel };
     return h('div', { class: 'app' },
       topBar(brandLink(), h('a', { class: 'toplink', href: '#/' }, 'My race')),
+      stepBar('card'),
       h('div', { class: 'info', role: 'status', style: 'background:var(--go-bg);color:var(--go);font-weight:700' }, 'Pace targets saved to your race card'),
       cardBody(r, true),
       printButton(),
@@ -675,6 +824,7 @@
     currentPrint = { race: r, pace: r.pace, fuel: r.fuel };
     return h('div', { class: 'app' },
       topBar(brandLink(), h('a', { class: 'toplink', href: '#/' }, 'My race')),
+      stepBar('card'),
       cardBody(r, false),
       printButton(),
       note('Typical ranges, not medical advice.'));
@@ -690,12 +840,15 @@
       var bikeStat = p.bike.watts ? [range(p.bike.watts[0], p.bike.watts[1]), 'watts'] : p.bike.hr ? [range(p.bike.hr[0], p.bike.hr[1]), 'bpm'] : ['Effort', p.bike.effort.split(':')[0]];
       var clock = finishClock(r.start, p.finish);
       paceSec = h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'), h('a', { href: '#/setup/3' }, 'Edit')),
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'), h('a', { href: '#/setup/5' }, 'Edit')),
+        paceStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your numbers changed since these targets. Open Pacing to update them.') : null,
         h('div', { class: 'stats' },
           stat('Swim', pace(p.swim.pace), '/100m'),
           stat('Bike', bikeStat[0], bikeStat[1]),
           stat('Run', pace(p.run.pace), '/km')),
         h('p', null, 'Finish ', h('b', null, hm(p.finish)), clock ? ' · about ' + clock : ''),
+        // The changeovers the finish includes: the athlete's own, or our guide (RD-031).
+        p.t1 && p.t2 ? h('p', { class: 'small' }, 'Changeovers: T1 ' + hm(p.t1) + ' · T2 ' + hm(p.t2)) : null,
         clock ? null : h('p', { class: 'small' }, finishClockHint()));
     } else {
       paceSec = h('section', { class: 'sec' },
@@ -709,7 +862,8 @@
         fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Fuel to update it.') : null,
         fuelLeg('Bike', f, 'bike'),
         fuelLeg('Run', f, 'run'),
-        showsKm(f, 'bike') || showsKm(f, 'run') ? h('p', { class: 'notice go' }, RD.pace.KM_NOTE) : null);
+        showsKm(f, 'bike') || showsKm(f, 'run') ? h('p', { class: 'notice go' }, RD.pace.KM_NOTE) : null,
+        h('p', { class: 'small' }, h('a', { href: '#/fuel' }, 'Change gel times')));
     } else {
       fuelSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('span', { class: 'later' }, p ? 'Next' : '')),
@@ -723,7 +877,8 @@
           h('span', null, d ? d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase() : '')),
         h('div', { style: 'flex:1;min-width:0' },
           h('h1', { tabindex: '-1' }, raceTitle(r)),
-          h('p', null, timeParts(r).concat(daysText(days)).filter(Boolean).join(' · ')))),
+          h('p', null, timeParts(r).concat(daysText(days)).filter(Boolean).join(' · ')),
+          taperInfo(r) && taperInfo(r).short ? h('p', null, taperInfo(r).short) : null)),
       paceSec,
       fuelSec);
   }
@@ -811,15 +966,25 @@
     if (gel && pickedCarbs(S.choice.gelCarbs)) gel = Object.assign({}, gel, { carbs: S.choice.gelCarbs });
     if (drink && pickedCarbs(S.choice.drinkCarbs)) drink = Object.assign({}, drink, { carbs: S.choice.drinkCarbs });
     var d = S.details;
-    return {
-      fromPlan: fromPlan, gels: gels, drinks: drinks,
-      input: {
-        distance: ctx.distance,
-        bikeMin: fromPlan ? r.splits.bike : hand.bikeMin != null ? hand.bikeMin : null,
-        runMin: fromPlan ? r.splits.run : hand.runMin != null ? hand.runMin : null,
-        heat: ctx.heat, gut: d.gut, sweat: d.sweatTypical || d.sweat == null ? null : d.sweat, gel: gel, drink: drink
-      }
+    var input = {
+      distance: ctx.distance,
+      bikeMin: fromPlan ? r.splits.bike : hand.bikeMin != null ? hand.bikeMin : null,
+      runMin: fromPlan ? r.splits.run : hand.runMin != null ? hand.runMin : null,
+      heat: ctx.heat, gut: d.gut, sweat: d.sweatTypical || d.sweat == null ? null : d.sweat, gel: gel, drink: drink
     };
+    // The athlete's own gel times (RD-031). Added only when some are set, so a plan saved before this existed
+    // is not called out of date for that alone. A time typed but unreadable goes in as blank, never as zero.
+    var tm = S.choice.timing || {};
+    function own(leg) {
+      var t = tm[leg] || {};
+      var first = unreadable('choice.timing.' + leg + '.first') ? null : t.first;
+      var every = unreadable('choice.timing.' + leg + '.every') ? null : t.every;
+      return { first: first == null ? null : first, every: every == null ? null : every };
+    }
+    var ownBike = own('bike');
+    var ownRun = own('run');
+    if (RD.fuel.hasTiming(ownBike) || RD.fuel.hasTiming(ownRun)) input.timing = { bike: ownBike, run: ownRun };
+    return { fromPlan: fromPlan, gels: gels, drinks: drinks, input: input };
   }
   function inputKey(input) { return JSON.stringify(input); }
   function fuelStale(r) { return !!(r && r.fuel && r.fuel.inputKey !== inputKey(fuelInput().input)); }
@@ -947,9 +1112,7 @@
 
     return h('div', { class: 'app' },
       topBar(solo ? brandLink() : backLink('#/', r.name || 'My race'), null),
-      solo ? null : h('nav', { class: 'stepnav', 'aria-label': 'Plan steps' },
-        h('a', { href: r.pace ? '#/setup/5' : '#/setup/2', class: r.pace ? 'done' : null }, '1 Pace' + (r.pace ? ' ✓' : '')),
-        h('a', { href: '#/fuel', 'aria-current': 'step' }, '2 Fuel')),
+      solo ? null : stepBar('fuel'),
       title('Fuel plan', 'Carbs, fluid and sodium for each leg, timed to your splits.'),
       splitsBox,
       h('section', { class: 'card' },
@@ -958,11 +1121,49 @@
           function (v) { set(base + '.heat', v); refresh(); }, 'pill', 'Forecast heat')),
       aboutYou,
       productsBox,
+      plan.ok ? timingBox(plan) : null,
       out,
       h('div', { class: 'actions noprint' },
         saveBtn,
         plan.ok ? printButton() : null,
         solo ? h('p', { class: 'small center' }, 'No account. Saved on this phone.') : null));
+  }
+
+  // Gel timing (RD-031): for each leg, the first gel and then one every so many minutes. Blank uses our suggested
+  // times, which show as the placeholders. Times that would pass the gut figure are refused by fuel.js, and the
+  // message shows here, by the fields, while the plan keeps the suggested times.
+  function timingBox(plan) {
+    function gap(times) { return times.length >= 2 ? String(times[1] - times[0]) : ''; }
+    function legBox(leg, name) {
+      var firstPath = 'choice.timing.' + leg + '.first';
+      var everyPath = 'choice.timing.' + leg + '.every';
+      var sug = plan.suggested[leg];
+      var msg = unreadable(firstPath) ? T.unreadableTimeMessage(raw[firstPath], 'hm')
+        : unreadable(everyPath) ? 'Enter how often in whole minutes, such as 30.'
+          : plan.timingNote[leg];
+      var times = plan[leg].gelTimes;
+      return h('div', { class: 'stack timing' },
+        h('p', { class: 'legname' }, name),
+        h('div', { class: 'two' },
+          bound(firstPath, 'hm', { label: name + ': first gel at', placeholder: sug.length ? T.fmtHM(sug[0]) : '0:30', live: refreshLater }),
+          bound(everyPath, 'num', { label: name + ': then every', unit: 'min', placeholder: gap(sug) || '30', live: refreshLater })),
+        h('p', { class: 'help' }, (plan.timingUsed[leg] ? 'Your times: ' : 'Suggested: ') + (times.length ? minutesList(times) : 'no gels on this leg')),
+        msg ? h('p', { class: 'error', role: 'alert' }, msg) : null);
+    }
+    var tm = S.choice.timing || {};
+    var anyOwn = ['bike', 'run'].some(function (leg) { return RD.fuel.hasTiming(tm[leg]) || unreadable('choice.timing.' + leg + '.first') || unreadable('choice.timing.' + leg + '.every'); });
+    return h('section', { class: 'card', id: 'gel-timing' },
+      h('p', { class: 'label' }, 'Gel timing'),
+      h('p', { class: 'help' }, 'We suggest these times. Set your own to match how you train. Your times never take carbs past your gut figure.'),
+      legBox('bike', 'Bike'),
+      legBox('run', 'Run'),
+      anyOwn ? h('button', {
+        type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () {
+          ['bike', 'run'].forEach(function (leg) { ['first', 'every'].forEach(function (k) { delete raw['choice.timing.' + leg + '.' + k]; }); });
+          S.choice.timing = { bike: { first: null, every: null }, run: { first: null, every: null } };
+          commit(); refresh();
+        }
+      }, 'Use the suggested times') : null);
   }
 
   var aboutShown = false; // once the fuel step asks for gut and sweat, it keeps asking until you leave

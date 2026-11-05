@@ -59,6 +59,16 @@ async function noHorizontalScroll(where) {
   const w = await page.evaluate(() => document.documentElement.scrollWidth);
   check(w <= 390, `no sideways scroll on ${where} (${w}px)`);
 }
+// RD-031. The floating step bar: four links, the current one marked, each at least 44 px.
+async function stepBarIs(current, where) {
+  const links = page.locator('nav.stepbar a');
+  const plain = (t) => t.replace(/,\s*done/, '').trim(); // a done step also says ", done" to a screen reader
+  const names = (await links.allInnerTexts()).map(plain);
+  const cur = plain(await page.locator('nav.stepbar a[aria-current="step"]').innerText().catch(() => ''));
+  const tall = await links.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44 && e.getBoundingClientRect().width >= 44));
+  check(names.join(',') === 'Race,Pacing,Fuel,Card' && cur.trim() === current && tall, `${where} has the step bar, with ${current} marked`);
+}
+const settle = () => page.waitForTimeout(700); // the fuel and targets screens redraw 400 ms after typing stops
 
 // Home, empty
 await page.goto(base + '/index.html');
@@ -104,6 +114,26 @@ check(!(await page.getByText('Transition should open before the race starts.').i
 check(await page.getByRole('button', { name: 'Clear transition time' }).isVisible(), 'F1 offers to clear a time that is set');
 check(await page.getByText('Swim 1.9 km · Bike 90 km · Run 21.1 km').isVisible(), 'F1 shows the 70.3 leg distances');
 check(await page.getByText(/days to go/).first().isVisible(), 'F1 shows days to go');
+await stepBarIs('Race', 'F1');
+// RD-011, RD-031. Taper length: our guide (14 days for a 70.3) is marked, one tap changes it, and a picked day works.
+const taperStore = () => page.evaluate(() => JSON.parse(localStorage.getItem('race-day-tools.v1')).race.taperDays);
+check((await page.getByRole('button', { name: /14 days/ }).getAttribute('aria-pressed')) === 'true' && /14 days \(our guide\)/.test(await page.getByRole('button', { name: /14 days/ }).innerText()), 'F1 marks our 14-day taper guide for a 70.3');
+const taperBefore = await page.locator('.countdown .n').innerText();
+await page.getByRole('button', { name: /21 days/ }).click();
+check((await taperStore()) === 21 && (await page.locator('.countdown .n').innerText()) !== taperBefore, 'Picking a 21-day taper saves it and moves the start');
+// The race is 20 days away, so a 21-day taper has already started.
+check(/You are in your taper/.test(await page.locator('.countdown .n').innerText()), 'A taper longer than the days to go says you are in it');
+const raceDay = new Date(Date.now() + 20 * 86400000);
+const isoLocal = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+const sevenBefore = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() - 7);
+await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(sevenBefore));
+check((await taperStore()) === 7, 'Picking the day the taper starts saves a 7-day taper');
+const after = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() + 3);
+await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(after));
+check(await page.getByText(/Pick a day 1 to 42 days before race day/).isVisible() && (await taperStore()) === 7 && (await page.getByLabel('Or pick the day your taper starts').inputValue()) === isoLocal(after), 'A taper day after the race is refused, not saved, and stays on screen with its message');
+await page.getByRole('button', { name: /14 days/ }).click();
+check((await taperStore()) == null && !(await page.getByText(/Pick a day 1 to 42/).isVisible()), 'Going back to 14 days uses our guide again');
+check(!(await page.getByRole('button', { name: 'Save and back to race card' }).count()), 'A first pass through the steps has no "back to race card" yet');
 // The date and time fields sit side by side. They must stay inside the page, with a gap between them,
 // at phone widths. The bug was seen in iOS Safari and this runs in Chromium, so it guards the layout only.
 for (const w of [390, 360, 320]) {
@@ -196,6 +226,29 @@ const wantClock = (startMin) => `${clock12(startMin + finLo)}–${clock12(startM
 check((await page.locator('.targets .fclock').innerText()).trim() === 'About ' + wantClock(6 * 60 + 40), `F5 shows the finish as a time of day: about ${wantClock(6 * 60 + 40)}`);
 check(await page.getByText('How we got these').isVisible(), 'F5 shows how we got these');
 check(await page.getByText(/your CSS \(your steady pool pace\) of 1:45/).isVisible(), 'F5 says what CSS is where it first uses it');
+await stepBarIs('Pacing', 'F5');
+// RD-031. Your own T1: the finish moves by exactly the difference, and the legs still add up to it.
+const finishOf = async () => { const m = /FINISH\s*\n?\s*(\d+):(\d\d)–(\d+):(\d\d)/.exec(await page.locator('.targets').innerText()); return [Number(m[1]) * 60 + Number(m[2]), Number(m[3]) * 60 + Number(m[4])]; };
+const t1Row = await page.locator('.targets .leg', { hasText: 'T1' }).innerText();
+check(/Our guide/.test(t1Row) && /0:04–0:05/.test(t1Row), 'F5 shows T1 on its own row, with our guide');
+await page.getByLabel('T1, swim to bike').fill('10');
+await settle();
+const fin10 = await finishOf();
+check(fin10[0] - finLo === 6 && fin10[1] - finHi === 5, `A 10-minute T1 moves the finish from our 4–5 minute guide by 6 and 5 minutes (${fin10})`);
+const legSum = await page.evaluate(() => {
+  const mins = (t) => { const m = /(\d+):(\d\d)(?:–(\d+):(\d\d))?/.exec(t); return m ? [Number(m[1]) * 60 + Number(m[2]), m[3] ? Number(m[3]) * 60 + Number(m[4]) : Number(m[1]) * 60 + Number(m[2])] : [0, 0]; };
+  return [...document.querySelectorAll('.targets .leg .s')].map((e) => mins(e.textContent)).reduce((a, b) => [a[0] + b[0], a[1] + b[1]], [0, 0]);
+});
+check(legSum[0] === fin10[0] && legSum[1] === fin10[1], 'The legs and changeovers on screen add up to the finish with your own T1');
+await page.getByLabel('T1, swim to bike').fill('4.5');
+await settle();
+check(await page.getByText(/Enter whole minutes, 1 to 30/).isVisible(), 'A T1 that is not whole minutes shows a message');
+await page.getByRole('button', { name: 'Save to my race card' }).click();
+check(await page.getByRole('heading', { name: 'Your pace targets' }).isVisible(), 'Save waits for a T1 that can be used');
+await page.getByLabel('T1, swim to bike').fill('');
+await settle();
+const finBack = await finishOf();
+check(finBack[0] === finLo && finBack[1] === finHi && !(await page.getByText(/Enter whole minutes/).isVisible()), 'A blank T1 goes back to our guide, never zero');
 await shot('f5');
 await noHorizontalScroll('F5');
 await page.getByRole('button', { name: 'Save to my race card' }).click();
@@ -241,6 +294,8 @@ check(!/typical/i.test(await fuelCard.innerText()), 'No product name says "typic
 check(/generic starter products/.test(await fuelCard.innerText()), 'The card says the products are generic starters until you edit them');
 // A line right under the product choice says what the plan uses, with the carbs per serve.
 check(/The plan uses Gel at 25g a serve and Sports drink at 30g per 500 ml\./.test(fuelText), 'The fuel step says which gel and drink the plan uses, with their carbs');
+await stepBarIs('Fuel', 'Fuel');
+check((await page.locator('nav.stepbar a.done').allInnerTexts()).map((t) => t.replace(/,\s*done/, '').trim()).join(',') === 'Race,Pacing', 'The step bar marks Race and Pacing done');
 const useTop = await topOf(page.getByText(/The plan uses /));
 const selTop = await topOf(page.locator('select').first());
 check(selTop < useTop && useTop < carryTop, 'That line sits under the product choice and above the carry list');
@@ -263,6 +318,26 @@ for (const w of [390, 360, 320]) {
 await page.setViewportSize({ width: 390, height: 844 });
 await shot('a2-fuel');
 await noHorizontalScroll('Fuel');
+// RD-031. Your own gel times: the first, then one every so many minutes.
+const suggestedBike = await page.locator('#gel-timing .timing').first().innerText();
+check(/Suggested: \d+:\d\d/.test(suggestedBike), 'Gel timing shows the suggested bike times');
+await page.getByLabel('Bike: first gel at').fill('030');
+await page.getByLabel('Bike: then every').fill('60');
+await settle();
+const ownBike = await page.locator('#gel-timing .timing').first().innerText();
+check(/Your times: 0:30 · 1:30 · 2:30/.test(ownBike), 'Your own bike gel times are used: 0:30, 1:30, 2:30');
+const ownRow = await page.locator('.prow', { hasText: '1 serve of' }).first().innerText();
+check(/^0:30\s+~\d+ km\s+1:30\s+~\d+ km\s+2:30\s+~\d+ km/.test(ownRow.trim()), 'The bike plan rows follow your own times, with km beside each');
+// A gel every 10 minutes is past the 70 g gut figure: refused with a message, and the suggested times stay.
+await page.getByLabel('Bike: then every').fill('10');
+await settle();
+check(await page.getByText(/over your gut figure of 70 g/).isVisible() && /Suggested: /.test(await page.locator('#gel-timing .timing').first().innerText()), 'Gel times past the gut figure are refused, and the suggested times stay');
+check(!/Capped at what your gut has trained: (?!70 g)/.test(await page.locator('.app').innerText()), 'The gut cap does not move');
+await page.getByLabel('Bike: then every').fill('60');
+await settle();
+check(/Your times: 0:30 · 1:30 · 2:30/.test(await page.locator('#gel-timing .timing').first().innerText()), 'Going back to every 60 minutes uses your times again');
+await shot('a2-fuel-timing');
+await noHorizontalScroll('Fuel with gel timing');
 await page.getByRole('button', { name: 'Save to my race card' }).click();
 
 // C1 Race card
@@ -276,6 +351,17 @@ check(!/typical/i.test(card), 'Race card has no "typical" in it');
 check(!/Countdown|Debrief|Coming later/.test(card), 'Race card hides Countdown and Debrief until they exist');
 check(/6:40am start/.test(card) && /Transition opens 5:30am/.test(card), 'Race card shows the start and when the transition opens');
 check(card.includes('· about ' + wantClock(6 * 60 + 40)), 'Race card shows the finish as a time of day');
+await stepBarIs('Card', 'Race card');
+check(/^0:30\s+Gel/.test(gelRow), 'Race card shows your own first gel time');
+check(/Changeovers: T1 0:04–0:05 · T2 0:02–0:04/.test(card), 'Race card shows the changeovers the finish includes');
+check(/Taper starts|In your taper/.test(card), 'Race card shows when the taper starts');
+for (const w of [390, 360, 320]) {
+  await page.setViewportSize({ width: w, height: 844 });
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  const bar = await page.locator('nav.stepbar a').evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44 && e.getBoundingClientRect().width >= 44));
+  check(sw <= w && bar, `The step bar fits with 44 px targets at ${w}px`);
+}
+await page.setViewportSize({ width: 390, height: 844 });
 await shot('c1-card');
 
 // Print view
@@ -283,6 +369,7 @@ await page.emulateMedia({ media: 'print' });
 await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
 const tt = await page.locator('.tt').textContent();
 check(/Bike fuel/.test(tt) && /175–185 W/.test(tt), 'Print card has pace and fuel');
+check(/Gel 0:30 · 1:30 · 2:30/.test(tt), 'Print card shows your own bike gel times');
 check(/at ~\d+ km/.test(tt) && /Go by the clock/.test(tt) && /Gel \d+:\d\d/.test(tt), 'Print card keeps the times and adds the km and the go-by-the-clock line');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
 check(/Transition opens 5:30am/.test(tt), 'Print card shows when the transition opens');
@@ -314,6 +401,35 @@ const homeText = await page.locator('.app').innerText();
 check(/2 of 2 done/.test(homeText), 'Home shows 2 of 2 done');
 check(!/Countdown|Debrief|Later/.test(homeText), 'Home hides Countdown and Debrief until they exist');
 await shot('a1-home');
+
+// RD-031. Jump between steps from the bar, and come back to the card.
+await page.goto(base + '/index.html#/card');
+await page.locator('nav.stepbar').getByRole('link', { name: /Race/ }).click();
+await page.getByRole('heading', { name: 'Which race?' }).waitFor();
+await stepBarIs('Race', 'F1 opened from the card');
+await page.getByRole('button', { name: 'Save and back to race card' }).click();
+await page.locator('.racecard').waitFor();
+check(true, 'F1 has "Save and back to race card" once the card has a plan');
+await page.locator('nav.stepbar').getByRole('link', { name: /Pacing/ }).click();
+await page.getByRole('heading', { name: 'Your pace targets' }).waitFor();
+check(true, 'Pacing in the step bar opens the targets once pace is saved');
+// Change a number and leave by the step bar without saving: the card says the targets are out of date.
+await page.goto(base + '/index.html#/setup/3');
+await page.getByLabel('FTP', { exact: true }).fill('260');
+await page.locator('nav.stepbar').getByRole('link', { name: /Card/ }).click();
+await page.locator('.racecard').waitFor();
+check(/Your numbers changed since these targets/.test(await page.locator('.racecard').innerText()), 'Leaving a pacing step by the bar after a change flags the targets as out of date');
+// "Save and back to race card" works the targets out again.
+await page.goto(base + '/index.html#/setup/3');
+await page.getByRole('button', { name: 'Save and back to race card' }).click();
+await page.locator('.racecard').waitFor();
+const ftp260 = await page.locator('.racecard').innerText();
+check(!/Your numbers changed since these targets/.test(ftp260) && !/175–185/.test(ftp260), 'Save and back to race card updates the targets and clears the flag');
+await page.goto(base + '/index.html#/setup/3');
+await page.getByLabel('FTP', { exact: true }).fill('240');
+await page.getByRole('button', { name: 'Save and back to race card' }).click();
+await page.locator('.racecard').waitFor();
+check(/175–185/.test(await page.locator('.racecard').innerText()), 'Putting FTP back to 240 gives 175–185 W again');
 
 // Lower the gut figure after saving fuel: the card must say the fuel plan is out of date
 await page.goto(base + '/index.html#/setup/2');
