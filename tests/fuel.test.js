@@ -215,3 +215,66 @@ test('plainName drops a trailing "(typical)" tag from a name saved by an older v
   assert.equal(F.plainName(null), null);
   assert.equal(F.plainName(undefined), undefined);
 });
+
+test('your own gel times are used on each leg: first, then every so many minutes, clear of the last 10 minutes (RD-031)', () => {
+  // A gut figure of 80: four gels plus the drink come to about 72 g an hour, which 70 would refuse.
+  const p = F.planFuel({ ...base, gut: 80, timing: { bike: { first: 30, every: 40 }, run: { first: 20, every: 30 } } });
+  assert.ok(p.ok);
+  assert.deepEqual(p.bike.gelTimes, [30, 70, 110, 150]); // 165 min bike: 150 is the last before 155
+  assert.deepEqual(p.run.gelTimes, [20, 50, 80]); // 113 min run: 110 would be in the last 10 minutes
+  assert.equal(p.bike.gels, 4);
+  assert.equal(p.carry.bikeGels, 4);
+  assert.deepEqual(p.timingUsed, { bike: true, run: true });
+  assert.deepEqual(p.timingNote, { bike: '', run: '' });
+  // Every time is inside the leg and clear of its last 10 minutes.
+  for (const t of p.bike.gelTimes) assert.ok(t >= 1 && t <= 165 - 10);
+  for (const t of p.run.gelTimes) assert.ok(t >= 1 && t <= 113 - 10);
+});
+
+test('your own gel times never take carbs past the gut figure: they are refused and the suggested times stay (RD-031, RD-02-A1)', () => {
+  const plain = F.planFuel(base);
+  // A gel every 10 minutes on the bike is far past a 70 g gut figure.
+  const p = F.planFuel({ ...base, timing: { bike: { first: 10, every: 10 }, run: { first: 5, every: 5 } } });
+  assert.ok(p.ok);
+  assert.deepEqual(p.bike.gelTimes, plain.bike.gelTimes);
+  assert.deepEqual(p.run.gelTimes, plain.run.gelTimes);
+  assert.equal(p.timingUsed.bike, false);
+  assert.match(p.timingNote.bike, /over your gut figure of 70 g/);
+  assert.match(p.timingNote.run, /over your gut figure of 70 g/);
+  // Across many timings, gut figures and gels, the cap always holds.
+  for (const gut of [0, 30, 60, 90, 120]) {
+    for (const every of [5, 10, 15, 20, 30, 45, 60, 120]) {
+      for (const gel of [GEL, CHEWS, { id: 'big', name: 'Big gel', kind: 'gel', carbs: 40, sodium: 100 }]) {
+        const q = F.planFuel({ ...base, gut, gel, timing: { bike: { first: 15, every }, run: { first: 15, every } } });
+        assert.ok(q.ok);
+        assert.ok(carbsTaken('bike', q, gel) <= gut + 1e-9, `bike gut ${gut} every ${every}`);
+        assert.ok(carbsTaken('run', q, gel) <= gut + 1e-9, `run gut ${gut} every ${every}`);
+      }
+    }
+  }
+});
+
+test('unreadable or half-filled gel timing is refused with a message, and a blank is never zero (RD-031)', () => {
+  const plain = F.planFuel(base);
+  const cases = [
+    [{ first: 30, every: null }, /Enter both/],
+    [{ first: null, every: 30 }, /Enter both/],
+    [{ first: 0, every: 30 }, /first gel time as h:mm/],
+    [{ first: 30.5, every: 30 }, /first gel time as h:mm/],
+    [{ first: 30, every: 2 }, /whole minutes, 5 to 120/],
+    [{ first: 30, every: 121 }, /whole minutes, 5 to 120/],
+    [{ first: 30, every: NaN }, /whole minutes, 5 to 120/],
+    [{ first: 160, every: 30 }, /at least 10 minutes before the end/]
+  ];
+  for (const [bike, msg] of cases) {
+    const p = F.planFuel({ ...base, timing: { bike } });
+    assert.ok(p.ok);
+    assert.match(p.timingNote.bike, msg, JSON.stringify(bike));
+    assert.deepEqual(p.bike.gelTimes, plain.bike.gelTimes, JSON.stringify(bike));
+  }
+  // Both blank means the suggested times, with no message.
+  const none = F.planFuel({ ...base, timing: { bike: { first: null, every: null }, run: null } });
+  assert.deepEqual(none.bike.gelTimes, plain.bike.gelTimes);
+  assert.deepEqual(none.timingNote, { bike: '', run: '' });
+  assert.deepEqual(none.suggested.bike, plain.bike.gelTimes);
+});

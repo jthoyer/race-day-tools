@@ -102,6 +102,30 @@
   function isNum(v) { return typeof v === 'number' && isFinite(v); }
   function between(v, lo, hi) { return isNum(v) && v >= lo && v <= hi; }
 
+  // Gel timing the athlete sets (RD-031): the first gel, then one every so many minutes, on one leg.
+  // No gel in the last END_GAP minutes of a leg, the same rule as spread(). UNCHECKED: the shortest and longest gap.
+  var END_GAP = 10;
+  var TIMING_EVERY = [5, 120]; // minutes between gels
+  // One leg's own timing: { first, every } in whole minutes. Both blank means "use the suggested times".
+  function hasTiming(t) { return !!t && (t.first != null || t.every != null); }
+  // Checks one leg's own timing before it is used. Returns a message, or '' when it can be used.
+  // A blank is never read as zero: a leg with one of the two set and the other blank asks for both.
+  function timingError(t, minutes) {
+    if (!hasTiming(t)) return '';
+    if (t.first == null || t.every == null) return 'Enter both the first gel time and how often, or leave both blank for our suggested times.';
+    var last = minutes - END_GAP;
+    if (!(isNum(t.first) && Math.round(t.first) === t.first && t.first >= 1)) return 'Type the first gel time as h:mm, such as 0:30.';
+    if (!(isNum(t.every) && Math.round(t.every) === t.every && between(t.every, TIMING_EVERY[0], TIMING_EVERY[1]))) return 'Enter how often in whole minutes, ' + TIMING_EVERY[0] + ' to ' + TIMING_EVERY[1] + '.';
+    if (isNum(minutes) && t.first > last) return 'The first gel must be at least ' + END_GAP + ' minutes before the end of the leg.';
+    return '';
+  }
+  // The gel times from one leg's own timing: first, first + every, and so on, never in the last END_GAP minutes.
+  function timesFrom(t, minutes) {
+    var out = [];
+    for (var m = t.first; m <= minutes - END_GAP; m += t.every) out.push(m);
+    return out;
+  }
+
   function validate(input) {
     var errs = [];
     if (!CARB_CEILING[input.distance]) errs.push({ field: 'distance', message: 'Pick Standard or 70.3.' });
@@ -153,6 +177,22 @@
     }
     var bikeWanted = Math.max(0, Math.floor(((bikeTarget - drinkCarbsH) * bikeH) / gel.carbs + 1e-9));
     var bikeGelTimes = spread(bikeWanted, input.bikeMin);
+    // The athlete's own gel times replace the suggested ones only if they keep carbs at or under the gut figure.
+    // If they would not, the suggested times stay and the message says why (RD-031). The gut cap never moves.
+    var timing = input.timing || {};
+    var timingNote = { bike: '', run: '' };
+    var timingUsed = { bike: false, run: false };
+    if (hasTiming(timing.bike)) {
+      var bikeBad = timingError(timing.bike, input.bikeMin);
+      if (!bikeBad) {
+        var ownBike = timesFrom(timing.bike, input.bikeMin);
+        var ownBikeCarbs = drinkCarbsH + (ownBike.length * gel.carbs) / bikeH;
+        if (ownBikeCarbs > gut + 1e-9) {
+          bikeBad = 'These times give about ' + Math.ceil(ownBikeCarbs) + ' g of carbs an hour on the bike, over your gut figure of ' + gut + ' g. Space the gels further apart.';
+        } else { bikeGelTimes = ownBike; timingUsed.bike = true; }
+      }
+      timingNote.bike = bikeBad;
+    }
     var bikeGelCount = bikeGelTimes.length;
     var bikeCarbsH = drinkCarbsH + (bikeGelCount * gel.carbs) / bikeH;
     var bikeSodiumTarget = roundTo(clamp(bikeFluid * SODIUM_PER_L[heat], SODIUM_RANGE[0], SODIUM_RANGE[1]), 50);
@@ -169,8 +209,19 @@
     var runFluid = fluidFor('run', sweat);
     var runWanted = Math.max(0, Math.floor((runTarget * runH) / gel.carbs + 1e-9));
     var runGelTimes = spread(runWanted, input.runMin);
+    if (hasTiming(timing.run)) {
+      var runBad = timingError(timing.run, input.runMin);
+      if (!runBad) {
+        var ownRun = timesFrom(timing.run, input.runMin);
+        var ownRunCarbs = (ownRun.length * gel.carbs) / runH;
+        if (ownRunCarbs > gut + 1e-9) {
+          runBad = 'These times give about ' + Math.ceil(ownRunCarbs) + ' g of carbs an hour on the run, over your gut figure of ' + gut + ' g. Space the gels further apart.';
+        } else { runGelTimes = ownRun; timingUsed.run = true; }
+      }
+      timingNote.run = runBad;
+    }
     var runGelCount = runGelTimes.length;
-    if (bikeGelCount < bikeWanted || runGelCount < runWanted) {
+    if ((!timingUsed.bike && bikeGelCount < bikeWanted) || (!timingUsed.run && runGelCount < runWanted)) {
       warnings.push('Your gel or chew serve is small, so it can’t be taken often enough to reach the target. The plan takes one every 5 minutes at most. A bigger serve would help.');
     }
     var runCarbsH = (runGelCount * gel.carbs) / runH;
@@ -229,6 +280,11 @@
         drink: drink ? drink.name : null,
         gelName: gel.name
       },
+      // Which legs use the athlete's own gel times, and why a leg's own times were not used ('' when fine).
+      timingUsed: timingUsed,
+      timingNote: timingNote,
+      // The suggested times, so the fuel step can show them beside the athlete's own.
+      suggested: { bike: spread(bikeWanted, input.bikeMin), run: spread(runWanted, input.runMin) },
       warnings: warnings
     };
   }
@@ -250,6 +306,11 @@
     carbSteps: carbSteps,
     describeProducts: describeProducts,
     spread: spread,
+    END_GAP: END_GAP,
+    TIMING_EVERY: TIMING_EVERY,
+    hasTiming: hasTiming,
+    timingError: timingError,
+    timesFrom: timesFrom,
     validate: validate,
     planFuel: planFuel
   };

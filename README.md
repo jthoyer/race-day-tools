@@ -70,7 +70,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/time.js` | Parsing and formatting times and dates. |
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
-| `public/js/app.js` | The screens: home, set-up F1–F5, saved F6, fuel A2, race card C1, products, print. |
+| `public/js/app.js` | The screens: home, set-up F1–F5, saved F6, fuel A2, race card C1, products, print, and the step bar (Race, Pacing, Fuel, Card) that joins them. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race fuel. |
 | `public/_headers` | Security headers and the content policy. |
@@ -83,7 +83,8 @@ The maths files work in the browser and in Node, so the tests run with no browse
 
 - Planned carbs never pass the gut figure the athlete enters, on any leg. A drink too strong on its own gets diluted with water.
 - Planned fluid never passes the sweat rate. Drinking more than you sweat is the main cause of exercise-associated hyponatraemia.
-- Finish times are always a range, and the leg times always add up to it.
+- Finish times are always a range, and the leg times always add up to it, with the athlete's own T1 and T2 too.
+- Gel times the athlete sets are refused if they would pass the gut figure. The suggested times stay.
 - "Not medical advice" appears beside every plan.
 
 ## Numbers to verify before launch
@@ -98,10 +99,13 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Swim in open water | `SWIM_FACTOR` | 70.3: 1.06–1.12 × CSS |
 | Heart-rate and effort targets | `BIKE_HR`, `RUN_HR`, `EFFORT` | see file |
 | Bike speed model | `BIKE_MODEL`, `COURSE_TIME` | CdA 0.29, Crr 0.005, rolling +4%, hilly +10% |
+| Changeovers, our guide | `T1`, `T2` | 70.3: T1 4–5, T2 2–4 min; Standard: T1 2–3, T2 1–2 min (they add up to the old combined 6–9 and 3–5) |
+| Taper length | `TAPER` | guide 14 days for a 70.3, 10 for a Standard; offered 10, 14, 21; a picked day 1–42 days out |
 | Carb ceilings | `CARB_CEILING` | 70.3: bike 90, run 60 g/h; Standard: 60, 30 |
 | Typical sweat rate | `TYPICAL_SWEAT` | 0.6 / 0.8 / 1.1 L/h by heat |
 | Fluid share and limits | `REPLACE`, `FLUID_FLOOR`, `FLUID_CEILING` | bike 75% of sweat, 0.4–1.0 L/h |
 | Sodium | `SODIUM_PER_L`, `SODIUM_RANGE` | 600–800 mg/L, 300–1,000 mg/h |
+| Gel timing limits | `TIMING_EVERY`, `END_GAP` | a gel every 5–120 min; none in the last 10 min of a leg |
 | Carb list on My products | `CARB_PICK` | 20–50 g in 5 g steps (a figure off the list goes under Other) |
 
 Good places to check them: the ACSM position stands on nutrition and on fluid replacement, and the consensus statements on exercise-associated hyponatraemia.
