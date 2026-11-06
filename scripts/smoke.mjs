@@ -31,8 +31,9 @@ const HEADERS = {};
 const server = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
   try {
-    const body = await readFile(join(ROOT, path.endsWith('/') ? path + 'index.html' : path));
-    res.writeHead(200, { ...HEADERS, 'content-type': TYPES[extname(path)] || 'application/octet-stream' });
+    const file = path.endsWith('/') ? path + 'index.html' : path; // a folder address serves its index.html, as a host does
+    const body = await readFile(join(ROOT, file));
+    res.writeHead(200, { ...HEADERS, 'content-type': TYPES[extname(file)] || 'application/octet-stream' });
     res.end(body);
   } catch {
     res.writeHead(404);
@@ -83,6 +84,8 @@ check((await gcards.count()) === 2, 'Guides show as two gallery cards');
 check(JSON.stringify(await gcards.evaluateAll((els) => els.map((e) => e.getAttribute('href')))) === '["guides/race-fuel.html","guides/bike-pacing.html"]', 'Gallery cards link to both guides');
 check((await gcards.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'Gallery cards are at least 44 px high');
 check(/Draft/.test(await gcards.first().innerText()), 'Gallery cards say Draft while the guides are unchecked');
+const howLink = page.getByRole('link', { name: 'How it works, and why it exists' });
+check((await howLink.getAttribute('href')) === 'how/' && (await howLink.evaluate((e) => e.getBoundingClientRect().height)) >= 44, 'First screen links to the how page, at least 44 px high (RD-032)');
 // The probe is expected to be refused; its console errors are dropped at the end by its unique address.
 const sent = await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false));
 check(sent === false, 'Content policy blocks every network request (connect-src none)');
@@ -529,6 +532,31 @@ check(/g\/hr/.test(await g.locator('.tool').innerText()), 'Fuel guide shows a pl
 const guideTool = await g.locator('.tool').innerText();
 check(/at \d+:\d\d \(~\d+ km\)/.test(guideTool) && /Go by the clock/.test(guideTool) && !/NaN/.test(guideTool), 'Fuel guide shows km beside the run gel times, with the go-by-the-clock line');
 if (SHOTS) await g.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, '0')}-guide-fuel.png`, fullPage: true });
+
+// RD-032. The how page: answers why the app exists and the route to a printed card, fits 390, 360 and 320 px,
+// makes no network request, and is linked from the home screen once a race exists too.
+await page.goto(base + '/index.html');
+await page.getByRole('heading', { name: 'Your plan' }).waitFor();
+check((await page.getByRole('link', { name: 'How it works, and why it exists' }).getAttribute('href')) === 'how/', 'Home with a race links to the how page');
+await page.getByRole('link', { name: 'How it works, and why it exists' }).click();
+await page.getByRole('heading', { name: 'Why this app exists' }).waitFor();
+for (const w of [390, 360, 320]) {
+  await page.setViewportSize({ width: w, height: 844 });
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  check(sw <= w, `how page has no sideways scroll at ${w}px (${sw}px)`);
+  const small = await page.locator('main a.btn').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 44).length);
+  check(small === 0, `how page buttons are at least 44 px high at ${w}px`);
+}
+await shot('how');
+const howText = await page.locator('main').innerText();
+check(/Why this app exists/.test(howText) && /Start my race card/.test(howText) && /Print top-tube card/.test(howText), 'How page says why the app exists and how to reach a printed card');
+check(/not medical advice/i.test(howText), 'How page keeps "Not medical advice"');
+check(!/NaN|undefined/.test(howText), 'How page shows no NaN or undefined');
+check((await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false))) === false, 'How page makes no network request (connect-src none)');
+check(/Content-Security-Policy/.test(await page.locator('head').innerHTML()) && (await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')) === (await g.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content)), 'How page carries the same content policy as the guides');
+await page.getByRole('link', { name: 'Start my race card' }).click();
+await page.getByRole('heading', { name: 'Which race?' }).waitFor();
+check(/#\/setup\/1$/.test(page.url()), 'How page "Start my race card" opens the first set-up screen');
 
 await browser.close();
 server.close();
