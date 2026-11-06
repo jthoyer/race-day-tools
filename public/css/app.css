@@ -19,6 +19,7 @@
   --pick: #92a4c6;
   --pick-bg: #eef2fb;
   --seg-bg: #eef0f4;
+  --soft: #dedfe1; /* the page background, 10% darker: the last step on the first screen */
   --warn: #9a3412;
   --warn-bg: #fdeee6;
   --display: 'Outfit', 'DM Sans', system-ui, sans-serif;
@@ -1009,36 +1010,6 @@ details.test p {
   line-height: 1.4;
 }
 
-/* Blank race card: the first screen. Empty parts get a dashed outline. */
-.racecard.blank .band {
-  background: var(--seg-bg);
-  color: var(--ink);
-}
-.racecard.blank .date {
-  border-right-color: var(--field);
-}
-.racecard.blank .date span,
-.racecard.blank .band p {
-  color: var(--muted);
-}
-.racecard.blank h1 {
-  color: var(--ink);
-}
-.stat.ph {
-  background: transparent;
-  border: 1px dashed var(--field);
-}
-.stat.ph b {
-  color: var(--muted);
-}
-.ph-line {
-  border: 1px dashed var(--field);
-  border-radius: var(--r);
-  padding: 10px 12px;
-  color: var(--muted);
-  font-size: 14px;
-}
-
 /* Guides: an article with the tool inside it (F7) */
 .article {
   display: grid;
@@ -1175,3 +1146,91 @@ details.test p {
 .prow .gtimes .gt { white-space: nowrap; text-align: left; font-weight: 400; color: var(--muted); }
 .prow .gtimes .gt .km { text-align: left; font-size: 13px; font-weight: 400; color: var(--muted); opacity: 0.85; }
 .kmnote { padding: 0 0 8px; }
+
+/* First screen (RD-033): logo, what the app is for, four steps, two ways in. */
+.splash {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 28px);
+  padding-top: 40px;
+}
+.splash-logo {
+  display: block;
+  width: 132px;
+  height: auto;
+  align-self: flex-start;
+}
+.splash-head {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+.splash-head h1 {
+  margin: 0;
+  font: 700 34px/38px var(--display);
+}
+.splash-head p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 26px;
+  color: var(--muted);
+}
+.splash-steps {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.splash-steps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: 600 17px/24px var(--display);
+}
+.splash-steps li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 27px;
+  top: 100%;
+  width: 2px;
+  height: 8px;
+  background: var(--line);
+}
+.splash-steps li:last-child {
+  background: var(--soft);
+  border-color: var(--soft);
+}
+.splash-steps .n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font: 700 13px var(--body);
+}
+.splash .actions {
+  gap: 4px;
+  padding-top: 24px;
+}
+.splash .btn {
+  min-height: 56px;
+  font-size: 17px;
+}
+.linkbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  font: 600 16px var(--body);
+  color: var(--link);
+}
