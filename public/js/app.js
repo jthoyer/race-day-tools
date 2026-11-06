@@ -363,6 +363,11 @@
       })));
   }
 
+  // The link to the instructional page (RD-032), on both home screens.
+  function howLink() {
+    return h('a', { class: 'btn ghost', href: 'how/' }, 'How it works, and why it exists');
+  }
+
   function home() {
     var r = S.race;
     if (isBlankRace(r)) {
@@ -373,6 +378,7 @@
           h('a', { class: 'btn', href: '#/setup/1' }, 'Start my race card'),
           h('a', { class: 'btn second', href: '#/fuel' }, 'Just plan my fuel')),
         guidesGallery(),
+        howLink(),
         note('Free. No account. Saved on this phone only. Typical ranges, not medical advice.'));
     }
 
@@ -433,6 +439,7 @@
           }
         }
       }, 'Start a new race'),
+      howLink(),
       note('Typical ranges, not medical advice.'));
   }
 

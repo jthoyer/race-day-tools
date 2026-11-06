@@ -1050,6 +1050,13 @@ details.test p {
 .article h1 {
   font-size: 28px;
 }
+.article ul,
+.article ol {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+}
 .draftnote {
   border-left: 3px solid var(--warn);
   background: var(--warn-bg);

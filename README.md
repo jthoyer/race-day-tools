@@ -72,6 +72,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
 | `public/js/app.js` | The screens: home, set-up F1–F5, saved F6, fuel A2, race card C1, products, print, and the step bar (Race, Pacing, Fuel, Card) that joins them. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
+| `public/how/index.html` | The instructional page at `/how/`: why the app exists, and from a blank card to a printed one. Linked from the home screen. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race fuel. |
 | `public/_headers` | Security headers and the content policy. |
 | `tests/` | Unit tests (`node --test`). |
