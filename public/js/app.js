@@ -314,7 +314,7 @@
 
   // ---------- home (A1) ----------
 
-  // A race with no name, date, pace or fuel is the same as no race: show the blank card.
+  // A race with no name, date, pace or fuel is the same as no race: show the splash.
   // (Opening step 1 and then pressing Cancel leaves such a race behind.)
   function isBlankRace(r) { return !r || (!r.name && !r.date && !r.pace && !r.fuel); }
 

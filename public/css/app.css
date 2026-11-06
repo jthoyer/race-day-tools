@@ -1152,6 +1152,7 @@ details.test p {
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 28px);
+  min-height: calc(100svh - 28px); /* the visible height on a phone, so the yellow button is not under the browser bar */
   padding-top: 40px;
 }
 .splash-logo {
@@ -1198,7 +1199,7 @@ details.test p {
   content: '';
   position: absolute;
   left: 27px;
-  top: 100%;
+  top: calc(100% + 1px); /* below the card's own 1px border, so the line meets the next card */
   width: 2px;
   height: 8px;
   background: var(--line);

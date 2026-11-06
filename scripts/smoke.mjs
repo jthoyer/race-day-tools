@@ -98,13 +98,14 @@ for (const w of [360, 320]) {
   await page.setViewportSize({ width: w, height: 844 });
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   check(sw <= w, `splash has no sideways scroll at ${w}px (${sw}px)`);
+  check(await page.locator('.splash .btn, .splash .linkbtn, a.gcard').evaluateAll((els) => els.length === 4 && els.every((e) => e.getBoundingClientRect().height >= 44)), `splash actions and guide cards are at least 44 px high at ${w}px`);
 }
 await page.setViewportSize({ width: 390, height: 844 });
 
 // F1 Which race?
 await page.getByRole('link', { name: 'Start my race card' }).click();
 await page.getByRole('heading', { name: 'Which race?' }).waitFor();
-// Cancelling step 1 leaves a race with no name, date or plan. That is still the blank card.
+// Cancelling step 1 leaves a race with no name, date or plan. That is still the splash.
 await page.getByRole('link', { name: 'Cancel' }).click();
 await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
 check(await page.locator('.splash').isVisible(), 'Cancelling step 1 returns to the splash');
