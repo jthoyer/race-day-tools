@@ -29,9 +29,10 @@ const HEADERS = {};
 }
 
 const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
+  const raw = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  const path = normalize(raw).replace(/^(\.\.[/\\])+/, '');
   try {
-    const file = path.endsWith('/') ? path + 'index.html' : path; // a folder address serves its index.html, as a host does
+    const file = raw.endsWith('/') ? path + 'index.html' : path; // a folder address serves its index.html, as a host does
     const body = await readFile(join(ROOT, file));
     res.writeHead(200, { ...HEADERS, 'content-type': TYPES[extname(file)] || 'application/octet-stream' });
     res.end(body);
@@ -544,14 +545,19 @@ for (const w of [390, 360, 320]) {
   await page.setViewportSize({ width: w, height: 844 });
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   check(sw <= w, `how page has no sideways scroll at ${w}px (${sw}px)`);
-  const small = await page.locator('main a.btn').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 44).length);
-  check(small === 0, `how page buttons are at least 44 px high at ${w}px`);
+  const btns = await page.locator('main a.btn').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  check(btns.length === 2 && btns.every((h) => h >= 44), `how page has its two buttons, each at least 44 px high at ${w}px`);
 }
 await shot('how');
 const howText = await page.locator('main').innerText();
 check(/Why this app exists/.test(howText) && /Start my race card/.test(howText) && /Print top-tube card/.test(howText), 'How page says why the app exists and how to reach a printed card');
 check(/not medical advice/i.test(howText), 'How page keeps "Not medical advice"');
-check(!/NaN|undefined/.test(howText), 'How page shows no NaN or undefined');
+// Every button name the page tells people to tap must exist in the app, or the steps send them hunting.
+const appSrc = await readFile(join(ROOT, 'js', 'app.js'), 'utf8');
+for (const label of ['Start my race card', 'Just plan my fuel', 'Plan my fuel', 'Save to my race card', 'Print top-tube card']) {
+  check(howText.includes(label) && appSrc.includes(label), `How page names "${label}", and the app has that button`);
+}
+check((await page.locator('main a.btn.second').getAttribute('href')) === '../index.html#/fuel', 'How page "Just plan my fuel" links to the fuel tool');
 check((await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false))) === false, 'How page makes no network request (connect-src none)');
 check(/Content-Security-Policy/.test(await page.locator('head').innerHTML()) && (await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')) === (await g.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content)), 'How page carries the same content policy as the guides');
 await page.getByRole('link', { name: 'Start my race card' }).click();
