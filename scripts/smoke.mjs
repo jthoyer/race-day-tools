@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'public');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
 const SHOTS = process.env.SHOTS || '';
 
 // Serve public/_headers as a host would, so a content policy that breaks the app fails this test.
@@ -72,12 +72,19 @@ const settle = () => page.waitForTimeout(700); // the fuel and targets screens r
 
 // Home, empty
 await page.goto(base + '/index.html');
-await page.getByRole('heading', { name: 'Name your race' }).waitFor();
+await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
 await shot('home-empty');
 const blankText = await page.locator('.app').innerText();
-check(await page.locator('.racecard.blank').isVisible(), 'First screen is a blank race card');
-check(!/Countdown|Debrief|Coming later/.test(blankText), 'Blank card hides Countdown and Debrief');
+// RD-033. The first screen says what the app is for, in four steps, with two ways in.
+check(await page.locator('.splash').isVisible(), 'First screen is the splash');
+check(await page.locator('img.splash-logo').evaluate((i) => i.complete && i.naturalWidth > 0 && i.getAttribute('alt') === 'TRI Momentum'), 'Splash shows the logo, with alt text');
+check(/Pace targets and a timed fuel plan for your triathlon, on one race card for your bike\./.test(blankText), 'Splash says what the app is for');
+check(JSON.stringify(await page.locator('.splash-steps li').allInnerTexts()) === JSON.stringify(['1\nChoose a race', '2\nChoose pacing', '3\nReview nutrition', '4\nGet your race card for your top tube']), 'Splash lists the four steps in order');
+check(!/Countdown|Debrief|Coming later/.test(blankText), 'Splash hides Countdown and Debrief');
+check(!/account/i.test(await page.getByRole('link').allInnerTexts().then((t) => t.join(' '))), 'Splash offers no sign-in: the app has no accounts');
 check(await page.getByRole('link', { name: 'Just plan my fuel' }).isVisible(), 'First screen keeps "Just plan my fuel"');
+check(await page.locator('.splash .btn, .splash .linkbtn').evaluateAll((els) => els.length === 2 && els.every((e) => e.getBoundingClientRect().height >= 44)), 'Splash has two actions, each at least 44 px high');
+check(/Not medical advice/i.test(blankText), 'Splash keeps "Not medical advice"');
 const gcards = page.locator('a.gcard');
 check((await gcards.count()) === 2, 'Guides show as two gallery cards');
 check(JSON.stringify(await gcards.evaluateAll((els) => els.map((e) => e.getAttribute('href')))) === '["guides/race-fuel.html","guides/bike-pacing.html"]', 'Gallery cards link to both guides');
@@ -87,14 +94,21 @@ check(/Draft/.test(await gcards.first().innerText()), 'Gallery cards say Draft w
 const sent = await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false));
 check(sent === false, 'Content policy blocks every network request (connect-src none)');
 await noHorizontalScroll('home');
+for (const w of [360, 320]) {
+  await page.setViewportSize({ width: w, height: 844 });
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  check(sw <= w, `splash has no sideways scroll at ${w}px (${sw}px)`);
+  check(await page.locator('.splash .btn, .splash .linkbtn, a.gcard').evaluateAll((els) => els.length === 4 && els.every((e) => e.getBoundingClientRect().height >= 44)), `splash actions and guide cards are at least 44 px high at ${w}px`);
+}
+await page.setViewportSize({ width: 390, height: 844 });
 
 // F1 Which race?
 await page.getByRole('link', { name: 'Start my race card' }).click();
 await page.getByRole('heading', { name: 'Which race?' }).waitFor();
-// Cancelling step 1 leaves a race with no name, date or plan. That is still the blank card.
+// Cancelling step 1 leaves a race with no name, date or plan. That is still the splash.
 await page.getByRole('link', { name: 'Cancel' }).click();
-await page.getByRole('heading', { name: 'Name your race' }).waitFor();
-check(await page.locator('.racecard.blank').isVisible(), 'Cancelling step 1 leaves the blank card');
+await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+check(await page.locator('.splash').isVisible(), 'Cancelling step 1 returns to the splash');
 await page.getByRole('link', { name: 'Start my race card' }).click();
 await page.getByRole('heading', { name: 'Which race?' }).waitFor();
 check(await page.getByText('Tap the date to choose it.').isVisible(), 'F1 says what to do with an empty date');

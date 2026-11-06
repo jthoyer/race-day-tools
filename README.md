@@ -39,7 +39,6 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 - DM Sans for body and controls, Outfit for headings and the wordmark, both from Google Fonts.
 - A 9 px corner radius on buttons, inputs and cards.
-- A dashed outline marks a part of the race card that is still empty (the blank card on the first screen). It is the empty state of the stat tile, not a new component.
 - Controls at least 44 px high and wide.
 - One yellow action per screen; secondary actions are grey or outlined.
 - Phone first, and light only.
@@ -64,6 +63,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 
 | File | What it does |
 | --- | --- |
+| `public/img/tri-momentum-logo.png` | The logo on the first screen: reversed, navy on light, with a transparent background. |
 | `public/index.html` | The app shell. Loads the scripts in order. |
 | `public/js/pace.js` | Pacing maths: targets per leg, leg times, finish range, and the approximate km beside a gel time (`kmAt`). No DOM. |
 | `public/js/fuel.js` | Fuel maths: carbs, fluid and sodium per leg, gel times, carry list. No DOM. |
