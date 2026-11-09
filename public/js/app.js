@@ -1,6 +1,7 @@
 /*
- * Race-day tools: the app. One race plan, built step by step, written to one race card.
- * Screens follow the 2 Nov 2026 blueprint: set-up F1-F6, fuel step A2, race home A1, race card C1.
+ * TRI Momentum: the app. One race plan, built in four steps, written to one race card.
+ * 1 Choose a race, 2 Choose pacing (three parts), 3 Review nutrition, 4 the race card. The owner's four-step flow,
+ * 8-9 Nov 2026. Code names such as fuel.js and #/fuel are older than the word "nutrition" and stay as they are.
  * Everything is saved on this device as you go. No account, no server.
  */
 (function (root) {
@@ -21,7 +22,9 @@
 
   // ---------- formatting ----------
 
-  var DIST_LABEL = { standard: 'Standard', '70.3': '70.3' };
+  var DIST_LABEL = { standard: 'Olympic', '70.3': '70.3' };
+  // A real, finite number. Note null >= 0 is true in JavaScript, so a plain comparison is not enough.
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
   var HEAT = [
     { value: 'mild', label: 'Mild', hint: 'Under 22°C' },
     { value: 'warm', label: 'Warm', hint: '22–28°C' },
@@ -47,22 +50,6 @@
     var d = T.addDays(iso, 0);
     return d ? d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
   }
-  function startText(t) {
-    var m = /^(\d{1,2}):(\d{2})$/.exec(t || '');
-    if (!m) return '';
-    var hr = Number(m[1]);
-    return (hr % 12 || 12) + ':' + m[2] + (hr < 12 ? 'am' : 'pm');
-  }
-  // "7:00am start", "Transition opens 6:00am". A time that is blank or unreadable is left out,
-  // so a label never shows on its own with nothing after it. "00:00" is a real time: "12:00am".
-  function timeParts(r) {
-    var parts = [];
-    var s = startText(r.start);
-    if (s) parts.push(s + ' start');
-    var o = startText(r.transitionOpens);
-    if (o) parts.push('Transition opens ' + o);
-    return parts;
-  }
   function daysText(n) {
     if (n == null) return '';
     if (n > 1) return n + ' days to go';
@@ -81,31 +68,9 @@
   // RD-025. A gel time with about how far into the leg it is: "0:40 (~22 km)". The time comes first and is the rule;
   // the km is a guide from an even pace. A leg time that cannot be read gives the time alone.
   function kmOf(p, leg, t) { var k = RD.pace.kmAt(p.distance, leg, t, p[leg].minutes); return k == null ? '' : '~' + k + ' km'; }
-  function gelTimesText(p, leg) {
-    return p[leg].gelTimes.map(function (t) { var k = kmOf(p, leg, t); return T.fmtHM(t) + (k ? ' (' + k + ')' : ''); }).join(' · ');
-  }
   // The km alone, in the same order as the times, for the 70 mm print card: "~22 km · ~64 km".
   function kmList(p, leg) { return p[leg].gelTimes.map(function (t) { return kmOf(p, leg, t) || '?'; }).join(' · '); }
   function showsKm(p, leg) { return p[leg].gels > 0 && p[leg].gelTimes.some(function (t) { return !!kmOf(p, leg, t); }); }
-  // The same times as rows: each time on its own line, with its km beside it in a quieter style.
-  function gelTimesNode(p, leg) {
-    var kids = [];
-    p[leg].gelTimes.forEach(function (t) {
-      var k = kmOf(p, leg, t);
-      kids.push(h('span', { class: 'gt' }, T.fmtHM(t), k ? h('span', { class: 'km' }, ' ' + k) : null));
-    });
-    return h('span', { class: 'gtimes' }, kids);
-  }
-
-  // The finish as a time of day, such as "11:51am–12:05pm": the start time plus the finish range shown, to the
-  // minute. After midnight it says so. With no start time it gives '' and nothing is shown, never a made-up time.
-  function finishClock(start, finish) {
-    var lo = T.addMinutes(start, finish[0]);
-    var hi = T.addMinutes(start, finish[1]);
-    if (!lo || !hi) return '';
-    var text = lo.time === hi.time && lo.days === hi.days ? startText(lo.time) : startText(lo.time) + '–' + startText(hi.time);
-    return hi.days > 0 ? text + ', next day' : text;
-  }
   // ---------- taper (RD-011, RD-031) ----------
 
   function isoOf(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -131,11 +96,6 @@
     };
   }
 
-  // Shown where a finish exists but there is no start time to add it to.
-  function finishClockHint() {
-    return h('span', null, h('a', { href: '#/setup/1' }, 'Add a start time'), ' to see your finish time of day.');
-  }
-
   // ---------- inputs bound to the store ----------
 
   function get(path) {
@@ -157,7 +117,7 @@
         : kind === 'clock' ? T.fmtPace(v)
           : kind === 'hm' ? T.fmtHM(v)
             : String(v);
-    return RD.ui.field({
+    var node = RD.ui.field({
       name: path.replace(/\./g, '-'),
       label: opts.label,
       unit: opts.unit,
@@ -169,11 +129,6 @@
       error: errors[path],
       oninput: function (e) {
         var text = e.target.value;
-        // opts.validate(text) returns a message when the entry breaks a rule with another field.
-        // The entry stays on screen with the message and is not saved, so a bad pair never reaches the card.
-        var bad = opts.validate ? opts.validate(text) : '';
-        if (bad) { raw[path] = text; errors[path] = bad; if (opts.live) opts.live(); return; }
-        if (opts.validate) delete errors[path];
         // Times can be typed as digits ("130" is 1:30) or with a dot ("1.30"). See time.js, tidyTime.
         var parsed = kind === 'num' ? RD.ui.num(text)
           : kind === 'clock' ? T.parseClock(T.tidyTime(text))
@@ -181,10 +136,12 @@
               : text;
         if (kind !== 'text' && parsed == null && text.trim() !== '') raw[path] = text;
         else delete raw[path];
-        // An error stays on screen until the next Next, so take it off as soon as what is typed reads.
-        // A new one waits for the person to leave the field or press Next.
-        if (kind !== 'text' && parsed != null && errors[path]) clearFieldError(e.target, path);
         set(path, kind !== 'text' && text.trim() === '' ? null : parsed);
+        // An error stays on screen until the next Next, so take it off as soon as what is typed reads. A field with
+        // its own rule (opts.invalid, which reads the store) keeps it until the entry passes that rule.
+        // A new one waits for the person to leave the field or press Next.
+        var reads = opts.invalid ? !opts.invalid() : kind !== 'text' && parsed != null;
+        if (errors[path] && reads) clearFieldError(e.target, path);
         if (opts.live) opts.live();
       },
       // When the person leaves a time field, show the time we read, so a slip is easy to see.
@@ -193,6 +150,15 @@
         if (p != null) e.target.value = kind === 'clock' ? T.fmtPace(p) : T.fmtHM(p);
       } : null
     });
+    // opts.invalid() gives a message when the entry can't be used. It shows once the person leaves the field, in place,
+    // with no redraw: a redraw here would swallow the tap on whatever they are moving to.
+    if (opts.invalid) {
+      node.addEventListener('focusout', function (e) {
+        var m = e.target.tagName === 'INPUT' ? opts.invalid() : '';
+        if (m) showFieldError(e.target, path, m);
+      });
+    }
+    return node;
   }
 
   // Take an error message off a field without redrawing the screen, so typing is not interrupted.
@@ -204,6 +170,17 @@
     input.removeAttribute('aria-describedby');
   }
 
+  // Put an error message by a field without redrawing the screen.
+  function showFieldError(input, path, msg) {
+    errors[path] = msg;
+    var errId = input.id + '-err';
+    var el = document.getElementById(errId);
+    if (el) el.textContent = msg;
+    else input.closest('.row-wrap').appendChild(h('p', { class: 'error', id: errId, role: 'alert' }, msg));
+    input.setAttribute('aria-invalid', 'true');
+    input.setAttribute('aria-describedby', errId);
+  }
+
   // True when something typed in this field can't be read.
   function unreadable(path) { return raw[path] != null; }
 
@@ -212,11 +189,21 @@
   function topBar(left, right) {
     return h('header', { class: 'top' }, left, right);
   }
-  function brandLink() { return h('a', { class: 'brand', href: '#/' }, 'Race-day tools'); }
+  // The wordmark (the owner's, 9 Nov 2026): three ink boxes holding white T, R and I, then "Momentum" in Outfit.
+  // In a header it is a link home. Big, on the front page, it is a picture with the same name.
+  function wordmark(big) {
+    var kids = [h('span', { class: 'tri', 'aria-hidden': 'true' }, h('b', null, 'T'), h('b', null, 'R'), h('b', null, 'I')),
+      h('span', { class: 'word' }, 'Momentum')];
+    return big ? h('div', { class: 'mark big', role: 'img', 'aria-label': 'TRI Momentum' }, kids)
+      : h('a', { class: 'mark', href: '#/', 'aria-label': 'TRI Momentum' }, kids);
+  }
+  function myPlan() { return h('a', { class: 'toplink', href: '#/' }, 'My plan'); }
   function backLink(href, text) {
     return h('a', { class: 'back', href: href },
       svg('M15 5l-7 7 7 7'), text || 'Back');
   }
+  // A quiet link under the actions, such as "Back: choose a race".
+  function quietLink(href, text) { return h('a', { class: 'back', href: href }, text); }
   // A stroke icon from one path, or several (an array).
   function svg(d, size) {
     var ns = 'http://www.w3.org/2000/svg';
@@ -228,36 +215,50 @@
     [].concat(d).forEach(function (one) { var p = document.createElementNS(ns, 'path'); p.setAttribute('d', one); s.appendChild(p); });
     return s;
   }
+  var TICK = 'M5 12l5 5 9-10';
 
-  // The floating step bar (RD-031): Race, Pacing, Fuel and Card, on every step of a race plan and on the race card.
-  // Any step opens from any other, so a person can change one thing and go straight back to the card.
-  // A step that is done has a green dot, and says so to a screen reader.
-  var STEP_ICONS = {
-    race: ['M5 21V4', 'M5 4h11l-2 4 2 4H5'],
-    pacing: ['M20 13a8 8 0 1 1-16 0a8 8 0 1 1 16 0', 'M12 9v4l2 2', 'M10 2h4'],
-    fuel: ['M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z'],
-    card: ['M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'M7 10h10', 'M7 14h6']
-  };
-  function stepBar(current) {
+  // The four steps, and where each opens. Home and the rail both read this, so they never disagree about what is done.
+  // Race is done when the race has a date, Pacing when pace is saved, Nutrition when nutrition is saved. The race card
+  // (step 4) is done only once pace and nutrition are both saved, and the rail never shows it done (it is the goal).
+  function stepState(r) {
+    return {
+      race: !!(r && r.date),
+      pacing: !!(r && r.pace),
+      nutrition: !!(r && r.fuel),
+      card: !!(r && r.pace && r.fuel)
+    };
+  }
+  function pacingHref(r) { return r && r.pace ? '#/pacing/3' : '#/pacing/1'; }
+
+  // The rail (replaces the step bar, 9 Nov 2026): Race, Pacing, Nutrition and Race card, on every step and the race card.
+  // Any step opens from any other, so a person can change one thing and go straight back to the card. A step that is
+  // done has a green circle with a tick, and says so to a screen reader. It stays in view as the page scrolls.
+  function rail(current) {
     var r = S.race;
     if (!r) return null;
+    var done = stepState(r);
     var steps = [
-      { id: 'race', label: 'Race', href: '#/setup/1', done: !!r.date },
-      { id: 'pacing', label: 'Pacing', href: r.pace ? '#/setup/5' : '#/setup/2', done: !!r.pace },
-      { id: 'fuel', label: 'Fuel', href: '#/fuel', done: !!r.fuel },
-      { id: 'card', label: 'Card', href: '#/card', done: false }
+      { id: 'race', label: 'Race', href: '#/setup/1', done: done.race },
+      { id: 'pacing', label: 'Pacing', href: pacingHref(r), done: done.pacing },
+      { id: 'nutrition', label: 'Nutrition', href: '#/fuel', done: done.nutrition },
+      { id: 'card', label: 'Race card', href: '#/card', done: false, goal: true }
     ];
-    return h('nav', { class: 'stepbar noprint', 'aria-label': 'Race plan steps' }, steps.map(function (s) {
-      return h('a', { href: s.href, class: s.done ? 'done' : null, 'aria-current': s.id === current ? 'step' : null },
-        svg(STEP_ICONS[s.id], 20), h('span', null, s.label), s.done ? h('span', { class: 'sr-only' }, ', done') : null);
+    return h('nav', { class: 'rail noprint', 'aria-label': 'Your four steps' }, steps.map(function (st, i) {
+      var cls = ['r', st.done ? 'done' : '', st.goal ? 'goal' : '', st.id === current ? 'now' : ''].filter(Boolean).join(' ');
+      return h('a', { href: st.href, class: cls, 'aria-current': st.id === current ? 'step' : null },
+        h('span', { class: 'c', 'aria-hidden': 'true' }, st.done ? svg(TICK, 14) : String(i + 1)),
+        st.label, st.done ? h('span', { class: 'sr-only' }, ', done') : null);
     }));
   }
-  function progress(n, of, label) {
+  // The part bar on the three pacing parts.
+  var PARTS = ['Your fitness', 'Course and heat', 'Your targets'];
+  function partBar(n) {
     var segs = [];
-    for (var i = 1; i <= of; i++) segs.push(h('span', { class: 'seg' + (i < n ? ' done' : i === n ? ' now' : '') }));
+    for (var i = 1; i <= PARTS.length; i++) segs.push(h('span', { class: 'seg' + (i < n ? ' done' : i === n ? ' now' : '') }));
     return h('div', { class: 'progress' },
-      h('p', { class: 'label' }, label || 'Set up · ' + n + ' of ' + of),
-      h('div', { class: 'segs' + (of === 4 ? ' four' : ''), 'aria-hidden': 'true' }, segs));
+      h('p', { class: 'label' }, 'Pacing · part ' + n + ' of ' + PARTS.length),
+      h('div', { class: 'segs three', 'aria-hidden': 'true' }, segs),
+      h('p', { class: 'help parts' }, PARTS.map(function (t, i) { return [i ? ' · ' : null, i === n - 1 ? h('b', null, t) : t]; })));
   }
   function title(text, sub) {
     return h('div', null, h('h1', { tabindex: '-1' }, text), sub ? h('p', { class: 'sub' }, sub) : null);
@@ -266,10 +267,14 @@
 
   // ---------- routing ----------
 
+  // #/setup/1 is step 1 (the guides link to it). #/pacing/1 to #/pacing/3 are the parts of step 2. #/fuel is step 3.
+  // The old addresses still open a live screen: #/setup/2 and #/setup/3 open part 1, #/setup/4 part 2, #/setup/5 part 3,
+  // and #/saved opens the race card.
   var routes = {
     '': home,
     setup: setup,
-    saved: saved,
+    pacing: pacing,
+    saved: raceCard,
     fuel: fuelStep,
     card: raceCard,
     products: products
@@ -280,7 +285,12 @@
     var parts = hash.split('/');
     var fn = routes[parts[0]] || home;
     currentPrint = null;
-    if (!render.quiet) aboutShown = false;
+    if (!render.quiet) {
+      aboutShown = false;
+      // The "targets saved" line shows on the first arrival at step 3 only, and stays while that screen redraws.
+      if (savedNote === 'shown') savedNote = false;
+      else if (savedNote === 'pending') savedNote = parts[0] === 'fuel' ? 'shown' : false;
+    }
     RD.ui.clear(view);
     var out = fn(parts.slice(1));
     view.appendChild(out);
@@ -312,152 +322,142 @@
     root.scrollTo(0, 0);
   }
 
-  // ---------- home (A1) ----------
+  // ---------- home ----------
 
-  // A race with no name, date, pace or fuel is the same as no race: show the blank card.
-  // (Opening step 1 and then pressing Cancel leaves such a race behind.)
+  // A race with no name, date, pace or nutrition is the same as no race: show the front page.
+  // (Opening step 1 and then leaving it with nothing typed leaves such a race behind.)
   function isBlankRace(r) { return !r || (!r.name && !r.date && !r.pace && !r.fuel); }
 
-  // The first screen is an empty race card. Each step fills in one part of it.
-  // Empty parts have a dashed outline so a person can see what is still to do.
-  function blankCard() {
-    function ph(name, unit) {
-      return h('div', { class: 'stat ph' }, h('span', null, name), h('b', null, '–'), h('span', null, unit || ' '));
-    }
-    return h('article', { class: 'racecard blank' },
-      h('div', { class: 'band' },
-        h('div', { class: 'date', 'aria-hidden': 'true' }, h('strong', null, '–'), h('span', null, ' ')),
-        h('div', { style: 'flex:1;min-width:0' },
-          h('h1', { tabindex: '-1' }, 'Name your race'),
-          h('p', null, 'Add your race to begin'))),
-      h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'),
-          h('a', { href: '#/setup/1', 'aria-label': 'Set up pace' }, 'Set up')),
-        h('div', { class: 'stats', 'aria-hidden': 'true' }, ph('Swim', '/100m'), ph('Bike'), ph('Run', '/km')),
-        h('p', { 'aria-hidden': 'true' }, 'Finish ', h('b', null, '–'))),
-      h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('span', { class: 'later' }, 'After pace')),
-        h('div', { class: 'ph-line' }, 'Carbs, fluid and sodium per leg')));
-  }
-
-  // The guides on the first screen. A new guide is one more entry here. Both are drafts: their
-  // ranges are not yet checked against sources, so each card says so (see the draft note on the page).
+  // The guides, at the bottom of the front page only (owner, 9 Nov 2026). A new guide is one more entry here. Both are
+  // drafts: their ranges are not yet checked against sources, so each link says so.
   var GUIDES = [
-    { href: 'guides/race-fuel.html', topic: 'Fuelling', draft: true,
-      title: 'How many gels for a 70.3?',
-      summary: 'Gel times for the bike and run, capped at what your gut has trained.' },
-    { href: 'guides/bike-pacing.html', topic: 'Bike pacing', draft: true,
-      title: 'How hard should you ride a 70.3 bike?',
-      summary: 'Your bike power target, from your FTP and the course.' }
+    { href: 'guides/race-fuel.html', title: 'How many gels for a 70.3?', draft: true },
+    { href: 'guides/bike-pacing.html', title: 'How hard should you ride a 70.3 bike?', draft: true }
   ];
-
-  // One tappable card per guide. One column on a phone, two across when there is room.
-  function guidesGallery() {
-    return h('section', { class: 'stack', 'aria-label': 'Guides' },
+  function guideLinks() {
+    return h('section', { class: 'guides', 'aria-label': 'Guides' },
       h('p', { class: 'label' }, 'Guides'),
-      h('div', { class: 'gallery' }, GUIDES.map(function (g) {
-        return h('a', { class: 'gcard', href: g.href },
-          h('span', { class: 'gtop' }, h('span', { class: 'label' }, g.topic), g.draft ? h('span', { class: 'tag' }, 'Draft') : null),
-          h('span', { class: 'gtitle' }, g.title),
-          h('span', { class: 'gsum' }, g.summary));
+      h('ul', null, GUIDES.map(function (g) {
+        return h('li', null, h('a', { href: g.href }, g.title, g.draft ? h('span', { class: 'tag' }, 'Draft') : null));
       })));
   }
+
+  // One of the four steps, as on the front page and the coming-back screen.
+  // o: { state: 'done' | 'now' | 'todo' or '' for the plain front-page look, goal, desc, link: [href, text] }
+  function stepItem(n, name, o) {
+    return h('li', { class: 'step' + (o.state ? ' ' + o.state : '') + (o.goal ? ' goal' : '') },
+      h('span', { class: 'dot', 'aria-hidden': 'true' }, o.state === 'done' ? svg(TICK, 14) : String(n)),
+      h('div', null,
+        h('p', { class: 't' }, name, o.state === 'done' ? h('span', { class: 'sr-only' }, ', done') : null),
+        o.desc ? h('p', { class: 'd' }, o.desc) : null),
+      o.link ? h('a', { href: o.link[0] }, o.link[1]) : null);
+  }
+
+  var COUNT_SENTENCE = ['Four steps to go.', 'One step done, three to go.', 'Two steps done, two to go.', 'Three steps done, one to go.', 'All four steps done.'];
+  var STEP_NAMES = ['Choose a race', 'Choose pacing', 'Review nutrition', 'Get your race card for your top tube'];
+  var OUT_OF_DATE = 'Out of date: Edit to update it';
+  var SWEAT_NEEDED = 'Add your sweat rate on step 3, or use a typical value.';
 
   function home() {
     var r = S.race;
     if (isBlankRace(r)) {
-      return h('div', { class: 'app' },
-        topBar(brandLink(), null),
-        blankCard(),
-        h('div', { class: 'actions', style: 'margin-top:0' },
-          h('a', { class: 'btn', href: '#/setup/1' }, 'Start my race card'),
-          h('a', { class: 'btn second', href: '#/fuel' }, 'Just plan my fuel')),
-        guidesGallery(),
-        note('Free. No account. Saved on this phone only. Typical ranges, not medical advice.'));
+      return h('div', { class: 'app home' },
+        h('div', { class: 'startmark' }, wordmark(true)),
+        h('div', null,
+          h('h1', { tabindex: '-1' }, 'Race with a plan.'),
+          h('p', { class: 'lead' }, 'Pace targets and a timed nutrition plan for your triathlon, on one race card for your bike.')),
+        h('ol', { class: 'steps' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); })),
+        h('div', { class: 'actions' },
+          h('a', { class: 'btn', href: '#/setup/1' }, 'Get started'),
+          note('Free. No account needed. Saved on this phone only.')),
+        guideLinks());
     }
 
     var days = T.daysUntil(r.date);
-    var paceDone = !!r.pace;
-    var fuelDone = !!r.fuel;
-    var done = (paceDone ? 1 : 0) + (fuelDone ? 1 : 0);
-    var segs = [paceDone, fuelDone].map(function (x, i) {
-      return h('span', { class: 'seg' + (x ? ' done' : i === done ? ' now' : '') });
-    });
+    var done = stepState(r);
+    var count = [done.race, done.pacing, done.nutrition, done.card].filter(Boolean).length;
+    var tp = taperInfo(r);
+    // The first step not done among 1 to 3 is the next one. When 1 to 3 are all done the action opens the card.
+    var nextStep = !done.race ? 1 : !done.pacing ? 2 : !done.nutrition ? 3 : 0;
+    var dist = DIST_LABEL[r.distance] || '70.3';
+    var p = r.pace;
+    var f = r.fuel;
+    var bikeText = p ? (p.bike.watts ? range(p.bike.watts[0], p.bike.watts[1]) + ' W' : p.bike.hr ? range(p.bike.hr[0], p.bike.hr[1]) + ' bpm' : p.bike.effort.split(':')[0]) : '';
+    var items = [
+      stepItem(1, STEP_NAMES[0], {
+        state: done.race ? 'done' : nextStep === 1 ? 'now' : 'todo',
+        desc: dist + ' · ' + (r.date ? longDate(r.date) : 'No date yet'),
+        link: done.race ? ['#/setup/1', 'Edit'] : null
+      }),
+      stepItem(2, STEP_NAMES[1], {
+        state: done.pacing ? 'done' : nextStep === 2 ? 'now' : 'todo',
+        desc: done.pacing ? (paceStale(r) ? OUT_OF_DATE : 'Bike ' + bikeText + ' · finish ' + hm(p.finish)) : 'Targets for each leg and a finish range',
+        link: done.pacing ? [pacingHref(r), 'Edit'] : null
+      }),
+      stepItem(3, STEP_NAMES[2], {
+        state: done.nutrition ? 'done' : nextStep === 3 ? 'now' : 'todo',
+        desc: done.nutrition ? (ownSweatBad() || fuelStale(r) ? [fuelStale(r) ? OUT_OF_DATE : '', ownSweatBad() ? SWEAT_NEEDED : ''].filter(Boolean).join('. ') : 'Bike ' + f.bike.carbsPerHour + ' g/hr · run ' + f.run.carbsPerHour + ' g/hr')
+          : nextStep === 3 ? 'Next: check your gut figure and pick your carbs' : 'Carbs, fluid and sodium per leg',
+        link: done.nutrition ? ['#/fuel', 'Edit'] : null
+      }),
+      stepItem(4, STEP_NAMES[3], {
+        state: done.card ? 'done' : 'todo',
+        goal: !done.card,
+        desc: done.card ? 'Ready to print' : 'Ready once nutrition is done',
+        link: done.card ? ['#/card', 'Open'] : null
+      })
+    ];
+    var action = nextStep === 1 ? ['#/setup/1', 'Continue: choose a race']
+      : nextStep === 2 ? [pacingHref(r), 'Continue: choose pacing']
+        : nextStep === 3 ? ['#/fuel', 'Continue: review nutrition'] : ['#/card', 'Open my race card'];
 
-    function step(n, name, isDone, isNow, detail, href, linkText) {
-      return h('li', { class: 'step' + (isDone ? ' done' : isNow ? ' now' : '') },
-        h('span', { class: 'dot', 'aria-hidden': 'true' }, isDone ? '✓' : String(n)),
-        h('div', null, h('p', { class: 't' }, n + ' · ' + name), h('p', { class: 'd' }, detail)),
-        href ? h('a', { href: href }, linkText) : h('span', { class: 'later' }, 'Later'));
-    }
-
-    var d = S.details;
-    var f = S.fitness;
-    var chips = [];
-    if (d.weight) chips.push(d.weight + ' kg');
-    if (f.mode === 'power' && f.ftp) chips.push('FTP ' + f.ftp + ' W');
-    if (f.css) chips.push('CSS ' + T.fmtPace(f.css) + ' /100m');
-    if (f.runThreshold) chips.push('Run ' + T.fmtPace(f.runThreshold) + ' /km');
-    chips.push(d.sweatTypical || !d.sweat ? 'Sweat: typical' : 'Sweat ' + d.sweat + ' L/hr');
-    if (d.gut != null) chips.push('Gut ' + d.gut + ' g/hr');
-
-    return h('div', { class: 'app' },
-      topBar(brandLink(), null),
-      h('section', { class: 'hero' },
-        h('p', { class: 'k' }, 'YOUR NEXT RACE'),
+    return h('div', { class: 'app home' },
+      topBar(wordmark(), null),
+      h('div', null,
+        days != null ? h('p', { class: 'label' }, daysText(days)) : null,
         h('h1', { tabindex: '-1' }, raceTitle(r)),
-        h('p', null, [longDate(r.date)].concat(timeParts(r)).filter(Boolean).join(' · ') || 'No date yet'),
-        taperInfo(r) && taperInfo(r).short ? h('p', null, taperInfo(r).short) : null,
-        h('div', { class: 'meta' },
-          days != null ? h('span', { class: 'chip' }, daysText(days)) : h('span'),
-          h('a', { href: '#/setup/1' }, 'Change race'))),
-      h('section', { class: 'card' },
-        h('div', { class: 'sechead' }, h('h2', null, 'Your plan'), h('span', { class: 'small' }, done + ' of 2 done')),
-        h('div', { class: 'segs two', 'aria-hidden': 'true' }, segs),
-        h('ol', { class: 'steps' },
-          step(1, 'Pace', paceDone, !paceDone,
-            paceDone ? 'Finish ' + hm(r.pace.finish) + (r.pace.bike.watts ? ' · bike ' + range(r.pace.bike.watts[0], r.pace.bike.watts[1]) + ' W' : '') : 'Targets for each leg and a finish range',
-            paceDone ? '#/setup/5' : '#/setup/2', paceDone ? 'View' : 'Start'),
-          step(2, 'Fuel', fuelDone, paceDone && !fuelDone,
-            fuelDone ? (fuelStale(r) ? 'Out of date: open Fuel to update it' : r.fuel.bike.carbsPerHour + ' g carbs an hour on the bike') : 'Carbs, fluid and sodium per leg',
-            '#/fuel', fuelDone ? 'View' : 'Plan'))),
-      h('a', { class: 'btn', href: '#/card' }, 'Open race card'),
-      h('section', { class: 'card' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Your details'), h('a', { href: '#/setup/2' }, 'Edit')),
-        h('div', { class: 'chips' }, chips.map(function (c) { return h('span', { class: 'chip' }, c); })),
-        h('p', { class: 'help' }, 'Entered once. Saved on this phone. Every step uses them.')),
-      h('button', {
-        type: 'button', class: 'btn ghost', onclick: function () {
-          if (root.confirm('Start a new race? This clears the current race plan. Your details stay.')) {
-            S.race = null; commit(); go('setup/1');
+        h('p', { class: 'sub' }, (r.date ? longDate(r.date) : 'No date yet') + '. ' + COUNT_SENTENCE[count]),
+        tp && tp.short ? h('p', { class: 'small' }, tp.short) : null),
+      h('ol', { class: 'steps' }, items),
+      h('div', { class: 'actions' },
+        h('a', { class: 'btn', href: action[0] }, action[1]),
+        h('button', {
+          type: 'button', class: 'back', onclick: function () {
+            if (root.confirm('Start a new race? This clears the current race plan. Your details stay.')) {
+              S.race = null; commit(); go('setup/1');
+            }
           }
-        }
-      }, 'Start a new race'),
-      note('Typical ranges, not medical advice.'));
+        }, 'Start a new race'),
+        note('Saved on this phone only.')));
   }
 
-  // ---------- set-up flow (F1-F5) ----------
+  // ---------- step 1: choose a race ----------
 
   function ensureRace() {
     if (!S.race) {
-      S.race = { name: '', distance: '70.3', date: '', start: '', transitionOpens: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
+      S.race = { name: '', distance: '70.3', date: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
       commit();
     }
     return S.race;
   }
 
+  // The old addresses #/setup/2 to #/setup/5 land on the parts of step 2.
+  var LEGACY_PART = { 2: 1, 3: 1, 4: 2, 5: 3 };
   function setup(args) {
     var n = Number(args[0]) || 1;
-    if (n < 1 || n > 5) n = 1;
+    if (LEGACY_PART[n]) return pacing([String(LEGACY_PART[n])]);
+    return setupRace(ensureRace());
+  }
+  function pacing(args) {
+    var n = Number(args[0]) || 1;
+    if (n < 1 || n > 3) n = 1;
     var r = ensureRace();
-    var screens = { 1: setupRace, 2: setupYou, 3: setupFitness, 4: setupCourse, 5: setupTargets };
-    var left = n === 1 ? h('a', { class: 'back', href: '#/' }, 'Cancel') : backLink('#/setup/' + (n - 1));
-    // Step 1 is the Race step. Steps 2 to 5 are the Pacing step, with their own progress under the step bar.
+    var parts = { 1: pacingFitness, 2: pacingCourse, 3: pacingTargets };
     return h('div', { class: 'app' },
-      topBar(left, h('span', { class: 'racename' }, r.name || '')),
-      stepBar(n === 1 ? 'race' : 'pacing'),
-      n === 1 ? null : progress(n - 1, 4, 'Pacing · ' + (n - 1) + ' of 4'),
-      screens[n](r));
+      topBar(wordmark(), myPlan()),
+      rail('pacing'),
+      partBar(n),
+      parts[n](r));
   }
 
   // Runs a step's check. Returns true when it passes; otherwise shows the errors and puts focus on the first one.
@@ -466,8 +466,8 @@
     if (Object.keys(errors).length) { refresh(); var first = view.querySelector('[aria-invalid="true"]'); if (first) first.focus(); return false; }
     return true;
   }
-  function next(n, check) {
-    return function () { if (passes(check)) go('setup/' + (n + 1)); };
+  function next(path, check) {
+    return function () { if (passes(check)) go(path); };
   }
 
   // "Save and back to race card" (RD-031). Details save as they are typed, but the pace targets are worked out from
@@ -486,67 +486,35 @@
   // Only once the card has something on it. On a first pass through the steps, Next is the way on.
   function hasPlan(r) { return !!(r && (r.pace || r.fuel)); }
 
-  // A small button that empties an optional time. The saved value becomes blank, never midnight.
-  function clearTime(path, label) {
-    return h('button', {
-      type: 'button', class: 'back', style: 'color:var(--link)',
-      onclick: function () { delete raw[path]; delete errors[path]; set(path, ''); refresh(); }
-    }, label);
-  }
-
   function setupRace(r) {
-    // Re-draw only when the Clear buttons or an error appear or go. Re-drawing on every keystroke
-    // would drop a person out of the time field they are typing in.
-    var clearShown = !!(r.start || r.transitionOpens);
-    var errShown = !!(errors['race.start'] || errors['race.transitionOpens']);
-    function timesChanged() {
-      var clearNow = !!(r.start || r.transitionOpens);
-      var errNow = !!(errors['race.start'] || errors['race.transitionOpens']);
-      if (clearNow !== clearShown || errNow !== errShown) refresh();
-    }
     var tp = taperInfo(r);
     var days = tp ? tp.days : null;
-    var taperLine = tp ? tp.line : null;
-    // An entry held back by the order check is not saved, so it must be fixed before moving on.
     function checkRace() {
-      var e = {};
-      ['race.start', 'race.transitionOpens'].forEach(function (p) { if (unreadable(p)) e[p] = T.RACE_TIMES_MESSAGE; });
-      if (Object.keys(e).length) return e;
       if (!r.name) set('race.name', 'My race');
-      return e;
+      return {};
     }
-    return h('div', { class: 'stack' },
-      title('Which race?', 'Add the date to see your days to go and when your taper starts. The times are optional.'),
-      bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3' }),
-      h('section', { class: 'card' },
-        h('p', { class: 'label' }, 'Distance'),
-        RD.ui.choice([{ value: 'standard', label: 'Standard' }, { value: '70.3', label: '70.3' }], r.distance,
-          function (v) { set('race.distance', v); refresh(); }, 'pill', 'Distance'),
-        h('p', { class: 'help' }, legsText(r.distance))),
-      h('div', { class: 'two' },
+    return h('div', { class: 'app' },
+      topBar(wordmark(), myPlan()),
+      rail('race'),
+      h('div', { class: 'stack' },
+        title('Choose a race', 'Every step works back from race day.'),
+        bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3' }),
+        h('section', { class: 'card' },
+          h('p', { class: 'label' }, 'Distance'),
+          RD.ui.choice([{ value: 'standard', label: 'Olympic' }, { value: '70.3', label: '70.3' }], r.distance,
+            function (v) { set('race.distance', v); refresh(); }, 'pill', 'Distance'),
+          h('p', { class: 'help' }, legsText(r.distance))),
         bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
-        bound('race.start', 'text', {
-          label: 'Start time (optional)', type: 'time', live: timesChanged,
-          validate: function (t) { return T.raceTimesError(t, r.transitionOpens); }
-        })),
-      // A date field shows nothing at all on some phones while it is empty, so say what to do.
-      r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.'),
-      bound('race.transitionOpens', 'text', {
-        label: 'Transition opens (optional)', type: 'time', live: timesChanged,
-        validate: function (t) { return T.raceTimesError(r.start, t); }
-      }),
-      // A phone's time picker may have no way to empty a time that is set, so give one.
-      r.start || r.transitionOpens ? h('div', { style: 'display:flex;flex-wrap:wrap;gap:0 18px' },
-        r.start ? clearTime('race.start', 'Clear start time') : null,
-        r.transitionOpens ? clearTime('race.transitionOpens', 'Clear transition time') : null) : null,
-      taperLine ? h('section', { class: 'countdown' },
-        h('div', { style: 'flex:1' }, h('p', { class: 'k' }, 'COUNTDOWN'), h('p', { class: 'v' }, daysText(days))),
-        h('p', { class: 'n' }, taperLine)) : null,
-      tp && days >= 0 ? taperPicker(r, tp) : null,
-      h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn', onclick: next(1, checkRace) }, 'Next: about you'),
-        hasPlan(r) ? backToCard(checkRace) : null,
-        h('p', { class: 'small center' }, 'Saved on this phone as you go. No account.')));
+        // A date field shows nothing at all on some phones while it is empty, so say what to do.
+        r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.'),
+        tp ? h('section', { class: 'countdown' },
+          h('div', { style: 'flex:1' }, h('p', { class: 'k' }, 'COUNTDOWN'), h('p', { class: 'v' }, daysText(days))),
+          h('p', { class: 'n' }, tp.line)) : null,
+        tp && days >= 0 ? taperPicker(r, tp) : null,
+        h('div', { class: 'actions' },
+          h('button', { type: 'button', class: 'btn', onclick: next('pacing/1', checkRace) }, 'Next: choose pacing'),
+          hasPlan(r) ? backToCard(checkRace) : null,
+          h('p', { class: 'small center' }, 'Saved on this phone as you go.'))));
   }
 
   // Taper length (RD-011, RD-031): one tap for 10, 14 or 21 days, or pick the day it starts. Our guide is marked.
@@ -584,92 +552,8 @@
             }
           })),
         dateErr ? h('p', { class: 'error', id: 'f-race-taperDate-err', role: 'alert' }, dateErr) : null),
-      h('p', { class: 'help' }, 'We count back from race day. Our guide is ' + guide + ' days for a ' + (DIST_LABEL[r.distance] || '70.3') +
+      h('p', { class: 'help' }, 'We count back from race day. Our guide is ' + guide + ' days for ' + (r.distance === 'standard' ? 'an Olympic' : 'a 70.3') + ' race' +
         (tp.own ? '. You chose ' + tp.len + '.' : '.') + ' If your coach says otherwise, go with your coach.'));
-  }
-
-  function setupYou() {
-    var d = S.details;
-    return h('div', { class: 'stack' },
-      title('About you', 'You enter these once. Every race and every step uses them.'),
-      h('section', { class: 'card' },
-        bound('details.weight', 'num', { label: 'Body weight', unit: 'kg' }),
-        // Weight is used only to turn a power target into a bike time (pace.js, bikeSpeed). The fuel plan
-        // never reads it, so this text must not say it sets fluid or sodium.
-        h('p', { class: 'help' }, 'Your weight and your bike’s together set how much power it takes to roll, so the same watts give a different speed. In Power mode we use it to turn your target into a bike time. It does not change your fuel plan.')),
-      h('section', { class: 'card' },
-        bound('details.sweat', 'num', { label: 'Sweat rate', unit: 'L an hour', disabled: d.sweatTypical, placeholder: d.sweatTypical ? 'Typical for the heat' : '' }),
-        h('label', { class: 'check' },
-          h('input', { type: 'checkbox', checked: d.sweatTypical, onchange: function (e) { set('details.sweatTypical', e.target.checked); refresh(); } }),
-          'Use a typical value for now'),
-        d.sweatTypical ? h('span', { class: 'tag' }, 'Typical') : null,
-        h('details', { class: 'test' }, h('summary', null, 'How to test it'),
-          h('p', { class: 'help' }, 'Weigh yourself with no clothes before and after a one-hour ride at race effort. Each kilogram lost is about one litre. Add what you drank during the ride.'))),
-      h('section', { class: 'card' },
-        bound('details.gut', 'num', { label: 'Carbs your gut handles', unit: 'g an hour' }),
-        h('p', { class: 'help' }, 'The most you have taken on long rides without trouble. Your fuel plan never goes above it.')),
-      h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn', onclick: next(2, checkYou) }, 'Next: fitness numbers'),
-        hasPlan(S.race) ? backToCard(checkYou) : null,
-        h('p', { class: 'small center' }, 'Saved on this phone only. Not medical advice.')));
-  }
-
-  function checkYou() {
-    var e = {};
-    var d = S.details;
-    function ok(v, lo, hi) { return typeof v === 'number' && isFinite(v) && v >= lo && v <= hi; }
-    if (unreadable('details.weight') || !ok(d.weight, 35, 150)) e['details.weight'] = 'Enter a body weight between 35 and 150 kg.';
-    if (!d.sweatTypical && (unreadable('details.sweat') || !ok(d.sweat, 0.2, 3))) e['details.sweat'] = 'Enter 0.2 to 3 L an hour, or tick typical.';
-    if (unreadable('details.gut') || !ok(d.gut, 0, 120)) e['details.gut'] = 'Enter 0 to 120 g an hour. Not sure? Start with 40.';
-    return e;
-  }
-
-  function setupFitness() {
-    var f = S.fitness;
-    var mode = f.mode || 'power';
-    var bike;
-    if (mode === 'power') {
-      bike = h('section', { class: 'card' },
-        h('p', { class: 'legname' }, 'Bike'),
-        bound('fitness.ftp', 'num', { label: 'FTP', unit: 'watts' }),
-        h('p', { class: 'help', style: 'font-weight:600;color:var(--ink)' }, 'When did you test it?'),
-        RD.ui.choice([{ value: true, label: 'In the last 6 weeks' }, { value: false, label: 'Longer ago' }], f.ftpRecent !== false,
-          function (v) { set('fitness.ftpRecent', v); refresh(); }, 'pill', 'When you tested FTP'),
-        h('details', { class: 'test' }, h('summary', null, 'How to test FTP'),
-          h('p', { class: 'help' }, 'After a good warm-up, ride 20 minutes as hard as you can hold evenly. Your FTP is about 95% of the average power.')));
-    } else {
-      bike = h('section', { class: 'card' },
-        h('p', { class: 'legname' }, 'Bike'),
-        mode === 'hr' ? bound('fitness.bikeLthr', 'num', { label: 'Bike threshold heart rate', unit: 'bpm' }) : null,
-        bound('fitness.steadySpeed', 'num', { label: 'Speed on a hard long ride', unit: 'km/h' }),
-        h('p', { class: 'help' }, 'Your average on a two-hour ride at a strong, steady effort. It sets your bike time.'));
-    }
-    return h('div', { class: 'stack' },
-      title('Fitness numbers', 'Your targets come from these. Use your latest test.'),
-      h('section', { class: 'card' },
-        h('p', { class: 'legname' }, 'Swim'),
-        bound('fitness.css', 'clock', { label: 'Critical swim speed (CSS)', unit: '/100m', placeholder: '1:45' }),
-        h('p', { class: 'help' }, 'Your steady swim pace per 100 m in a pool. It comes from a 200 m and a 400 m test. Your swim target starts from it.'),
-        h('details', { class: 'test' }, h('summary', null, 'How to test CSS'),
-          h('p', { class: 'help' }, 'Swim a 400 m and a 200 m time trial with a rest between. CSS pace per 100 m is (400 time − 200 time) ÷ 2.'))),
-      // This choice changes the bike and the run, and never the swim, so it sits between them and the swim.
-      // What each mode asks for is checked against validate() in pace.js: the run threshold pace is needed in all three.
-      h('section', { class: 'card' },
-        h('p', { class: 'label' }, 'How do you pace the bike and run?'),
-        RD.ui.choice([{ value: 'power', label: 'Power' }, { value: 'hr', label: 'Heart rate' }, { value: 'effort', label: 'Effort' }], mode,
-          function (v) { set('fitness.mode', v); errors = {}; refresh(); }, 'segbtn', 'How you pace the bike and run'),
-        h('p', { class: 'help' }, 'Power needs your FTP. Heart rate needs your threshold heart rates and the speed of a hard long ride. Effort needs only the speed of a hard long ride.')),
-      bike,
-      h('section', { class: 'card' },
-        h('p', { class: 'legname' }, 'Run'),
-        mode === 'hr' ? bound('fitness.runLthr', 'num', { label: 'Run threshold heart rate', unit: 'bpm' }) : null,
-        bound('fitness.runThreshold', 'clock', { label: 'Run threshold pace', unit: '/km', placeholder: '4:50' }),
-        h('details', { class: 'test' }, h('summary', null, 'How to test it'),
-          h('p', { class: 'help' }, 'Run 30 minutes solo as hard as you can hold evenly. Your average pace for the last 20 minutes is your threshold pace. A recent 10 km race pace is close enough.'))),
-      h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn', onclick: next(3, checkFitness) }, 'Next: course and heat'),
-        hasPlan(S.race) ? backToCard(checkFitness) : null,
-        h('p', { class: 'small center' }, mode === 'effort' ? 'Effort mode gives targets out of 10, with a talk test.' : 'Don’t know a number? Choose Effort.')));
   }
 
   function paceInput() {
@@ -706,21 +590,87 @@
     return '';
   }
 
+
+  // ---------- step 2: choose pacing, part 1 (your fitness) ----------
+
+  var MODE_NEEDS = {
+    power: 'Power needs your FTP.',
+    hr: 'Heart rate needs your threshold heart rates and the speed of a hard long ride.',
+    effort: 'Effort needs only the speed of a hard long ride.'
+  };
+
+  function pacingFitness() {
+    var f = S.fitness;
+    var mode = f.mode || 'power';
+    var bike;
+    if (mode === 'power') {
+      bike = h('section', { class: 'card' },
+        h('p', { class: 'legname' }, 'Bike'),
+        bound('fitness.ftp', 'num', { label: 'FTP', unit: 'watts' }),
+        h('p', { class: 'help', style: 'font-weight:600;color:var(--ink)' }, 'When did you test it?'),
+        RD.ui.choice([{ value: true, label: 'In the last 6 weeks' }, { value: false, label: 'Longer ago' }], f.ftpRecent !== false,
+          function (v) { set('fitness.ftpRecent', v); refresh(); }, 'pill', 'When you tested FTP'),
+        h('details', { class: 'test' }, h('summary', null, 'How to test FTP'),
+          h('p', { class: 'help' }, 'After a good warm-up, ride 20 minutes as hard as you can hold evenly. Your FTP is about 95% of the average power.')));
+    } else {
+      bike = h('section', { class: 'card' },
+        h('p', { class: 'legname' }, 'Bike'),
+        mode === 'hr' ? bound('fitness.bikeLthr', 'num', { label: 'Bike threshold heart rate', unit: 'bpm' }) : null,
+        bound('fitness.steadySpeed', 'num', { label: 'Speed on a hard long ride', unit: 'km/h' }),
+        h('p', { class: 'help' }, 'Your average on a two-hour ride at a strong, steady effort. It sets your bike time.'));
+    }
+    return h('div', { class: 'stack' },
+      title('Choose pacing', 'How will you pace the bike and the run?'),
+      // The choice comes first (S2). What each mode needs is checked against validate() in pace.js: the run threshold
+      // pace is needed in all three, and so are CSS and body weight.
+      h('div', { class: 'stack tight' },
+        RD.ui.choice([{ value: 'power', label: 'Power' }, { value: 'hr', label: 'Heart rate' }, { value: 'effort', label: 'Effort' }], mode,
+          function (v) { set('fitness.mode', v); errors = {}; refresh(); }, 'pill', 'How you pace the bike and run'),
+        h('p', { class: 'help' }, MODE_NEEDS[mode] + ' The swim always uses your CSS.')),
+      h('section', { class: 'card' },
+        h('p', { class: 'legname' }, 'Swim'),
+        bound('fitness.css', 'clock', { label: 'CSS, your critical swim speed', unit: '/100m', placeholder: '1:45' }),
+        h('p', { class: 'help' }, 'Your steady swim pace per 100 m in a pool. It comes from a 200 m and a 400 m test. Your swim target starts from it.'),
+        h('details', { class: 'test' }, h('summary', null, 'How to test CSS'),
+          h('p', { class: 'help' }, 'Swim a 400 m and a 200 m time trial with a rest between. CSS pace per 100 m is (400 time − 200 time) ÷ 2.'))),
+      bike,
+      h('section', { class: 'card' },
+        h('p', { class: 'legname' }, 'Run'),
+        mode === 'hr' ? bound('fitness.runLthr', 'num', { label: 'Run threshold heart rate', unit: 'bpm' }) : null,
+        bound('fitness.runThreshold', 'clock', { label: 'Run threshold', unit: '/km', placeholder: '4:50' }),
+        h('details', { class: 'test' }, h('summary', null, 'How to test it'),
+          h('p', { class: 'help' }, 'Run 30 minutes solo as hard as you can hold evenly. Your average pace for the last 20 minutes is your threshold pace. A recent 10 km race pace is close enough.'))),
+      h('section', { class: 'card' },
+        bound('details.weight', 'num', { label: 'Body weight', unit: 'kg' }),
+        // Weight is used only to turn a power target into a bike time (pace.js, bikeSpeed). The nutrition plan
+        // never reads it, so this line must not say it sets fluid or sodium. The owner's wording.
+        h('p', { class: 'help' }, 'Turns your power into a bike time. It does not change your nutrition plan.')),
+      h('div', { class: 'actions' },
+        h('button', { type: 'button', class: 'btn', onclick: next('pacing/2', checkFitness) }, 'Next: course and heat'),
+        hasPlan(S.race) ? backToCard(checkFitness) : null,
+        quietLink('#/setup/1', 'Back: choose a race')));
+  }
+
   function checkFitness() {
     var e = {};
-    var map = { css: 'fitness.css', ftp: 'fitness.ftp', runThreshold: 'fitness.runThreshold', bikeLthr: 'fitness.bikeLthr', runLthr: 'fitness.runLthr', steadySpeed: 'fitness.steadySpeed' };
-    RD.pace.validate(paceInput()).forEach(function (x) { if (map[x.field]) e[map[x.field]] = x.message; });
+    var map = { css: 'fitness.css', ftp: 'fitness.ftp', runThreshold: 'fitness.runThreshold', bikeLthr: 'fitness.bikeLthr', runLthr: 'fitness.runLthr', steadySpeed: 'fitness.steadySpeed', weight: 'details.weight' };
+    var msgs = {};
+    RD.pace.validate(paceInput()).forEach(function (x) { msgs[x.field] = x.message; if (map[x.field]) e[map[x.field]] = x.message; });
     Object.keys(map).forEach(function (k) {
       if (!unreadable(map[k])) return;
-      // The swim and run pace fields are times: say what to type. The rest are plain numbers.
-      e[map[k]] = k === 'css' || k === 'runThreshold' ? T.unreadableTimeMessage(raw[map[k]], 'clock') : 'That doesn’t look right. Check the format.';
+      // The swim and run pace fields are times: say what to type. A weight we can't read gets the weight message,
+      // which pace.js owns. The rest are plain numbers.
+      e[map[k]] = k === 'css' || k === 'runThreshold' ? T.unreadableTimeMessage(raw[map[k]], 'clock')
+        : k === 'weight' && msgs.weight ? msgs.weight : 'That doesn’t look right. Check the format.';
     });
     return e;
   }
 
-  function setupCourse(r) {
+  // ---------- step 2, part 2 (course and heat) ----------
+
+  function pacingCourse(r) {
     return h('div', { class: 'stack' },
-      title('Course and heat', 'Hills change your bike target. Heat changes your run and your fuel.'),
+      title('Course and heat', 'Hills change your bike target. Heat changes your run and your nutrition.'),
       h('section', { class: 'card' },
         h('p', { class: 'legname' }, 'Bike course'),
         RD.ui.choice(COURSE, r.course, function (v) { set('race.course', v); refresh(); }, 'opt', 'Bike course'),
@@ -730,12 +680,14 @@
         RD.ui.choice(HEAT, r.heat, function (v) { set('race.heat', v); refresh(); }, 'opt', 'Forecast heat'),
         h('p', { class: 'help' }, 'Check it again in race week. You can change it any time.')),
       h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn', onclick: next(4) }, 'See my pace targets'),
-        hasPlan(r) ? backToCard() : null));
+        h('button', { type: 'button', class: 'btn', onclick: next('pacing/3') }, 'Next: your targets'),
+        hasPlan(r) ? backToCard() : null,
+        quietLink('#/pacing/1', 'Back: your fitness')));
   }
 
-  function targetsBlock(p, r) {
-    var clock = finishClock(r && r.start, p.finish);
+  // ---------- step 2, part 3 (your targets) ----------
+
+  function targetsBlock(p) {
     var bikeT;
     var bikeSub = null;
     if (p.bike.watts) bikeT = range(p.bike.watts[0], p.bike.watts[1]) + ' W';
@@ -752,17 +704,22 @@
       // Each changeover on its own row (RD-031). A plan saved before T1 and T2 were split shows them together.
       p.t1 ? leg('T1', 'Swim to bike', p.t1Own ? 'Your time' : 'Our guide', hm(p.t1)) : leg('Changes', 'T1 and T2', null, hm(p.transitions)),
       p.t2 ? leg('T2', 'Bike to run', p.t2Own ? 'Your time' : 'Our guide', hm(p.t2)) : null,
-      h('div', { class: 'finish' }, h('span', { class: 'k' }, 'FINISH'), h('span', { class: 'v' }, hm(p.finish))),
-      h('p', { class: 'fclock' }, clock ? 'About ' + clock : finishClockHint()));
+      h('div', { class: 'finish' }, h('span', { class: 'k' }, 'FINISH'), h('span', { class: 'v' }, hm(p.finish))));
   }
 
-  function setupTargets(r) {
+  // The line that says targets were saved. It shows on step 3 the first time round (see render).
+  var savedNote = false;
+  function statusLine(text) {
+    return h('div', { class: 'info', role: 'status', style: 'background:var(--go-bg);color:var(--go);font-weight:700' }, text);
+  }
+
+  function pacingTargets(r) {
     var p = RD.pace.planPace(paceInput());
     if (!p.ok) {
       return h('div', { class: 'stack' },
         title('A number is missing', 'We need these before we can set your targets.'),
         h('div', { class: 'info warn', role: 'alert' }, h('ul', null, p.errors.map(function (e) { return h('li', null, e.message); }))),
-        h('div', { class: 'actions' }, h('a', { class: 'btn', href: p.errors.some(function (e) { return e.field === 'weight'; }) ? '#/setup/2' : '#/setup/3' }, 'Fix my numbers')));
+        h('div', { class: 'actions' }, h('a', { class: 'btn', href: '#/pacing/1' }, 'Fix my numbers'), quietLink('#/pacing/2', 'Back: course and heat')));
     }
     currentPrint = { race: r, pace: p, fuel: r.fuel };
     // The changeover fields show their message as soon as an entry can't be used. The plan above uses our guide
@@ -771,7 +728,7 @@
     var guide = RD.pace.T1[r.distance] ? r.distance : '70.3';
     return h('div', { class: 'stack' },
       title('Your pace targets', 'Hold these and you finish strong. Each is a range, not one number.'),
-      targetsBlock(p, r),
+      targetsBlock(p),
       h('section', { class: 'card' },
         h('p', { class: 'label' }, 'Your changeovers'),
         h('div', { class: 'two' },
@@ -794,43 +751,33 @@
             })) return;
             var first = !r.pace && !r.fuel;
             savePace(r, p);
-            // The first time through, F6 says it was saved and offers fuel. After that, back to the card.
-            go(first ? 'saved' : 'card');
+            // The first time through, step 3 follows, and says the targets were saved. After that, back to the card.
+            if (first) savedNote = 'pending';
+            go(first ? 'fuel' : 'card');
           }
         }, 'Save to my race card'),
-        h('a', { class: 'btn second', href: '#/setup/3' }, 'Change a number')));
+        quietLink('#/pacing/2', 'Back: course and heat')));
   }
 
-  // ---------- saved (F6) ----------
-
-  function saved() {
-    var r = S.race;
-    if (!r || !r.pace) return home();
-    currentPrint = { race: r, pace: r.pace, fuel: r.fuel };
-    return h('div', { class: 'app' },
-      topBar(brandLink(), h('a', { class: 'toplink', href: '#/' }, 'My race')),
-      stepBar('card'),
-      h('div', { class: 'info', role: 'status', style: 'background:var(--go-bg);color:var(--go);font-weight:700' }, 'Pace targets saved to your race card'),
-      cardBody(r, true),
-      printButton(),
-      note('Typical ranges, not medical advice.'));
-  }
-
-  // ---------- race card (C1) ----------
+  // ---------- step 4: the race card ----------
 
   function raceCard() {
     var r = S.race;
     if (!r) return home();
     currentPrint = { race: r, pace: r.pace, fuel: r.fuel };
+    // The yellow action is the next step until pace and nutrition are both saved. Then it is Print (one yellow a screen).
+    var nextAction = !r.pace ? h('a', { class: 'btn', href: '#/pacing/1' }, 'Choose pacing')
+      : !r.fuel ? h('a', { class: 'btn', href: '#/fuel' }, 'Review nutrition') : null;
     return h('div', { class: 'app' },
-      topBar(brandLink(), h('a', { class: 'toplink', href: '#/' }, 'My race')),
-      stepBar('card'),
-      cardBody(r, false),
-      printButton(),
+      topBar(wordmark(), myPlan()),
+      rail('card'),
+      cardBody(r),
+      nextAction,
+      printButton(!nextAction),
       note('Typical ranges, not medical advice.'));
   }
 
-  function cardBody(r, showNext) {
+  function cardBody(r) {
     var d = T.addDays(r.date, 0);
     var days = T.daysUntil(r.date);
     var p = r.pace;
@@ -838,37 +785,36 @@
     var paceSec;
     if (p) {
       var bikeStat = p.bike.watts ? [range(p.bike.watts[0], p.bike.watts[1]), 'watts'] : p.bike.hr ? [range(p.bike.hr[0], p.bike.hr[1]), 'bpm'] : ['Effort', p.bike.effort.split(':')[0]];
-      var clock = finishClock(r.start, p.finish);
       paceSec = h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'), h('a', { href: '#/setup/5' }, 'Edit')),
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pacing'), h('a', { href: pacingHref(r) }, 'Step 2')),
         paceStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your numbers changed since these targets. Open Pacing to update them.') : null,
         h('div', { class: 'stats' },
           stat('Swim', pace(p.swim.pace), '/100m'),
           stat('Bike', bikeStat[0], bikeStat[1]),
           stat('Run', pace(p.run.pace), '/km')),
-        h('p', null, 'Finish ', h('b', null, hm(p.finish)), clock ? ' · about ' + clock : ''),
+        h('p', null, 'Finish ', h('b', null, hm(p.finish))),
         // The changeovers the finish includes: the athlete's own, or our guide (RD-031).
-        p.t1 && p.t2 ? h('p', { class: 'small' }, 'Changeovers: T1 ' + hm(p.t1) + ' · T2 ' + hm(p.t2)) : null,
-        clock ? null : h('p', { class: 'small' }, finishClockHint()));
+        p.t1 && p.t2 ? h('p', { class: 'small' }, 'Changeovers: T1 ' + hm(p.t1) + ' · T2 ' + hm(p.t2)) : null);
     } else {
       paceSec = h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pace'), h('a', { href: '#/setup/2' }, 'Set up')),
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Pacing'), h('a', { href: '#/pacing/1' }, 'Step 2')),
         h('p', { class: 'small' }, 'Targets for each leg and a finish range.'));
     }
-    var fuelSec;
+    var nutSec;
     if (f) {
-      fuelSec = h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('a', { href: '#/fuel' }, 'Edit')),
-        fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Fuel to update it.') : null,
-        fuelLeg('Bike', f, 'bike'),
-        fuelLeg('Run', f, 'run'),
-        showsKm(f, 'bike') || showsKm(f, 'run') ? h('p', { class: 'notice go' }, RD.pace.KM_NOTE) : null,
+      nutSec = h('section', { class: 'sec' },
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Nutrition'), h('a', { href: '#/fuel' }, 'Step 3')),
+        // Both can show at once: the sweat line never hides the out-of-date notice.
+        fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Nutrition to update it.') : null,
+        ownSweatBad() ? h('p', { class: 'notice warn', role: 'status' }, 'Add your sweat rate on ', h('a', { href: '#/fuel' }, 'step 3'), ', or use a typical value.') : null,
+        legCard('Bike', f, 'bike'),
+        legCard('Run', f, 'run'),
+        clockNote(f),
         h('p', { class: 'small' }, h('a', { href: '#/fuel' }, 'Change gel times')));
     } else {
-      fuelSec = h('section', { class: 'sec' },
-        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Fuel'), h('span', { class: 'later' }, p ? 'Next' : '')),
-        p ? h('p', null, 'Uses your splits: bike about ' + T.fmtHM(r.splits.bike) + ', run about ' + T.fmtHM(r.splits.run) + '.') : h('p', { class: 'small' }, 'Carbs, fluid and sodium per leg.'),
-        showNext || p ? h('a', { class: 'btn', href: '#/fuel' }, 'Plan my fuel') : null);
+      nutSec = h('section', { class: 'sec' },
+        h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Nutrition'), h('a', { href: '#/fuel' }, 'Step 3')),
+        p && r.splits ? h('p', null, 'Uses your splits: bike about ' + T.fmtHM(r.splits.bike) + ', run about ' + T.fmtHM(r.splits.run) + '.') : h('p', { class: 'small' }, 'Carbs, fluid and sodium per leg.'));
     }
     return h('article', { class: 'racecard' },
       h('div', { class: 'band' },
@@ -877,24 +823,24 @@
           h('span', null, d ? d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase() : '')),
         h('div', { style: 'flex:1;min-width:0' },
           h('h1', { tabindex: '-1' }, raceTitle(r)),
-          h('p', null, timeParts(r).concat(daysText(days)).filter(Boolean).join(' · ')),
+          h('p', null, [d ? d.toLocaleDateString('en-AU', { weekday: 'long' }) : '', daysText(days)].filter(Boolean).join(' · ')),
           taperInfo(r) && taperInfo(r).short ? h('p', null, taperInfo(r).short) : null)),
       paceSec,
-      fuelSec);
+      nutSec);
   }
 
   // The pace behind one leg of the pace plan, in the middle of its range: "~1:45 /100m", "~34 km/h", "~4:50 /km" (RD-030).
   // Falls back to 'h:mm' when the plan holds no readable pace, so a blank is never shown as zero.
   function legPace(r, leg) {
-    function isNum(v) { return typeof v === 'number' && isFinite(v) && v > 0; }
+    function isPos(v) { return typeof v === 'number' && isFinite(v) && v > 0; }
     var p = r && r.pace && r.pace[leg];
     if (leg === 'bike') {
       var km = RD.pace.LEGS[r && r.distance] && RD.pace.LEGS[r.distance].bike;
       var min = r && r.splits && r.splits.bike;
-      return isNum(km) && isNum(min) ? '~' + Math.round(km / (min / 60)) + ' km/h' : 'h:mm';
+      return isPos(km) && isPos(min) ? '~' + Math.round(km / (min / 60)) + ' km/h' : 'h:mm';
     }
     var pace = p && p.pace;
-    if (!pace || !isNum(pace[0]) || !isNum(pace[1])) return 'h:mm';
+    if (!pace || !isPos(pace[0]) || !isPos(pace[1])) return 'h:mm';
     return '~' + T.fmtPace((pace[0] + pace[1]) / 2) + (leg === 'swim' ? ' /100m' : ' /km');
   }
   function stat(name, value, unit) {
@@ -905,36 +851,61 @@
   // Both read through plainName, so a plan saved before the " (typical)" tag was dropped shows the plain name.
   function gelName(f) { return RD.fuel.plainName(f.carry && f.carry.gelName) || 'gel or chews'; }
   function drinkName(f) { return f.carry && f.carry.drink ? RD.fuel.plainName(f.carry.drink) : null; }
-  // What the bike sips are made of: water, the drink on its own, or the drink mixed with water.
-  function sipKind(f) {
+  // What the bike bottle holds: water, the drink on its own, or the drink mixed with water.
+  function bottleKind(f) {
     var dn = drinkName(f);
     var share = f.bike.drinkShare;
-    return !dn || share <= 0 ? 'water' : share < 1 ? dn + ' and water' : dn;
+    return !dn || !(share > 0) ? 'water' : share < 1 ? 'both' : 'drink';
   }
-  // One leg of the fuel plan on the race card: the leg and its carbs an hour, then each gel as a row with its time
-  // first and its km beside it (RD-025), as the 4 Nov 2026 timeline blueprint. The words match the old paragraph.
-  function fuelLeg(name, f, leg) {
+  function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+  function sipKind(f) {
+    var k = bottleKind(f);
+    return k === 'water' ? 'water' : k === 'both' ? drinkName(f) + ' and water' : drinkName(f);
+  }
+  // One leg of the nutrition plan as a card (step 3 and the race card): the leg and its carbs an hour, the drink line on
+  // the bike, then each gel as a row with its time first and large and its km on the right (RD-025), then the bottles,
+  // sodium and top-up lines. The words match the old plan rows.
+  function legCard(name, f, leg) {
     var L = f[leg];
-    var gel = gelName(f);
+    var gel = cap(gelName(f));
     var kids = [h('header', null, h('h3', null, name), h('span', { class: 'badge' }, L.carbsPerHour + ' g/hr'))];
-    if (leg === 'bike') kids.push(h('p', { class: 'tlline' }, 'Sip about ' + L.sipMl + ' ml of ' + sipKind(f) + ' every 15 min.'));
+    function line(text) { kids.push(h('p', { class: 'tlline' }, text)); }
+    if (leg === 'bike') {
+      line(cap(sipKind(f)) + ': about ' + L.sipMl + ' ml every 15 min');
+      if (bottleKind(f) === 'both') line('Mix: ' + Math.round(L.drinkShare * 100) + '% ' + drinkName(f) + ', the rest water');
+    }
     if (L.gels) {
       L.gelTimes.forEach(function (t) {
         var k = kmOf(f, leg, t);
-        kids.push(h('div', { class: 'tlrow' }, h('b', null, T.fmtHM(t)), h('span', null, gel.charAt(0).toUpperCase() + gel.slice(1)), k ? h('span', { class: 'km' }, k) : null));
+        kids.push(h('div', { class: 'tlrow' }, h('b', null, T.fmtHM(t)), h('span', null, gel), k ? h('span', { class: 'km' }, k) : null));
       });
-    } else if (leg === 'run') {
-      kids.push(h('p', { class: 'tlline' }, 'No gels needed; sports drink at aid stations if you want it.'));
+    } else {
+      line(leg === 'bike' ? 'No gels needed: the drink covers it' : 'No gels needed; sports drink at aid stations if you want it.');
     }
-    if (leg === 'run') kids.push(h('p', { class: 'tlline' }, 'Water at each aid station.'));
+    if (leg === 'run') {
+      line('Water at each aid station');
+      if (isNum(L.fluidPerHour)) line('A few sips: about ' + Math.round(L.fluidPerHour * 1000) + ' ml an hour');
+    }
+    if (leg === 'bike' && isNum(L.bottlesAtStart)) line('Bottles: start with ' + L.bottlesAtStart + (L.refills ? '; pick up ' + L.refills + ' more at aid stations' : ''));
+    if (isNum(L.sodiumTarget) && isNum(L.sodiumFromProducts)) line('Sodium: ~' + L.sodiumTarget + ' mg/hr (' + L.sodiumFromProducts + ' from your ' + (leg === 'bike' ? 'products' : 'gels') + ')');
+    if (L.sodiumShort) line('Top up: ~' + L.sodiumShort + ' mg/hr more' + (leg === 'bike' ? ': a salt capsule or salty snack you have tried' : ', or cola or sports drink at aid stations'));
     return h('div', { class: 'tl' }, kids);
   }
-  function printButton() {
-    return h('button', { type: 'button', class: 'btn ghost', onclick: function () { root.print(); } },
+  // One go-by-the-clock note for the whole plan, whenever any km shows. The text is KM_NOTE in pace.js. Its first
+  // sentence is set in bold, taken from that text and never retyped here.
+  function clockNote(f) {
+    if (!showsKm(f, 'bike') && !showsKm(f, 'run')) return null;
+    var n = RD.pace.KM_NOTE;
+    var cut = n.indexOf('. ') + 1;
+    return h('p', { class: 'notice go' }, cut > 0 ? [h('b', null, n.slice(0, cut)), n.slice(cut)] : n);
+  }
+  // Print is outlined, and yellow only when it is the one action left on the screen.
+  function printButton(primary) {
+    return h('button', { type: 'button', class: 'btn' + (primary ? '' : ' ghost'), onclick: function () { root.print(); } },
       svg('M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v7H7z'), 'Print top-tube card');
   }
 
-  // ---------- fuel step (A2) ----------
+  // ---------- nutrition data ----------
 
   // null means "never edited": use the generic starter products. An empty list means the athlete removed them all.
   function productList() {
@@ -987,7 +958,27 @@
     return { fromPlan: fromPlan, gels: gels, drinks: drinks, input: input };
   }
   function inputKey(input) { return JSON.stringify(input); }
+  // An own sweat rate (typical not chosen) that is blank, unreadable or out of range. fuelInput() reads a blank own rate
+  // as "typical", so on its own it would swap the typical rate in without a word. The plan refuses it instead (fuelStep).
+  function ownSweatBad() {
+    var d = S.details;
+    if (d.sweatTypical) return false;
+    // An unreadable entry is stored as null, so !isNum covers it too.
+    return !isNum(d.sweat) || fuelFieldBad('sweat');
+  }
+  // The input is checked by fuel.js, so the limits stay there. fuelMessage() is fuel.js's own message for a field.
+  function fuelFieldBad(field) { return RD.fuel.validate(fuelInput().input).some(function (e) { return e.field === field; }); }
+  function fuelMessage(field) {
+    var bad = Object.assign({}, fuelInput().input);
+    bad[field] = NaN;
+    var e = RD.fuel.validate(bad).filter(function (x) { return x.field === field; })[0];
+    return e ? e.message : '';
+  }
+  // Only the input key says a plan is out of date, so a save from before this change is never called out of date by it.
+  // A bad own sweat rate is said beside it, never instead of it (SWEAT_NEEDED), and step 3 refuses to re-plan until it is fixed.
   function fuelStale(r) { return !!(r && r.fuel && r.fuel.inputKey !== inputKey(fuelInput().input)); }
+
+  // ---------- step 3: review nutrition ----------
 
   function fuelStep() {
     var r = S.race;
@@ -1004,17 +995,22 @@
     var drink = input.drink;
     var d = S.details;
     var plan = RD.fuel.planFuel(input);
+    // An own sweat rate that is blank or unreadable is read by fuelInput() as "typical". Here it is refused instead,
+    // so it is never quietly swapped for the typical rate. No plan is made, and none can be saved, until it is fixed.
+    if (ownSweatBad() && (plan.ok || !plan.errors.some(function (e) { return e.field === 'sweat'; }))) {
+      plan = { ok: false, errors: (plan.ok ? [] : plan.errors).concat([{ field: 'sweat', message: fuelMessage('sweat') }]) };
+    }
     if (plan.ok) plan.inputKey = inputKey(input);
 
-    // Splits: from the pace plan, or typed in.
+    // Splits: from the pacing, or typed in.
     var splitsBox;
     if (fromPlan) {
       splitsBox = h('section', { class: 'fromplan' },
-        h('p', { class: 'label' }, 'From your pace plan'),
-        // The same tiles as the race card. The big time is the middle of each pace range, which is what the fuel plan uses.
+        h('p', { class: 'label' }, 'From your pacing'),
+        // The same tiles as the race card. The big time is the middle of each pace range, which is what the plan uses.
         // The small line is the pace it came from (RD-030).
         h('div', { class: 'stats' }, stat('Swim', T.fmtHM(r.splits.swim), legPace(r, 'swim')), stat('Bike', T.fmtHM(r.splits.bike), legPace(r, 'bike')), stat('Run', T.fmtHM(r.splits.run), legPace(r, 'run'))),
-        h('p', { class: 'help' }, 'Times are h:mm. The big time is the middle of each range in your pace plan, and the small line is its pace.'),
+        h('p', { class: 'help' }, 'Times are h:mm. The big time is the middle of each range in your pacing, and the small line is its pace.'),
         h('button', {
           type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () {
             r.splitsByHand = { bike: r.splits.bike, run: r.splits.run }; commit(); refresh();
@@ -1025,26 +1021,58 @@
       if (!solo && !r.splitsByHand) { r.splitsByHand = { bike: null, run: null }; commit(); }
       splitsBox = h('section', { class: 'card' },
         solo ? h('div', null, h('p', { class: 'label' }, 'Distance'),
-          RD.ui.choice([{ value: 'standard', label: 'Standard' }, { value: '70.3', label: '70.3' }], S.solo.distance,
+          RD.ui.choice([{ value: 'standard', label: 'Olympic' }, { value: '70.3', label: '70.3' }], S.solo.distance,
             function (v) { set('solo.distance', v); refresh(); }, 'pill', 'Distance')) : null,
         h('div', { class: 'two' },
           bound(solo ? 'solo.bikeMin' : timesPath + '.bike', 'hm', { label: 'Bike time', placeholder: '2:45', live: refreshLater }),
           bound(solo ? 'solo.runMin' : timesPath + '.run', 'hm', { label: 'Run time', placeholder: '1:55', live: refreshLater })),
-        h('p', { class: 'help' }, 'Type h:mm.' + (!solo && r.splits ? '' : ' Your pace plan fills these in for you.')),
-        !solo && r.splits ? h('button', { type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () { r.splitsByHand = null; commit(); refresh(); } }, 'Use my pace plan times') : null);
+        h('p', { class: 'help' }, 'Type h:mm.' + (!solo && r.splits ? '' : ' Your pacing fills these in for you.')),
+        !solo && r.splits ? h('button', { type: 'button', class: 'back', style: 'color:var(--link)', onclick: function () { r.splitsByHand = null; commit(); refresh(); } }, 'Use my pacing times') : null);
     }
 
-    var aboutYou = null;
-    if (d.gut == null || unreadable('details.gut')) aboutShown = true;
+    // Your gut and sweat. First time, or after Change, two questions. Later, a summary with a Change link.
+    // The gut figure has no default: its field starts empty, and the plan waits until it reads. A blank is never zero
+    // (isNum, not a truthiness test: 0 g/hr is a real figure).
+    var gutBad = fuelFieldBad('gut');
+    var sweatBad = ownSweatBad();
+    if (gutBad || sweatBad) aboutShown = true;
+    var heatKey = RD.fuel.TYPICAL_SWEAT[ctx.heat] ? ctx.heat : 'warm';
+    var typicalText = 'Typical for ' + heatKey + ': ' + RD.fuel.TYPICAL_SWEAT[heatKey] + ' L/hr';
+    var heatChoice = RD.ui.choice(HEAT.map(function (x) { return { value: x.value, label: x.label + ', ' + x.hint }; }), ctx.heat,
+      function (v) { set(base + '.heat', v); refresh(); }, 'pill', 'Forecast heat');
+    var gutSweat;
     if (aboutShown) {
-      aboutYou = h('section', { class: 'card' },
-        h('p', { class: 'legname' }, 'About you'),
-        bound('details.gut', 'num', { label: 'Carbs your gut handles', unit: 'g an hour', placeholder: '60', live: refreshLater }),
+      gutSweat = h('section', { class: 'card' },
+        h('p', { class: 'label' }, 'Your gut and sweat'),
+        h('p', { class: 'legname' }, 'Forecast heat'),
+        heatChoice,
+        bound('details.gut', 'num', {
+          label: 'Carbs your gut handles', unit: 'g an hour', live: refreshLater,
+          invalid: function () { return fuelFieldBad('gut') ? fuelMessage('gut') : ''; }
+        }),
         h('p', { class: 'help' }, 'The most you have taken on long rides without trouble. The plan never goes above it.'),
-        h('label', { class: 'check' },
-          h('input', { type: 'checkbox', checked: d.sweatTypical, onchange: function (e) { set('details.sweatTypical', e.target.checked); refresh(); } }),
-          'Use a typical sweat rate'),
-        !d.sweatTypical ? bound('details.sweat', 'num', { label: 'Sweat rate', unit: 'L an hour', live: refreshLater }) : null);
+        h('p', { class: 'legname' }, 'Sweat rate'),
+        RD.ui.choice([{ value: true, label: typicalText }, { value: false, label: 'I know mine' }], !!d.sweatTypical,
+          function (v) { set('details.sweatTypical', v); refresh(); }, 'pill', 'Sweat rate'),
+        !d.sweatTypical ? bound('details.sweat', 'num', {
+          label: 'Sweat rate', unit: 'L an hour', live: refreshLater,
+          invalid: function () { return ownSweatBad() ? fuelMessage('sweat') : ''; }
+        }) : null);
+    } else {
+      gutSweat = h('section', { class: 'card' },
+        h('div', { class: 'sechead' },
+          h('p', { class: 'label' }, 'Your gut and sweat'),
+          h('a', {
+            href: '#/fuel', onclick: function (e) {
+              e.preventDefault(); aboutShown = true; refresh();
+              var gut = document.getElementById('f-details-gut');
+              if (gut) gut.focus();
+            }
+          }, 'Change')),
+        h('div', { class: 'kv' }, h('span', null, 'Your gut handles'), h('span', null, h('b', null, d.gut + ' g/hr'))),
+        h('div', { class: 'kv' }, h('span', null, 'Sweat rate'), h('span', null, d.sweatTypical ? typicalText : d.sweat + ' L/hr')),
+        h('p', { class: 'legname' }, 'Forecast heat'),
+        heatChoice);
     }
 
     // One card for the choice and what to pack. The carry list sits right under the choice that changes it.
@@ -1071,7 +1099,7 @@
           h('option', { value: 'none', selected: !drink ? 'selected' : null }, 'Water only')));
     }
     var productsBox = h('section', { class: 'card' },
-      h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Your fuel'), h('a', { href: '#/products' }, 'Edit my products')),
+      h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Your nutrition'), h('a', { href: '#/products' }, 'Edit my products')),
       h('div', { class: 'two' },
         gel ? carbPick('gel', 'Gel or chew, carbs per serve', gel, 'gelCarbs') : null,
         drinkSelect),
@@ -1087,8 +1115,8 @@
         h('p', null, 'To see your plan:'),
         h('ul', null, plan.errors.map(function (e) { return h('li', null, e.message); })));
     } else {
-      currentPrint = { race: r || { name: 'Fuel plan', distance: ctx.distance }, pace: r && r.pace, fuel: plan };
-      out = fuelPlanBlock(plan);
+      currentPrint = { race: r || { name: 'Nutrition plan', distance: ctx.distance }, pace: r && r.pace, fuel: plan };
+      out = nutritionPlan(plan, gel);
     }
 
     var saveBtn = null;
@@ -1097,12 +1125,12 @@
         type: 'button', class: 'btn', onclick: function () {
           r.fuel = plan; commit(); go('card');
         }
-      }, r.fuel ? 'Update my race card' : 'Save to my race card');
+      }, r.fuel ? 'Update my race card' : 'Next: get your race card');
     } else if (plan.ok && solo) {
       saveBtn = h('button', {
         type: 'button', class: 'btn', onclick: function () {
           S.race = {
-            name: '', distance: S.solo.distance, date: '', start: '', transitionOpens: '', course: 'rolling', heat: S.solo.heat,
+            name: '', distance: S.solo.distance, date: '', course: 'rolling', heat: S.solo.heat,
             pace: null, fuel: plan, splits: null, splitsByHand: { bike: S.solo.bikeMin, run: S.solo.runMin }
           };
           commit(); go('setup/1');
@@ -1111,21 +1139,19 @@
     }
 
     return h('div', { class: 'app' },
-      topBar(solo ? brandLink() : backLink('#/', r.name || 'My race'), null),
-      solo ? null : stepBar('fuel'),
-      title('Fuel plan', 'Carbs, fluid and sodium for each leg, timed to your splits.'),
+      topBar(wordmark(), myPlan()),
+      rail('nutrition'),
+      title('Review nutrition', fromPlan ? 'Built from your pacing. Change anything that looks wrong.' : 'Add your bike and run times. Change anything that looks wrong.'),
+      savedNote ? statusLine('Pace targets saved to your race card') : null,
       splitsBox,
-      h('section', { class: 'card' },
-        h('p', { class: 'label' }, 'Forecast heat'),
-        RD.ui.choice(HEAT.map(function (x) { return { value: x.value, label: x.label + ', ' + x.hint }; }), ctx.heat,
-          function (v) { set(base + '.heat', v); refresh(); }, 'pill', 'Forecast heat')),
-      aboutYou,
+      gutSweat,
       productsBox,
-      plan.ok ? timingBox(plan) : null,
       out,
+      plan.ok ? timingBox(plan) : null,
+      plan.ok ? capNote(plan) : null,
       h('div', { class: 'actions noprint' },
         saveBtn,
-        plan.ok ? printButton() : null,
+        plan.ok ? printButton(false) : null,
         solo ? h('p', { class: 'small center' }, 'No account. Saved on this phone.') : null));
   }
 
@@ -1173,41 +1199,35 @@
     refreshTimer = setTimeout(refresh, 400);
   }
 
-  function fuelPlanBlock(p) {
-    var b = p.bike;
-    var rn = p.run;
-    var bikeRows = [
-      // The rows name the products the person chose, so the choice shows where it is used.
-      prow('Every 15 min', 'About ' + b.sipMl + ' ml of ' + (!drinkName(p) || b.drinkShare <= 0 ? 'water' : b.drinkShare < 1 ? 'fluid' : drinkName(p))),
-      b.drinkShare > 0 && b.drinkShare < 1 && drinkName(p) ? prow('Mix', Math.round(b.drinkShare * 100) + '% ' + drinkName(p) + ', the rest water') : null,
-      b.gels ? prow(gelTimesNode(p, 'bike'), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed: the drink covers it'),
-      prow('Bottles', 'Start with ' + b.bottlesAtStart + (b.refills ? '; pick up ' + b.refills + ' more at aid stations' : '')),
-      prow('Sodium', '~' + b.sodiumTarget + ' mg/hr (' + b.sodiumFromProducts + ' from your products)'),
-      b.sodiumShort ? prow('Top up', '~' + b.sodiumShort + ' mg/hr more: a salt capsule or salty snack you have tried') : null
-    ];
-    var runRows = [
-      rn.gels ? prow(gelTimesNode(p, 'run'), '1 serve of ' + gelName(p)) : prow('Gels', 'None needed for this run'),
-      prow('Each aid station', 'Water, a few sips: about ' + Math.round(rn.fluidPerHour * 1000) + ' ml an hour'),
-      prow('Sodium', '~' + rn.sodiumTarget + ' mg/hr (' + rn.sodiumFromProducts + ' from your gels)'),
-      rn.sodiumShort ? prow('Top up', '~' + rn.sodiumShort + ' mg/hr more, or cola or sports drink at aid stations') : null
-    ];
-    return h('div', { class: 'stack' },
+  // The plan as the owner writes it (S3): a heading, one summary line, a card per leg, one go-by-the-clock note.
+  // The count in the summary is the number of gel rows shown. Chews are never called gels.
+  function summaryLine(p, gel) {
+    var n = p.bike.gels + p.run.gels;
+    var chew = gel && gel.kind === 'chew';
+    var what = chew ? (n === 1 ? 'serving of chews' : 'servings of chews') : n === 1 ? 'gel' : 'gels';
+    var bottle = bottleKind(p);
+    var bike = bottle === 'water' ? 'water' : bottle === 'both' ? 'a drink and water' : 'a drink';
+    return (n > 0 ? n : 'No') + ' ' + what + ', ' + bike + ' on the bike, water on the run.';
+  }
+  function nutritionPlan(p, gel) {
+    return h('section', { class: 'stack' },
+      h('div', null,
+        h('h2', { class: 'planhead' }, 'Nutrition plan'),
+        h('p', { class: 'sub' }, summaryLine(p, gel))),
       h('section', { class: 'legplan' },
         h('header', null, h('h2', null, 'Before the swim'), null),
         h('p', { class: 'help', style: 'padding-bottom:8px' }, p.preRace)),
-      h('section', { class: 'legplan' },
-        h('header', null, h('h2', null, 'Bike · ' + T.fmtHM(b.minutes)), h('span', { class: 'badge' }, b.carbsPerHour + ' g/hr')),
-        bikeRows,
-        showsKm(p, 'bike') ? h('p', { class: 'help kmnote' }, RD.pace.KM_NOTE) : null),
-      h('section', { class: 'legplan' },
-        h('header', null, h('h2', null, 'Run · ' + T.fmtHM(rn.minutes)), h('span', { class: 'badge' }, rn.carbsPerHour + ' g/hr')),
-        runRows,
-        showsKm(p, 'run') ? h('p', { class: 'help kmnote' }, RD.pace.KM_NOTE) : null),
-      h('div', { class: 'info warn' },
-        h('div', null,
-          h('p', null, 'Capped at what your gut has trained: ' + p.gut + ' g an hour. Fluid stays under your ' + (p.sweatTypical ? 'typical ' : '') + 'sweat rate of ' + p.sweat + ' L an hour.'),
-          p.warnings.length ? h('ul', null, p.warnings.map(function (w) { return h('li', null, w); })) : null,
-          h('p', null, h('b', null, 'Typical ranges, not medical advice.'), ' Practise this plan in training first. Never drink more than you sweat.'))));
+      legCard('Bike', p, 'bike'),
+      legCard('Run', p, 'run'),
+      clockNote(p));
+  }
+  // The cap and safety note, the last block before the actions.
+  function capNote(p) {
+    return h('div', { class: 'info warn' },
+      h('div', null,
+        h('p', null, 'Capped at what your gut has trained: ' + p.gut + ' g an hour. Fluid stays under your ' + (p.sweatTypical ? 'typical ' : '') + 'sweat rate of ' + p.sweat + ' L an hour.'),
+        p.warnings.length ? h('ul', null, p.warnings.map(function (w) { return h('li', null, w); })) : null,
+        h('p', null, h('b', null, 'Typical ranges, not medical advice.'), ' Practise this plan in training first. Never drink more than you sweat.')));
   }
   // The packing list. It lives in the "Your fuel" card, under the choice that changes it.
   function carryList(p) {
@@ -1219,7 +1239,6 @@
         h('li', null, p.carry.bottles + ' bottle' + (p.carry.bottles > 1 ? 's' : '') + (drinkName(p) && p.bike.drinkShare > 0 ? ' (' + drinkName(p) + (p.bike.drinkShare < 1 ? ' and water' : '') + ')' : ' of water')),
         p.bike.sodiumShort || p.run.sodiumShort ? h('li', null, 'Salt capsules or a salty snack you have tried in training') : null));
   }
-  function prow(a, b) { return h('div', { class: 'prow' }, h('span', null, a), h('span', null, b)); }
 
   // ---------- products ----------
 
@@ -1253,7 +1272,7 @@
     var list = S.products;
     function upd(i, k, v) { list[i][k] = v; commit(); }
     return h('div', { class: 'app' },
-      topBar(backLink('#/fuel', 'Fuel plan'), null),
+      topBar(wordmark(), backLink('#/fuel', 'Nutrition')),
       title('My products', 'Enter what you race with. Check the label: brands change their recipes.'),
       list.map(function (p, i) {
         var id = 'p' + i;
@@ -1306,24 +1325,21 @@
     var p = c.pace;
     var f = c.fuel;
     var kids = [h('h2', null, raceTitle(r)),
-      r.date ? h('p', null, longDate(r.date) + (startText(r.start) ? ' · ' + startText(r.start) : '')) : null,
-      startText(r.transitionOpens) ? h('p', null, 'Transition opens ' + startText(r.transitionOpens)) : null];
+      r.date ? h('p', null, longDate(r.date)) : null];
     if (p) {
-      var clockPrint = finishClock(r.start, p.finish);
       kids.push(h('h3', null, 'Pace'),
         h('p', null, 'Swim ', h('span', { class: 'big' }, pace(p.swim.pace)), ' /100m'),
         h('p', null, 'Bike ', h('span', { class: 'big' }, p.bike.watts ? range(p.bike.watts[0], p.bike.watts[1]) + ' W' : p.bike.hr ? range(p.bike.hr[0], p.bike.hr[1]) + ' bpm' : p.bike.effort.split(':')[0])),
         h('p', null, 'Run ', h('span', { class: 'big' }, pace(p.run.pace)), ' /km'),
-        h('p', null, 'Finish ' + hm(p.finish)),
-        clockPrint ? h('p', null, 'About ' + clockPrint) : null);
+        h('p', null, 'Finish ' + hm(p.finish)));
     }
     if (f && f.ok !== false) {
-      if (c.race && c.race.fuel === f && fuelStale(c.race)) kids.push(h('p', null, h('b', null, 'Fuel plan out of date. Update it before race day.')));
-      kids.push(h('h3', null, 'Bike fuel · ' + f.bike.carbsPerHour + ' g/hr'),
+      if (c.race && c.race.fuel === f && fuelStale(c.race)) kids.push(h('p', null, h('b', null, 'Nutrition plan out of date. Update it before race day.')));
+      kids.push(h('h3', null, 'Bike nutrition · ' + f.bike.carbsPerHour + ' g/hr'),
         h('p', null, 'Sip ~' + f.bike.sipMl + ' ml every 15 min'),
         f.bike.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.bike.gelTimes))) : null,
         showsKm(f, 'bike') ? h('p', { class: 'fine' }, 'at ' + kmList(f, 'bike')) : null,
-        h('h3', null, 'Run fuel · ' + f.run.carbsPerHour + ' g/hr'),
+        h('h3', null, 'Run nutrition · ' + f.run.carbsPerHour + ' g/hr'),
         f.run.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.run.gelTimes))) : null,
         showsKm(f, 'run') ? h('p', { class: 'fine' }, 'at ' + kmList(f, 'run')) : null,
         h('p', null, 'Water at each aid station'));

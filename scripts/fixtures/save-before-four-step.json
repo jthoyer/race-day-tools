@@ -1,0 +1,203 @@
+{
+  "details": {
+    "weight": 72,
+    "sweat": null,
+    "sweatTypical": true,
+    "gut": 70
+  },
+  "fitness": {
+    "mode": "power",
+    "css": 105,
+    "ftp": 240,
+    "ftpRecent": true,
+    "runThreshold": 290,
+    "bikeLthr": null,
+    "runLthr": null,
+    "steadySpeed": null
+  },
+  "race": {
+    "name": "Sam Lee Spring Sprint Cup",
+    "distance": "standard",
+    "date": "2026-11-29",
+    "start": "06:40",
+    "transitionOpens": "05:30",
+    "course": "rolling",
+    "heat": "warm",
+    "pace": {
+      "ok": true,
+      "distance": "standard",
+      "mode": "power",
+      "course": "rolling",
+      "heat": "warm",
+      "legs": {
+        "swim": 1.5,
+        "bike": 40,
+        "run": 10
+      },
+      "swim": {
+        "pace": [
+          108,
+          113
+        ],
+        "minutes": [
+          27,
+          28
+        ]
+      },
+      "bike": {
+        "watts": [
+          200,
+          210
+        ],
+        "hr": null,
+        "effort": null,
+        "minutes": [
+          71,
+          72
+        ]
+      },
+      "run": {
+        "pace": [
+          300,
+          310
+        ],
+        "hr": null,
+        "effort": "7–8 out of 10: a word or two at a time",
+        "minutes": [
+          50,
+          52
+        ]
+      },
+      "transitions": [
+        3,
+        5
+      ],
+      "t1": [
+        2,
+        3
+      ],
+      "t2": [
+        1,
+        2
+      ],
+      "t1Own": false,
+      "t2Own": false,
+      "finish": [
+        151,
+        157
+      ],
+      "why": [
+        {
+          "leg": "Swim",
+          "text": "a little slower than your CSS (your steady pool pace) of 1:45, for open water and a steady start."
+        },
+        {
+          "leg": "Bike",
+          "text": "83–88% of your FTP of 240 W, a typical range for a Standard race on a rolling course."
+        },
+        {
+          "leg": "Run",
+          "text": "slower than your threshold of 4:50 /km, because you run after 40 km on the bike."
+        },
+        {
+          "leg": "Finish",
+          "text": "the three legs plus changeovers, with the fast and slow ends added up."
+        }
+      ],
+      "warnings": [],
+      "inputKey": "{\"distance\":\"standard\",\"mode\":\"power\",\"css\":105,\"ftp\":240,\"ftpRecent\":true,\"runThreshold\":290,\"weight\":72,\"bikeLthr\":null,\"runLthr\":null,\"steadySpeed\":null,\"course\":\"rolling\",\"heat\":\"warm\",\"t1\":null,\"t2\":null}"
+    },
+    "fuel": {
+      "ok": true,
+      "distance": "standard",
+      "heat": "warm",
+      "sweat": 0.8,
+      "sweatTypical": true,
+      "gut": 70,
+      "preRace": "Optional: a gel about 15 minutes before the swim start, if you have practised it.",
+      "bike": {
+        "minutes": 72,
+        "target": 60,
+        "carbsPerHour": 57,
+        "drinkCarbsPerHour": 36,
+        "fluidPerHour": 0.6,
+        "sipMl": 150,
+        "drink": "Sports drink",
+        "drinkShare": 1,
+        "gelTimes": [
+          35
+        ],
+        "gels": 1,
+        "sodiumTarget": 400,
+        "sodiumFromProducts": 340,
+        "sodiumShort": 0,
+        "bottlesAtStart": 1,
+        "refills": 0
+      },
+      "run": {
+        "minutes": 51,
+        "target": 30,
+        "carbsPerHour": 29,
+        "fluidPerHour": 0.4,
+        "gelTimes": [
+          25
+        ],
+        "gels": 1,
+        "sodiumTarget": 300,
+        "sodiumFromProducts": 60,
+        "sodiumShort": 0
+      },
+      "carry": {
+        "bikeGels": 1,
+        "runGels": 1,
+        "bottles": 1,
+        "drink": "Sports drink",
+        "gelName": "Gel"
+      },
+      "timingUsed": {
+        "bike": false,
+        "run": false
+      },
+      "timingNote": {
+        "bike": "",
+        "run": ""
+      },
+      "suggested": {
+        "bike": [
+          35
+        ],
+        "run": [
+          25
+        ]
+      },
+      "warnings": [
+        "Sweat rate is a typical value for warm weather. Test yours on a one-hour ride to make the fluid plan fit you."
+      ],
+      "inputKey": "{\"distance\":\"standard\",\"bikeMin\":72,\"runMin\":51,\"heat\":\"warm\",\"gut\":70,\"sweat\":null,\"gel\":{\"id\":\"gel\",\"name\":\"Gel\",\"kind\":\"gel\",\"carbs\":25,\"sodium\":50,\"serveMl\":0},\"drink\":{\"id\":\"drink\",\"name\":\"Sports drink\",\"kind\":\"drink\",\"carbs\":30,\"sodium\":250,\"serveMl\":500}}"
+    },
+    "splits": {
+      "swim": 28,
+      "bike": 72,
+      "run": 51
+    },
+    "splitsByHand": null
+  },
+  "solo": null,
+  "products": null,
+  "choice": {
+    "gel": "gel",
+    "drink": "drink",
+    "gelCarbs": null,
+    "drinkCarbs": null,
+    "timing": {
+      "bike": {
+        "first": null,
+        "every": null
+      },
+      "run": {
+        "first": null,
+        "every": null
+      }
+    }
+  }
+}

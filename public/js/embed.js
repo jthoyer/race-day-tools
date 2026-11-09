@@ -17,7 +17,7 @@
   function startPlan(apply) {
     var S = RD.store.load();
     if (S.race && !root.confirm('You already have a race plan on this phone. Replace it with a new one? Your details stay.')) return;
-    S.race = { name: '', distance: '70.3', date: '', start: '', transitionOpens: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
+    S.race = { name: '', distance: '70.3', date: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
     apply(S);
     if (!RD.store.save(S) && !root.confirm('This browser is blocking storage, so your numbers can’t be kept. Open the planner anyway?')) return;
     root.location.href = APP + '#/setup/1';
@@ -71,7 +71,7 @@
             // Carry the FTP in, but leave a heart-rate or effort user's chosen mode alone.
             if (ok) S.fitness.ftp = st.ftp;
           });
-        }, 'Add your race date and we’ll set swim and run targets, a finish range and a fuel plan. Your FTP and course come with you.')));
+        }, 'Add your race date and we’ll set swim and run targets, a finish range and a nutrition plan. Your FTP and course come with you.')));
     }
 
     // Update the result without rebuilding the input, so typing is never interrupted.
@@ -116,8 +116,8 @@
         });
       }
       el.appendChild(h('div', { class: 'stack' },
-        h('section', { class: 'tool', 'aria-label': 'Fuel calculator' },
-          h('div', { class: 'head' }, h('h2', null, 'Your ' + (st.distance === '70.3' ? '70.3' : 'Standard') + ' fuel'), h('span', { class: 'free' }, 'Free to try')),
+        h('section', { class: 'tool', 'aria-label': 'Nutrition calculator' },
+          h('div', { class: 'head' }, h('h2', null, 'Your ' + (st.distance === '70.3' ? '70.3' : 'Olympic') + ' nutrition'), h('span', { class: 'free' }, 'Free to try')),
           h('div', { class: 'two' }, inp('bike', 'Bike time', null, 'bike'), inp('run', 'Run time', null, 'run')),
           inp('gut', 'Carbs your gut handles', 'g an hour', 'gut', 'decimal'),
           h('div', null, h('p', { class: 'label' }, 'Heat'),
@@ -136,9 +136,10 @@
             S.race.distance = st.distance;
             S.race.heat = st.heat;
             S.race.splitsByHand = { bike: T.parseHM(st.bike), run: T.parseHM(st.run) };
-            // The guide's example gut figure never replaces one you saved; one you typed here does.
+            // The gut figure is the safety cap, so it is carried only if you typed it here. The guide's example figure
+            // (data-gut) is never carried: the plan would show it as if you had entered it.
             var g = RD.ui.num(st.gut);
-            if (g != null && (st.gutEdited || S.details.gut == null)) S.details.gut = g;
+            if (g != null && st.gutEdited) S.details.gut = g;
           });
         }, 'Add your race date and we’ll time your plan to your splits, with your own gels and drink. Your numbers come with you.')));
     }

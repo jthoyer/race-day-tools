@@ -50,18 +50,6 @@
     return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days);
   }
 
-  // A time of day, "06:40" -> 400 minutes since midnight. Blank or unreadable gives null.
-  // "00:00" is 0, which is a real time and not the same as blank, so test the result with == null.
-  function clockMinutes(text) {
-    if (typeof text !== 'string') return null;
-    var m = /^(\d{1,2}):(\d{2})$/.exec(text.trim());
-    if (!m) return null;
-    var hr = Number(m[1]);
-    var min = Number(m[2]);
-    if (hr > 23 || min > 59) return null;
-    return hr * 60 + min;
-  }
-
   // Typed digits become a time, so a phone's digits-only keypad is enough (it has no colon key).
   //   "130" -> "1:30"   "450" -> "4:50"   "1030" -> "10:30"   and a dot works like a colon: "1.30" -> "1:30".
   // Text that already has a colon is left alone. So is everything else, and the strict parsers then refuse it.
@@ -84,34 +72,10 @@
     return kind === 'hm' ? 'Type hours and minutes, such as 2:45 or 245.' : 'Type minutes and seconds, such as 1:45 or 145.';
   }
 
-  var RACE_TIMES_MESSAGE = 'Transition should open before the race starts.';
-
-  // The transition area opens before the race starts. Checked only when both times are set and
-  // readable: a blank time is "not set", never midnight. Returns a message, or '' when fine.
-  function raceTimesError(start, opens) {
-    var s = clockMinutes(start);
-    var o = clockMinutes(opens);
-    if (s == null || o == null) return '';
-    return o < s ? '' : RACE_TIMES_MESSAGE;
-  }
-
-  // A time of day plus some minutes: addMinutes('07:00', 291) is { time: '11:51', days: 0 }. `days` counts the
-  // midnights passed, so a finish after midnight says so. A blank or unreadable start gives null, never a made-up time.
-  function addMinutes(start, minutes) {
-    var s = clockMinutes(start);
-    if (s == null || typeof minutes !== 'number' || !isFinite(minutes)) return null;
-    var total = s + Math.round(minutes);
-    var days = Math.floor(total / 1440);
-    var m = total - days * 1440;
-    return { time: pad(Math.floor(m / 60)) + ':' + pad(m % 60), days: days };
-  }
-
   var api = {
     parseClock: parseClock, parseHM: parseHM, fmtPace: fmtPace, fmtHM: fmtHM, daysUntil: daysUntil, addDays: addDays,
-    clockMinutes: clockMinutes, raceTimesError: raceTimesError, RACE_TIMES_MESSAGE: RACE_TIMES_MESSAGE,
     tidyTime: tidyTime, unreadableTimeMessage: unreadableTimeMessage
   };
-  api.addMinutes = addMinutes;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else { root.RD = root.RD || {}; root.RD.time = api; }
 })(this);

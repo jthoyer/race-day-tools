@@ -114,7 +114,7 @@
   // Checks the inputs. Returns a list of { field, message }. Empty means good to go.
   function validate(input) {
     var errs = [];
-    if (!LEGS[input.distance]) errs.push({ field: 'distance', message: 'Pick Standard or 70.3.' });
+    if (!LEGS[input.distance]) errs.push({ field: 'distance', message: 'Pick Olympic or 70.3.' });
     if (!within(input.css, LIMITS.css)) errs.push({ field: 'css', message: 'Enter your critical swim speed (CSS) as m:ss per 100 m, between 1:05 and 3:30.' });
     if (!within(input.runThreshold, LIMITS.runThreshold)) errs.push({ field: 'runThreshold', message: 'Enter your run threshold as m:ss per km, between 3:00 and 9:00.' });
     if (!within(input.weight, LIMITS.weight)) errs.push({ field: 'weight', message: 'Enter a body weight between 35 and 150 kg.' });
@@ -172,7 +172,7 @@
       why.push({
         leg: 'Bike',
         text: Math.round(f[0] * 100) + '–' + Math.round(f[1] * 100) + '% of your FTP of ' + input.ftp + ' W, a typical range for ' +
-          (d === '70.3' ? 'a 70.3' : 'a Standard race') + ' on a ' + course + ' course' + (heat === 'hot' ? ', eased for the heat' : '') + '.'
+          (d === '70.3' ? 'a 70.3' : 'an Olympic race') + ' on a ' + course + ' course' + (heat === 'hot' ? ', eased for the heat' : '') + '.'
       });
       if (input.ftpRecent === false) warnings.push('Your FTP test is over 6 weeks old, so the bike target is set a little lower. Retest if you can.');
     } else {
@@ -249,7 +249,7 @@
   // RD-025. About how far into a leg a time is, at an even pace: time / leg time x leg distance, to the whole km.
   // It is a guide only. Time is the rule for fuel, so nothing in the plan is worked out from this number.
   // A blank, unreadable or zero leg time gives null, never a km. A time past the end is held at the whole leg.
-  var KM_NOTE = 'Km are a guide, from an even pace. Go by the clock: never take a gel earlier than its time.'; // wording awaits the owner's OK (RD-025)
+  var KM_NOTE = 'Go by the clock. Never take a gel earlier than its time. Km are a guide, from an even pace.'; // the owner's wording, 8-9 Nov 2026
   function kmAt(distance, leg, minutesIn, legMinutes) {
     function isNum(v) { return typeof v === 'number' && isFinite(v); }
     if (!Object.prototype.hasOwnProperty.call(LEGS, distance) || (leg !== 'bike' && leg !== 'run')) return null;

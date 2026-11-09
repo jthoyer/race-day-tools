@@ -128,7 +128,7 @@
 
   function validate(input) {
     var errs = [];
-    if (!CARB_CEILING[input.distance]) errs.push({ field: 'distance', message: 'Pick Standard or 70.3.' });
+    if (!CARB_CEILING[input.distance]) errs.push({ field: 'distance', message: 'Pick Olympic or 70.3.' });
     if (!between(input.bikeMin, 30, 480)) errs.push({ field: 'bikeMin', message: 'Enter a bike time between 0:30 and 8:00.' });
     if (!between(input.runMin, 15, 300)) errs.push({ field: 'runMin', message: 'Enter a run time between 0:15 and 5:00.' });
     if (!between(input.gut, 0, 120)) errs.push({ field: 'gut', message: 'Enter the carbs your gut handles, 0 to 120 g an hour.' });
