@@ -202,3 +202,13 @@ test('taperDays uses your own length when it is whole days in range, else the gu
   assert.equal(P.taperDays('sprint', null), 14);
   P.TAPER.options.forEach((n) => assert.equal(P.taperDays('70.3', n), n));
 });
+
+test('KM_NOTE is the owner\'s wording, and the bike explanation says Olympic (8-9 Nov 2026)', () => {
+  assert.equal(P.KM_NOTE, 'Go by the clock. Never take a gel earlier than its time. Km are a guide, from an even pace.');
+  const bike = P.planPace({ ...example, distance: 'standard' }).why.find((w) => w.leg === 'Bike').text;
+  assert.match(bike, /an Olympic race/);
+  assert.doesNotMatch(bike, /Standard/);
+  // The stored distance stays "standard"; only the words changed. A distance we do not know is refused with the new name.
+  const bad = P.planPace({ ...example, distance: 'ironman' });
+  assert.equal(bad.errors.find((e) => e.field === 'distance').message, 'Pick Olympic or 70.3.');
+});

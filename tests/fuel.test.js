@@ -278,3 +278,11 @@ test('unreadable or half-filled gel timing is refused with a message, and a blan
   assert.deepEqual(none.timingNote, { bike: '', run: '' });
   assert.deepEqual(none.suggested.bike, plain.bike.gelTimes);
 });
+
+test('an unknown distance is refused with "Pick Olympic or 70.3." (the stored value stays "standard")', () => {
+  const base = { distance: 'ironman', bikeMin: 165, runMin: 115, heat: 'warm', gut: 60, sweat: null, gel: F.DEFAULT_PRODUCTS[0], drink: F.DEFAULT_PRODUCTS[1] };
+  const bad = F.planFuel(base);
+  assert.equal(bad.ok, false);
+  assert.equal(bad.errors.find((e) => e.field === 'distance').message, 'Pick Olympic or 70.3.');
+  assert.equal(F.planFuel({ ...base, distance: 'standard' }).ok, true);
+});
