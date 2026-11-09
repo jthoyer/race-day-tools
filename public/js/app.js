@@ -356,6 +356,7 @@
   var COUNT_SENTENCE = ['Four steps to go.', 'One step done, three to go.', 'Two steps done, two to go.', 'Three steps done, one to go.', 'All four steps done.'];
   var STEP_NAMES = ['Choose a race', 'Choose pacing', 'Review nutrition', 'Get your race card for your top tube'];
   var OUT_OF_DATE = 'Out of date: Edit to update it';
+  var SWEAT_NEEDED = 'Add your sweat rate on step 3, or use a typical value.';
 
   function home() {
     var r = S.race;
@@ -395,7 +396,7 @@
       }),
       stepItem(3, STEP_NAMES[2], {
         state: done.nutrition ? 'done' : nextStep === 3 ? 'now' : 'todo',
-        desc: done.nutrition ? (fuelStale(r) ? OUT_OF_DATE : 'Bike ' + f.bike.carbsPerHour + ' g/hr · run ' + f.run.carbsPerHour + ' g/hr')
+        desc: done.nutrition ? (ownSweatBad() ? SWEAT_NEEDED : fuelStale(r) ? OUT_OF_DATE : 'Bike ' + f.bike.carbsPerHour + ' g/hr · run ' + f.run.carbsPerHour + ' g/hr')
           : nextStep === 3 ? 'Next: check your gut figure and pick your carbs' : 'Carbs, fluid and sodium per leg',
         link: done.nutrition ? ['#/fuel', 'Edit'] : null
       }),
@@ -803,7 +804,8 @@
     if (f) {
       nutSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Nutrition'), h('a', { href: '#/fuel' }, 'Step 3')),
-        fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Nutrition to update it.') : null,
+        ownSweatBad() ? h('p', { class: 'notice warn', role: 'status' }, 'Add your sweat rate on ', h('a', { href: '#/fuel' }, 'step 3'), ', or use a typical value.')
+          : fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Nutrition to update it.') : null,
         legCard('Bike', f, 'bike'),
         legCard('Run', f, 'run'),
         clockNote(f),
@@ -971,7 +973,9 @@
     var e = RD.fuel.validate(bad).filter(function (x) { return x.field === field; })[0];
     return e ? e.message : '';
   }
-  function fuelStale(r) { return !!(r && r.fuel && (r.fuel.inputKey !== inputKey(fuelInput().input) || ownSweatBad())); }
+  // Only the input key says a plan is out of date, so a save from before this change is never called out of date by it.
+  // A bad own sweat rate is said plainly where the plan shows (SWEAT_NEEDED) and step 3 refuses to re-plan until it is fixed.
+  function fuelStale(r) { return !!(r && r.fuel && r.fuel.inputKey !== inputKey(fuelInput().input)); }
 
   // ---------- step 3: review nutrition ----------
 

@@ -489,6 +489,7 @@ check(/Changeovers: T1 0:04–0:05 · T2 0:02–0:04/.test(card) && /Finish \d:\
 const cardRows = await page.locator('.racecard .tl').first().locator('.tlrow').evaluateAll((els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
 check(cardRows.length === 3 && /^0:30 Gel ~\d+ km$/.test(cardRows[0]), 'The card has the same leg cards, with your own first gel and its km');
 check((await page.locator('.racecard p.notice.go').count()) === 1 && (await page.locator('.racecard p.notice.go').innerText()).replace(/\s+/g, ' ').trim() === kmNote && (await page.getByRole('link', { name: 'Change gel times' }).isVisible()), 'The card has the go-by-the-clock note once, and "Change gel times"');
+check(await page.getByRole('link', { name: 'Change gel times' }).evaluate((e) => e.getBoundingClientRect().height >= 44), 'The card\'s "Change gel times" link is at least 44 px high');
 check(!/typical/i.test(card) && !/Countdown|Debrief|Coming later/.test(card) && /not medical advice/i.test(await appText()), 'The card has no "(typical)", no Countdown or Debrief, and says not medical advice');
 check((await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.getByRole('button', { name: 'Print top-tube card' }).evaluate((e) => !e.classList.contains('ghost'))), 'With pacing and nutrition saved, Print is the one yellow action');
 await wordsClean('The race card');
@@ -756,6 +757,57 @@ await page.getByRole('button', { name: 'Save to a race plan' }).click();
 await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
 const gsv = await store();
 check(gsv.details.gut === 55 && !('start' in gsv.race), 'Typing 55 in the nutrition guide carries 55 into details.gut');
+await page.context().close();
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// Scenario 6: a save from main whose own sweat rate is blank. Isolation: fresh context. This is the captured fixture
+// with ONLY details.sweatTypical set to false and details.sweat left null; nothing else is changed. The plan is not
+// called out of date for it (criterion 27); home and the card say plainly what is needed, and step 3 makes no plan.
+const SWEAT_NEEDED = 'Add your sweat rate on step 3, or use a typical value.';
+const blankSweat = JSON.parse(JSON.stringify(fixture));
+blankSweat.details.sweatTypical = false;
+blankSweat.details.sweat = null;
+await fresh('blank own sweat', { init: { fn: ([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, arg: [KEY, JSON.stringify(blankSweat)] } });
+await page.goto(base + '/index.html#/');
+await page.getByRole('heading', { name: /Sprint Cup/ }).waitFor();
+let bt = await appText();
+check(bt.includes(SWEAT_NEEDED) && !/Out of date|changed since/i.test(bt), 'Blank own sweat: home says the sweat rate is needed and shows no out-of-date text');
+await page.goto(base + '/index.html#/card');
+bt = await appText();
+check(bt.includes(SWEAT_NEEDED) && !/changed since|out of date/i.test(bt) && (await page.locator('.racecard .notice a', { hasText: 'step 3' }).getAttribute('href')) === '#/fuel', 'Blank own sweat: the card says it, links to step 3, and shows no out-of-date text');
+await page.emulateMedia({ media: 'print' });
+await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+check(!/out of date/i.test(await page.locator('.tt').textContent()), 'Blank own sweat: the print card has no out-of-date line');
+await page.emulateMedia({ media: 'screen' });
+await page.goto(base + '/index.html#/fuel');
+await page.reload();
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+check(/sweat rate/i.test(await page.locator('.info.warn').first().innerText()) && (await page.locator('.tl').count()) === 0 && (await page.getByRole('button', { name: /Next: get your race card|Update my race card/ }).count()) === 0, 'Blank own sweat: step 3 shows the sweat message and makes no plan and no save');
+await page.context().close();
+
+// ---------------------------------------------------------------------------------------------------------------
+// Scenario 7: a long multi-word product name in the leg cards. Isolation: fresh context, seeded from the fixture with
+// pacing saved and no nutrition plan, and a made-up gel with a long name.
+const longName = 'Citrus energy gel with caffeine extra strength';
+const longSave = JSON.parse(JSON.stringify(fixture));
+longSave.race.fuel = null;
+longSave.race.distance = '70.3';
+longSave.products = [{ id: 'gel', name: longName, kind: 'gel', carbs: 25, sodium: 50, serveMl: 0 }, { id: 'drink', name: 'Sports drink', kind: 'drink', carbs: 30, sodium: 250, serveMl: 500 }];
+await fresh('long product name', { width: 320, init: { fn: ([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, arg: [KEY, JSON.stringify(longSave)] } });
+await page.goto(base + '/index.html#/fuel');
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+check((await page.locator('.tl').count()) === 2 && (await page.locator('.tl .tlrow').first().innerText()).includes(longName.split(' ')[0]), 'Long name: step 3 makes the plan with the long product name');
+const rowsOk = await page.locator('.tl .tlrow').evaluateAll((rows) => rows.map((r) => {
+  const [t, name, km] = [...r.children];
+  const rb = r.getBoundingClientRect(); const nb = name.getBoundingClientRect();
+  const kb = km ? km.getBoundingClientRect() : null;
+  return name.scrollWidth <= name.clientWidth + 1 && nb.right <= rb.right + 1 && (!kb || (kb.right <= rb.right + 1 && kb.left >= nb.right - 1 && kb.width > 0)) && t.getBoundingClientRect().right <= nb.left + 1;
+}));
+check(rowsOk.length > 0 && rowsOk.every(Boolean), 'Long name at 320px: the name wraps, nothing is clipped, and the km stays visible without overlapping');
+check((await brokenText()).length === 0, 'Long name at 320px: no word is broken in the middle');
+await noHorizontalScroll('Step 3 with a long product name', 320);
+await shot('long-name-320');
 await page.context().close();
 
 await browser.close();

@@ -973,6 +973,12 @@ details.test p {
   font-size: 14px;
   font-weight: 700;
 }
+/* A link in a card line is a tap target of its own: at least 44 px high. */
+.sec p.small a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 p.notice.go {
   margin: 0;
   background: var(--accent-bg);
