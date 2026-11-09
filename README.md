@@ -119,8 +119,11 @@ These are from the blueprint and stay open. The code leaves room for each.
 - **D2** Restoring a purchase with no accounts. No payments yet.
 - **D3** Counting without tracking health data. No analytics yet.
 - **D4** Email, offline copy and hosting.
-- **D5** The name, and the fit with TRI Momentum. Since 9 November 2026 every screen header and tab title says TRI Momentum (owner, four-step flow). Whether the suite keeps a name of its own is still open.
 - **D6** Where the paywall sits in pace set-up. Everything is free in this build.
+
+Decided:
+
+- **D5** The name, and the fit with TRI Momentum (owner, 9 November 2026). The suite is TRI Momentum's wedge, not a separate business, so it has no name of its own: every screen header and tab title says TRI Momentum. The repo stays `race-day-tools`.
 
 ## Sources
 
