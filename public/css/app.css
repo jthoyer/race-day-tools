@@ -1,4 +1,4 @@
-/* Race-day tools. Tokens copied from the 2 Nov 2026 blueprint screens. Light only, by design. */
+/* TRI Momentum. Tokens copied from the 2 Nov 2026 blueprint screens. Light only, by design. */
 :root {
   --bg: #f7f8fa;
   --surface: #ffffff;
@@ -83,14 +83,49 @@ a:hover {
 .top > * {
   min-width: 0;
 }
-.brand {
+.mark {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-height: 44px;
-  font: 700 21px var(--display);
-  letter-spacing: -0.3px;
   color: var(--ink);
   text-decoration: none;
+}
+.tri {
+  display: flex;
+  gap: 3px;
+}
+.tri b {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--surface);
+  font: 700 10px var(--display);
+}
+.word {
+  font: 700 17px var(--display);
+  letter-spacing: -0.2px;
+}
+/* The big wordmark on the front page. */
+.mark.big {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.mark.big .tri {
+  gap: 7px;
+}
+.mark.big .tri b {
+  width: 39px;
+  height: 24px;
+  font-size: 18px;
+}
+.mark.big .word {
+  font-size: 23px;
+  line-height: 1.2;
 }
 .toplink,
 .back {
@@ -125,12 +160,9 @@ a:hover {
 
 h1,
 h2,
-.hero p,
 .step p,
 .sec p,
-.prow span,
-.carry li,
-.chip {
+.carry li {
   overflow-wrap: anywhere;
 }
 h1 {
@@ -176,6 +208,9 @@ h2 {
   display: grid;
   gap: 16px;
 }
+.stack.tight {
+  gap: 8px;
+}
 .row-wrap {
   display: grid;
   grid-template-columns: minmax(0, 1fr); /* an auto column grows to a native date or time control's own width */
@@ -192,8 +227,11 @@ h2 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
-.segs.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.segs.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.parts b {
+  color: var(--ink);
 }
 .seg {
   height: 6px;
@@ -431,6 +469,9 @@ h2 {
   gap: 10px;
   margin-top: auto;
 }
+.actions .back {
+  justify-content: center;
+}
 
 .info {
   display: flex;
@@ -533,15 +574,6 @@ h2 {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
-.targets .fclock {
-  margin: 4px 0 0;
-  color: #c7cede;
-  font-size: 14px;
-  text-align: right;
-}
-.targets .fclock a {
-  color: var(--accent-hover);
-}
 details.why {
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -575,106 +607,93 @@ details.test p {
   margin: 4px 0 0;
 }
 
-/* Plan steps and home */
-.hero {
-  border-radius: var(--r);
-  background: var(--ink);
-  color: #fff;
-  padding: 18px;
-  display: grid;
-  gap: 6px;
+/* Home: the four steps, on the front page and on the coming-back screen. They use the same tokens as the rail. */
+.home .startmark {
+  padding-top: 40px;
 }
-.hero .k {
-  margin: 0;
-  color: var(--accent-hover);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
+.home .lead {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 17px;
 }
-.hero h1 {
-  color: #fff;
-}
-.hero p {
-  margin: 0;
-  color: #edf0f7;
-}
-.hero .meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: center;
-  margin-top: 4px;
-}
-.hero .meta a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--accent-hover);
-}
-.chip {
-  display: inline-flex;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.chips .chip {
-  background: var(--seg-bg);
-  font-weight: 600;
+.home .startmark + div h1 {
+  font-size: 34px;
+  letter-spacing: -0.8px;
 }
 .steps {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  position: relative;
+}
+.steps::before {
+  content: '';
+  position: absolute;
+  left: 41px;
+  top: 20px;
+  bottom: 20px;
+  width: 2px;
+  background: var(--line);
 }
 .step {
+  position: relative;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  min-height: 54px;
   padding: 10px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: 12px;
 }
 .step .dot {
-  display: inline-grid;
+  display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--seg-bg);
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 14px;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+  font: 700 13px var(--body);
+}
+.step.goal {
+  border-color: var(--info-bg);
+  background: var(--info-bg);
 }
 .step.done .dot {
+  border-color: var(--go);
   background: var(--go);
-  color: #fff;
 }
 .step.now .dot {
+  border-color: var(--accent);
   background: var(--accent);
   color: var(--ink);
+}
+.step.todo .dot {
+  border-color: var(--field);
+  background: var(--surface);
+  color: var(--muted);
+}
+.step.goal.todo .dot {
+  border-color: var(--link);
+  background: var(--info-bg);
+  color: var(--link);
 }
 .step p {
   margin: 0;
 }
 .step .t {
-  font-weight: 700;
+  font: 600 17px/1.25 var(--display);
 }
 .step .d {
+  margin-top: 2px;
   color: var(--muted);
   font-size: 14px;
+  line-height: 1.35;
 }
 .step a {
   min-height: 44px;
@@ -685,59 +704,115 @@ details.test p {
   font-weight: 600;
   font-size: 14px;
 }
-/* The floating step bar (RD-031): Race, Pacing, Fuel and Card. It stays in view as the page scrolls. */
-.stepbar {
+/* The guides, at the bottom of the front page: plain links, so "Get started" stays the one yellow action. */
+.guides {
+  display: grid;
+  gap: 2px;
+}
+.guides ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.guides .tag {
+  align-self: center;
+}
+.guides a {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 44px;
+  padding: 4px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* The rail (9 Nov 2026) replaces the floating step bar: Race, Pacing, Nutrition and Race card, each a numbered circle.
+   It stays in view as the page scrolls. Step 4 sits on the light blue with a link-blue ring until it is current. */
+.rail {
   position: sticky;
   top: 8px;
   z-index: 5;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
-  padding: 4px;
+  padding: 6px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
-  box-shadow: 0 6px 20px rgba(24, 37, 66, 0.14);
+  box-shadow: 0 6px 20px rgba(24, 37, 66, 0.12);
 }
-.stepbar a {
+.rail::before {
+  content: '';
+  position: absolute;
+  left: 12.5%;
+  right: 12.5%;
+  top: 25px;
+  height: 2px;
+  background: var(--line);
+}
+.rail .r {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-height: 52px;
+  gap: 4px;
+  min-height: 58px;
   border-radius: 10px;
-  color: var(--ink);
-  font: 500 12px/1.2 var(--body);
+  color: var(--muted);
+  font: 600 12px/1.2 var(--body);
   text-decoration: none;
+  text-align: center;
 }
-.stepbar a:hover {
-  background: var(--seg-bg);
-}
-.stepbar a.done::after {
-  content: '';
-  position: absolute;
-  top: 6px;
-  right: calc(50% - 18px);
-  width: 8px;
-  height: 8px;
+.rail .c {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--go);
-  border: 2px solid var(--surface);
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font: 700 13px var(--body);
 }
-.stepbar a[aria-current='step'] {
-  background: var(--ink);
-  color: #fff;
+.rail .done .c {
+  border-color: var(--go);
+  background: var(--go);
+  color: var(--surface);
+}
+.rail .goal {
+  background: var(--info-bg);
+}
+.rail .goal .c {
+  border-color: var(--link);
+  color: var(--link);
+}
+.rail .now {
+  color: var(--ink);
   font-weight: 700;
 }
+.rail .now .c {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+}
+.rail .now:not(.goal) {
+  background: var(--bg);
+}
+.rail .now.goal {
+  box-shadow: inset 0 0 0 2px var(--link);
+}
 
-/* Gel timing on the fuel step (RD-031) */
+/* Gel timing on the nutrition step (RD-031) */
 .timing {
   gap: 8px;
 }
 
-/* Fuel (A2) */
+/* Nutrition step (A2) */
 .fromplan {
   border-radius: var(--r);
   background: var(--pick-bg);
@@ -774,28 +849,6 @@ details.test p {
   color: var(--accent-ink);
   font: 700 13px var(--body);
   white-space: nowrap;
-}
-.prow {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 15px;
-}
-.prow:last-child {
-  border-bottom: 0;
-}
-.prow span:first-child {
-  color: var(--muted);
-  /* Wrap at spaces only. The global "anywhere" rule lets a label shrink to one letter ("Bottle / s") when the
-     right-hand text is long. With "normal" it can't get narrower than its longest word, so the right side wraps instead. */
-  overflow-wrap: normal;
-}
-.prow span:last-child {
-  text-align: right;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 .carry {
   margin: 0;
@@ -920,9 +973,11 @@ details.test p {
   font-size: 14px;
   font-weight: 700;
 }
-.sec p.notice.go {
+p.notice.go {
+  margin: 0;
   background: var(--accent-bg);
   color: var(--accent-ink);
+  font-size: 15px;
 }
 .tl {
   border: 1px solid var(--line);
@@ -965,78 +1020,32 @@ details.test p {
   font-size: 15px;
   white-space: nowrap;
 }
-.later {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
+/* Wrap at spaces only. The global "anywhere" rule on .sec p would break a word in the middle in a narrow card. */
+.tl .tlline,
+.tl .tlrow span {
+  overflow-wrap: normal;
 }
-
-/* Guides gallery on the first screen: one tappable card per guide. */
-.gallery {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-}
-.gcard {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  min-height: 44px;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  color: var(--ink);
-  text-decoration: none;
-}
-.gcard:hover {
-  border-color: var(--pick);
+.tl .badge {
   background: var(--pick-bg);
+  color: var(--ink);
 }
-.gtop {
+.planhead {
+  font: 700 24px/1.15 var(--display);
+  letter-spacing: -0.4px;
+}
+/* A label on the left and its value on the right, as in "Your gut and sweat". */
+.kv {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+  font-size: 15px;
 }
-.gtitle {
-  font: 600 17px/1.25 var(--display);
-  overflow-wrap: anywhere;
-}
-.gsum {
+.kv span:last-child {
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.4;
+  text-align: right;
 }
-
-/* Blank race card: the first screen. Empty parts get a dashed outline. */
-.racecard.blank .band {
-  background: var(--seg-bg);
+.kv b {
   color: var(--ink);
-}
-.racecard.blank .date {
-  border-right-color: var(--field);
-}
-.racecard.blank .date span,
-.racecard.blank .band p {
-  color: var(--muted);
-}
-.racecard.blank h1 {
-  color: var(--ink);
-}
-.stat.ph {
-  background: transparent;
-  border: 1px dashed var(--field);
-}
-.stat.ph b {
-  color: var(--muted);
-}
-.ph-line {
-  border: 1px dashed var(--field);
-  border-radius: var(--r);
-  padding: 10px 12px;
-  color: var(--muted);
-  font-size: 14px;
 }
 
 /* Guides: an article with the tool inside it (F7) */
@@ -1166,12 +1175,5 @@ details.test p {
   }
 }
 
-/* The rule between the product choice and the carry list inside the "Your fuel" card. */
+/* The rule between the product choice and the carry list inside the "Your nutrition" card. */
 .divider { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; width: 100%; }
-
-/* RD-025. The km beside a gel time is quieter than the time, which stays first and is the rule.
-   The row rules for the first and last span in a row also match these spans, so these are written to win. */
-.prow .gtimes { display: grid; gap: 2px; overflow-wrap: normal; text-align: left; }
-.prow .gtimes .gt { white-space: nowrap; text-align: left; font-weight: 400; color: var(--muted); }
-.prow .gtimes .gt .km { text-align: left; font-size: 13px; font-weight: 400; color: var(--muted); opacity: 0.85; }
-.kmnote { padding: 0 0 8px; }
