@@ -38,7 +38,7 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 | Green | `#116b43` | Done, and the race card band |
 | Light blue (`--info-bg`) | `#eaf7fc` | Step 4, the race card, in the rail and the step list |
 
-- DM Sans for body and controls, Outfit for headings and the wordmark, both from Google Fonts.
+- DM Sans for body and controls, Outfit for headings and the wordmark. Both are open fonts (SIL Open Font License). They ship in `public/fonts/`, so no page asks another host for anything. The licence text is in `public/fonts/LICENSE.txt`.
 - A 9 px corner radius on buttons, inputs and cards.
 - The rail: four numbered steps on every step and the race card. Done is a green circle with a tick, the current step is ink, and step 4 stays on the light blue with a blue ring until it is current.
 - The wordmark: three ink boxes holding white T, R and I, then "Momentum" in Outfit.
@@ -76,6 +76,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
 | `public/_headers` | Security headers and the content policy. |
+| `public/fonts/` | DM Sans and Outfit as variable `.woff2` files, in two subsets each (Latin, and Latin Extended for other letters), with their licence. Declared at the top of `css/app.css`. |
 | `tests/` | Unit tests (`node --test`). |
 | `scripts/smoke.mjs` | Browser smoke test. |
 
