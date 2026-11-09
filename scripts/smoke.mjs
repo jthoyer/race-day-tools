@@ -217,6 +217,9 @@ await wordsClean('Pacing part 1');
 await page.getByLabel('FTP', { exact: true }).fill('240');
 await page.getByRole('button', { name: 'Heart rate' }).click();
 check((await page.getByLabel('Bike threshold heart rate').isVisible()) && (await page.getByLabel('Run threshold heart rate').isVisible()), 'Heart rate mode asks for both threshold heart rates');
+check(await page.getByText('Heart rate needs your threshold heart rates and the speed of a hard long ride. The swim always uses your CSS.', { exact: true }).isVisible(), 'Heart rate mode says what it needs');
+await page.getByRole('button', { name: 'Effort', exact: true }).click();
+check((await page.getByText('Effort needs only the speed of a hard long ride. The swim always uses your CSS.', { exact: true }).isVisible()) && (await page.getByLabel('Speed on a hard long ride').isVisible()) && (await page.getByLabel('FTP', { exact: true }).count()) === 0, 'Effort mode says what it needs and asks only for the long-ride speed');
 await page.getByRole('button', { name: 'Power' }).click();
 check((await page.getByLabel('FTP', { exact: true }).inputValue()) === '240', 'Switching pace mode keeps the FTP that was typed');
 // Weight: 20 is refused with the message, a blank is never zero.
@@ -314,6 +317,7 @@ await page.goto(base + '/index.html#/');
 await page.reload();
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
 const s5a = await appText();
+check(!/Countdown|Debrief|Coming later/.test(s5a), 'S5 hides Countdown and Debrief until they exist');
 check(/Two steps done, two to go\./.test(s5a) && /Next: check your gut figure and pick your carbs/.test(s5a), 'S5 after pacing says "Two steps done, two to go." and what step 3 is');
 check((await page.getByRole('link', { name: 'Continue: review nutrition' }).isVisible()) && (await page.locator('.btn').count()) === 1, 'S5 after pacing has one yellow action, "Continue: review nutrition"');
 check(/Bike 175–185 W · finish \d:\d\d–\d:\d\d/.test(s5a) && /days to go/i.test(s5a) && /Taper starts|In your taper/.test(s5a), 'S5 shows the days to go, the taper line and the pacing summary');
@@ -424,7 +428,9 @@ const kmNote = await page.evaluate(() => RD.pace.KM_NOTE);
 check((await page.locator('p.notice.go').count()) === 1 && noteText === kmNote && (await noteEl.locator('b').innerText()) === 'Go by the clock.', 'One go-by-the-clock note sits under the legs, with the owner\'s words and "Go by the clock." in bold');
 // The "Your nutrition" card: pickers, plan-uses line, starter note, carry list.
 const nutCard = page.locator('section.card', { has: page.getByText('Your nutrition', { exact: true }) });
-check((await nutCard.count()) === 1 && (await nutCard.locator('select').count()) === 2 && (await nutCard.getByText('Carry list', { exact: true }).count()) === 1 && /generic starter products/.test(await nutCard.innerText()) && !/typical/i.test(await nutCard.innerText()), 'One "Your nutrition" card holds both pickers, the starter note and the carry list');
+check((await nutCard.count()) === 1 && (await nutCard.locator('select').count()) === 2 && (await nutCard.getByText('Carry list', { exact: true }).count()) === 1 && /generic starter products/.test(await nutCard.innerText()) && !/typical/i.test(await nutCard.innerText()) && (await page.getByText('What you use', { exact: true }).count()) === 0, 'One "Your nutrition" card holds both pickers, the starter note and the carry list, and the old "What you use" card is gone');
+const nutTops = [await topOf(nutCard.locator('select').first()), await topOf(nutCard.getByText(/The plan uses /)), await topOf(nutCard.getByText('Carry list', { exact: true }))];
+check(nutTops[0] < nutTops[1] && nutTops[1] < nutTops[2], 'In the Your nutrition card the carb choice comes first, then the "plan uses" line, then the carry list');
 check(/The plan uses Gel at 25g a serve and Sports drink at 30g per 500 ml\./.test(fuelText), 'Step 3 says which gel and drink the plan uses, with their carbs');
 // A row label may wrap at spaces but is never broken in the middle of a word. A box can never be narrower than its
 // longest word, so measure each word in the element's own font and compare.
@@ -470,6 +476,7 @@ await page.getByLabel('Bike: then every').fill('60');
 await settle();
 check(/Your times: 0:30 · 1:30 · 2:30/.test(await page.locator('#gel-timing .timing').first().innerText()), 'Going back to every 60 minutes uses your times again');
 await shot('step3-timing');
+await noHorizontalScroll('Step 3 with gel timing');
 // Save: with no saved nutrition the yellow action is "Next: get your race card"; Print is outlined.
 const nextBtn = page.getByRole('button', { name: 'Next: get your race card' });
 check((await page.locator('.actions .btn:not(.ghost)').count()) === 1 && /ghost/.test(await page.getByRole('button', { name: 'Print top-tube card' }).getAttribute('class')), 'Step 3 has one yellow action, and Print is outlined');
@@ -490,6 +497,7 @@ const cardRows = await page.locator('.racecard .tl').first().locator('.tlrow').e
 check(cardRows.length === 3 && /^0:30 Gel ~\d+ km$/.test(cardRows[0]), 'The card has the same leg cards, with your own first gel and its km');
 check((await page.locator('.racecard p.notice.go').count()) === 1 && (await page.locator('.racecard p.notice.go').innerText()).replace(/\s+/g, ' ').trim() === kmNote && (await page.getByRole('link', { name: 'Change gel times' }).isVisible()), 'The card has the go-by-the-clock note once, and "Change gel times"');
 check(await page.getByRole('link', { name: 'Change gel times' }).evaluate((e) => e.getBoundingClientRect().height >= 44), 'The card\'s "Change gel times" link is at least 44 px high');
+check(/Sports drink/.test((await page.locator('.racecard .tl .tlline').allInnerTexts()).join(' ')), 'The card names the drink in the bike leg card');
 check(!/typical/i.test(card) && !/Countdown|Debrief|Coming later/.test(card) && /not medical advice/i.test(await appText()), 'The card has no "(typical)", no Countdown or Debrief, and says not medical advice');
 check((await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.getByRole('button', { name: 'Print top-tube card' }).evaluate((e) => !e.classList.contains('ghost'))), 'With pacing and nutrition saved, Print is the one yellow action');
 await wordsClean('The race card');
@@ -652,6 +660,7 @@ await page.reload();
 check((await carbsList.last().inputValue()) === 'other' && (await page.getByLabel('Exact figure (g)').last().inputValue()) === '22', 'A carb figure off the list shows as typed under Other, not rounded');
 check((await store()).products.slice(-1)[0].carbs === 22, 'The saved carb figure is exactly 22');
 await carbsList.last().selectOption({ label: '40 g' });
+check((await page.getByLabel('Exact figure (g)').count()) === (await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).products.filter((p) => ![20, 25, 30, 35, 40, 45, 50].includes(p.carbs)).length, KEY)), 'Picking a step from Other hides the typed box again');
 await page.getByRole('link', { name: 'Done' }).click();
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
 await page.locator('select').first().selectOption({ label: '30g' });
