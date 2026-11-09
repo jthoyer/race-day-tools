@@ -396,7 +396,7 @@
       }),
       stepItem(3, STEP_NAMES[2], {
         state: done.nutrition ? 'done' : nextStep === 3 ? 'now' : 'todo',
-        desc: done.nutrition ? (ownSweatBad() ? SWEAT_NEEDED : fuelStale(r) ? OUT_OF_DATE : 'Bike ' + f.bike.carbsPerHour + ' g/hr · run ' + f.run.carbsPerHour + ' g/hr')
+        desc: done.nutrition ? (ownSweatBad() || fuelStale(r) ? [fuelStale(r) ? OUT_OF_DATE : '', ownSweatBad() ? SWEAT_NEEDED : ''].filter(Boolean).join(' ') : 'Bike ' + f.bike.carbsPerHour + ' g/hr · run ' + f.run.carbsPerHour + ' g/hr')
           : nextStep === 3 ? 'Next: check your gut figure and pick your carbs' : 'Carbs, fluid and sodium per leg',
         link: done.nutrition ? ['#/fuel', 'Edit'] : null
       }),
@@ -804,8 +804,9 @@
     if (f) {
       nutSec = h('section', { class: 'sec' },
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Nutrition'), h('a', { href: '#/fuel' }, 'Step 3')),
-        ownSweatBad() ? h('p', { class: 'notice warn', role: 'status' }, 'Add your sweat rate on ', h('a', { href: '#/fuel' }, 'step 3'), ', or use a typical value.')
-          : fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Nutrition to update it.') : null,
+        // Both can show at once: the sweat line never hides the out-of-date notice.
+        fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, 'Your splits, details or products changed since this plan. Open Nutrition to update it.') : null,
+        ownSweatBad() ? h('p', { class: 'notice warn', role: 'status' }, 'Add your sweat rate on ', h('a', { href: '#/fuel' }, 'step 3'), ', or use a typical value.') : null,
         legCard('Bike', f, 'bike'),
         legCard('Run', f, 'run'),
         clockNote(f),
@@ -974,7 +975,7 @@
     return e ? e.message : '';
   }
   // Only the input key says a plan is out of date, so a save from before this change is never called out of date by it.
-  // A bad own sweat rate is said plainly where the plan shows (SWEAT_NEEDED) and step 3 refuses to re-plan until it is fixed.
+  // A bad own sweat rate is said beside it, never instead of it (SWEAT_NEEDED), and step 3 refuses to re-plan until it is fixed.
   function fuelStale(r) { return !!(r && r.fuel && r.fuel.inputKey !== inputKey(fuelInput().input)); }
 
   // ---------- step 3: review nutrition ----------

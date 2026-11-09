@@ -784,6 +784,21 @@ await page.goto(base + '/index.html#/fuel');
 await page.reload();
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
 check(/sweat rate/i.test(await page.locator('.info.warn').first().innerText()) && (await page.locator('.tl').count()) === 0 && (await page.getByRole('button', { name: /Next: get your race card|Update my race card/ }).count()) === 0, 'Blank own sweat: step 3 shows the sweat message and makes no plan and no save');
+// Then the gut figure changes (70 to 40) and the person leaves without a valid sweat rate: the plan is out of date AND
+// the sweat rate is needed. Both notices show; the sweat line never hides the out-of-date one.
+await page.getByLabel('Carbs your gut handles').fill('40');
+await settle();
+const both = async (where, t) => check(/changed since this plan|Out of date/i.test(t) && t.includes(SWEAT_NEEDED), `Blank own sweat and a changed gut figure: ${where} shows both the out-of-date notice and the sweat line`);
+await page.goto(base + '/index.html#/');
+await page.reload();
+await both('home', await appText());
+await page.goto(base + '/index.html#/card');
+await page.reload();
+await both('the card', await appText());
+await page.emulateMedia({ media: 'print' });
+await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+check(/out of date/i.test(await page.locator('.tt').textContent()), 'Blank own sweat and a changed gut figure: print says out of date');
+await page.emulateMedia({ media: 'screen' });
 await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------
