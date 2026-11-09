@@ -792,9 +792,11 @@ const both = async (where, t) => check(/changed since this plan|Out of date/i.te
 await page.goto(base + '/index.html#/');
 await page.reload();
 await both('home', await appText());
+check((await page.locator('li.step', { hasText: 'Review nutrition' }).locator('.d').innerText()).trim() === 'Out of date: Edit to update it. Add your sweat rate on step 3, or use a typical value.', 'Home\'s step 3 line reads as two sentences when both notices show')
 await page.goto(base + '/index.html#/card');
 await page.reload();
 await both('the card', await appText());
+check((await page.locator('.racecard .notice.warn').allInnerTexts()).map((t) => t.trim()).join('|') === 'Your splits, details or products changed since this plan. Open Nutrition to update it.|Add your sweat rate on step 3, or use a typical value.', 'The card shows the two notices as separate sentences')
 await page.emulateMedia({ media: 'print' });
 await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
 check(/out of date/i.test(await page.locator('.tt').textContent()), 'Blank own sweat and a changed gut figure: print says out of date');

@@ -396,7 +396,7 @@
       }),
       stepItem(3, STEP_NAMES[2], {
         state: done.nutrition ? 'done' : nextStep === 3 ? 'now' : 'todo',
-        desc: done.nutrition ? (ownSweatBad() || fuelStale(r) ? [fuelStale(r) ? OUT_OF_DATE : '', ownSweatBad() ? SWEAT_NEEDED : ''].filter(Boolean).join(' ') : 'Bike ' + f.bike.carbsPerHour + ' g/hr · run ' + f.run.carbsPerHour + ' g/hr')
+        desc: done.nutrition ? (ownSweatBad() || fuelStale(r) ? [fuelStale(r) ? OUT_OF_DATE : '', ownSweatBad() ? SWEAT_NEEDED : ''].filter(Boolean).join('. ') : 'Bike ' + f.bike.carbsPerHour + ' g/hr · run ' + f.run.carbsPerHour + ' g/hr')
           : nextStep === 3 ? 'Next: check your gut figure and pick your carbs' : 'Carbs, fluid and sodium per leg',
         link: done.nutrition ? ['#/fuel', 'Edit'] : null
       }),
