@@ -317,7 +317,7 @@ await page.goto(base + '/index.html#/');
 await page.reload();
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
 const s5a = await appText();
-check(!/Countdown|Debrief|Coming later/.test(s5a), 'S5 hides Countdown and Debrief until they exist');
+check(!/Countdown|Debrief|Later/.test(s5a), 'S5 hides Countdown and Debrief until they exist');
 check(/Two steps done, two to go\./.test(s5a) && /Next: check your gut figure and pick your carbs/.test(s5a), 'S5 after pacing says "Two steps done, two to go." and what step 3 is');
 check((await page.getByRole('link', { name: 'Continue: review nutrition' }).isVisible()) && (await page.locator('.btn').count()) === 1, 'S5 after pacing has one yellow action, "Continue: review nutrition"');
 check(/Bike 175–185 W · finish \d:\d\d–\d:\d\d/.test(s5a) && /days to go/i.test(s5a) && /Taper starts|In your taper/.test(s5a), 'S5 shows the days to go, the taper line and the pacing summary');
@@ -497,7 +497,7 @@ const cardRows = await page.locator('.racecard .tl').first().locator('.tlrow').e
 check(cardRows.length === 3 && /^0:30 Gel ~\d+ km$/.test(cardRows[0]), 'The card has the same leg cards, with your own first gel and its km');
 check((await page.locator('.racecard p.notice.go').count()) === 1 && (await page.locator('.racecard p.notice.go').innerText()).replace(/\s+/g, ' ').trim() === kmNote && (await page.getByRole('link', { name: 'Change gel times' }).isVisible()), 'The card has the go-by-the-clock note once, and "Change gel times"');
 check(await page.getByRole('link', { name: 'Change gel times' }).evaluate((e) => e.getBoundingClientRect().height >= 44), 'The card\'s "Change gel times" link is at least 44 px high');
-check(/Sports drink/.test((await page.locator('.racecard .tl .tlline').allInnerTexts()).join(' ')), 'The card names the drink in the bike leg card');
+check(/^Sports drink( and water)?: about \d+ ml every 15 min$/.test((await page.locator('.racecard .tl .tlline').first().innerText()).trim()), 'The card names the drink in the first line of the bike leg card');
 check(!/typical/i.test(card) && !/Countdown|Debrief|Coming later/.test(card) && /not medical advice/i.test(await appText()), 'The card has no "(typical)", no Countdown or Debrief, and says not medical advice');
 check((await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.getByRole('button', { name: 'Print top-tube card' }).evaluate((e) => !e.classList.contains('ghost'))), 'With pacing and nutrition saved, Print is the one yellow action');
 await wordsClean('The race card');
