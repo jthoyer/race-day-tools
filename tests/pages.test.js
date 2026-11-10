@@ -56,3 +56,29 @@ test('the three content-policy tags are identical and block every network reques
   assert.equal(new Set(csp).size, 1);
   assert.match(csp[0], /connect-src 'none'/);
 });
+
+test('the content policy names no outside host, and no page loads from one', () => {
+  const headers = /Content-Security-Policy:\s*(.*)/.exec(fs.readFileSync(path.join(ROOT, '_headers'), 'utf8'))[1];
+  assert.doesNotMatch(headers, /https?:|\*/, '_headers names an outside host');
+  assert.match(headers, /font-src 'self'/);
+  for (const p of PAGES) {
+    const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html[p])[1];
+    assert.doesNotMatch(csp, /https?:|\*/, `${p}: the content policy names an outside host`);
+    assert.match(csp, /font-src 'self'/, p);
+    assert.doesNotMatch(html[p], /<(?:link|script|img|iframe)\b[^>]*\b(?:href|src)="(?:https?:)?\/\//i, `${p}: loads from an outside host`);
+  }
+});
+
+test('every font file app.css names is shipped, and the licence ships with them', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8');
+  const faces = [...css.matchAll(/@font-face\s*\{([^}]*)\}/g)].map((m) => m[1]);
+  assert.ok(faces.length >= 4, 'expected DM Sans and Outfit, each in two subsets');
+  const families = new Set(faces.map((f) => /font-family:\s*'([^']+)'/.exec(f)[1]));
+  assert.deepEqual([...families].sort(), ['DM Sans', 'Outfit']);
+  for (const f of faces) {
+    const url = /url\(([^)]+)\)/.exec(f)[1].replace(/['"]/g, '');
+    assert.doesNotMatch(url, /^(?:https?:)?\/\//, `a font loads from another host: ${url}`);
+    assert.ok(fs.existsSync(path.resolve(ROOT, 'css', url)), `${url} is missing`);
+  }
+  assert.match(fs.readFileSync(path.join(ROOT, 'fonts', 'LICENSE.txt'), 'utf8'), /SIL OPEN FONT LICENSE/i);
+});

@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'public');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' };
 const SHOTS = process.env.SHOTS || '';
 
 // Serve public/_headers as a host would, so a content policy that breaks the app fails this test.
@@ -53,11 +53,11 @@ async function fresh(label, { width = 390, init } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height: 844 } });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => problems.push(`page error (${label}): ` + e.message));
-  p.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g/.test(m.text())) problems.push(`console (${label}): ` + m.text()); });
+  p.on('console', (m) => { if (m.type() === 'error') problems.push(`console (${label}): ` + m.text()); });
+  // Fonts ship with the app, so nothing may be requested from another host.
+  p.on('request', (r) => { const u = new URL(r.url()); if (/^https?:$/.test(u.protocol) && u.hostname !== 'localhost') problems.push(`outside request (${label}): ` + r.url()); });
   // A content-policy violation shows as a console error above, and as a securitypolicyviolation event here.
   await p.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error('CSP blocked ' + e.violatedDirective + ' ' + e.blockedURI)));
-  // Fonts come from Google; the test must not depend on the network.
-  await p.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
   if (init) await p.addInitScript(init.fn, init.arg);
   page = p;
   return p;
@@ -133,6 +133,8 @@ await wordsClean('S0');
 // The probe is expected to be refused; its console errors are dropped at the end by its unique address.
 const sent = await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false));
 check(sent === false, 'Content policy blocks every network request (connect-src none)');
+const fontsLoaded = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, '')); });
+check(fontsLoaded.includes('DM Sans') && fontsLoaded.includes('Outfit'), 'DM Sans and Outfit load from the app, with no outside request');
 await noHorizontalScroll('S0');
 for (const [i, href] of ['guides/race-fuel.html', 'guides/bike-pacing.html'].entries()) {
   await page.goto(base + '/index.html');
