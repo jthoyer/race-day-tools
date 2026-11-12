@@ -19,7 +19,13 @@ We send two things to our email service, [service name, country].
 - **Your email address.**
 - **Your race card.** The race name, date and distance, your pace targets and finish range, and your nutrition plan: carbs an hour, gel times and drinks. It also carries the "not medical advice" note.
 
-The service sends you one email with the PDF.
+The service sends you one email with the PDF. [Confirm where the service stores and handles data. If it is outside Australia, say so here and name the country.]
+
+### The email we send you
+
+You asked for it, so we send it. It comes from TRI Momentum, [sender name and address], and says who sent it.
+
+It carries your race card and nothing else. It has no advert and no offer. If we ever want to send you anything more, we will ask you first, and you can say no.
 
 ### What we don't send
 
@@ -47,7 +53,19 @@ Adding your email doesn't create an account. We don't ask you to make one.
 
 You don't need to give an email. Your plan works on your phone without one.
 
-If our email service keeps a record of your address, you can ask us to delete it. Write to [contact address].
+If our email service keeps a record of your address, you can ask us to delete it. Write to [contact address]. We will pass the request on and tell you when it is done.
+
+### See or correct your information
+
+You can ask what we hold about you, and ask us to correct it. Write to [contact address]. We will reply within [number] days.
+
+Because we use your address once and don't save it, there may be little to show you. [Confirm with the email service what it holds, so this answer is true.]
+
+### If you have a complaint
+
+Write to us first, at [contact address]. We will reply within [number] days.
+
+If you are not happy with our answer, you can complain to the Office of the Australian Information Commissioner (OAIC) at oaic.gov.au.
 
 ### Who we are
 
@@ -60,6 +78,10 @@ If this changes, we update this page and its date. Last updated: [date of launch
 ---
 
 ## Notes for the owner
+
+- **Added 12 November 2026:** the email section (consent, who sent it, no advert), a note on where the service handles data (APP 8), a way to see or correct your information (APPs 12 and 13) and a complaints route. These came from a check against general knowledge and secondary sources. The OAIC and ACMA pages themselves could not be read in the session, so confirm each point against them or with a lawyer.
+- **Does the Privacy Act apply to you?** Businesses with annual turnover of A$3 million or less are generally exempt, with exceptions. Whether that still holds in 2026 is unconfirmed. The statement is written to be true either way. Decide whether to say "we follow the Australian Privacy Principles" in so many words. It would be a promise.
+- **Spam Act:** the card email is something the person asked for. It stays outside "commercial" messages only while it has no promotion. Add a promotion and it needs consent, sender identification and an unsubscribe link, with the unsubscribe honoured within five working days (ACMA's figure; confirm).
 
 - **Blanks:** service name and country, what it keeps and for how long, a contact address, legal name, launch date.
 - **Wording to check:** "We keep no list of addresses" is true only if the service keeps nothing we can read back as a list. Confirm it before launch, or change the sentence.
