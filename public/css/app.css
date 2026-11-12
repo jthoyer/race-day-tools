@@ -914,13 +914,82 @@ details.test p {
   background: var(--surface);
 }
 .racecard .band {
+  display: grid;
+  gap: 14px;
+  padding: 14px 18px 16px;
+  background: var(--ink);
+  color: #fff;
+}
+.racecard .band .toprow,
+.racecard .band .who,
+.racecard .band .count {
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 76px;
-  padding: 14px 18px;
-  background: var(--go);
+}
+.racecard .band .toprow {
+  justify-content: space-between;
+  gap: 8px;
+}
+.racecard .band .k {
+  margin: 0;
+  color: var(--accent-hover);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+.racecard .band .editbtn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  margin: -10px -6px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--accent-hover);
+  font: 700 14px var(--body);
+  cursor: pointer;
+}
+.racecard .band .editbtn:hover {
   color: #fff;
+}
+.racecard .band .editbtn:focus-visible {
+  outline-color: #fff;
+}
+.racecard .band .rule {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.racecard .band .count {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 4px 16px;
+}
+.racecard .band .count .v {
+  margin: 0;
+  font: 700 28px/1.1 var(--display);
+}
+.racecard .band .taper {
+  display: grid;
+  justify-items: end;
+  gap: 0;
+  margin-left: auto;
+}
+.racecard .band .taper .editbtn {
+  margin: 0 -6px -10px;
+}
+.racecard .band .panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+}
+.racecard .band .panel:focus {
+  outline: 0;
 }
 .racecard .date {
   display: flex;
@@ -943,7 +1012,7 @@ details.test p {
   letter-spacing: 0;
   color: #fff;
 }
-.racecard .band p {
+.racecard .band .bt {
   margin: 0;
   color: rgba(255, 255, 255, 0.9);
   font-size: 14px;

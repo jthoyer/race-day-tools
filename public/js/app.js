@@ -16,6 +16,7 @@
   var raw = {}; // what the person is typing, before it parses
   var errors = {}; // field -> message, shown after they press Next
   var currentPrint = null; // what the print button and Ctrl+P print
+  var cardEdit = null; // which part of the race card header is open for editing: 'race', 'taper' or null
   var view = document.getElementById('view');
 
   function commit() { store.save(S); }
@@ -287,6 +288,7 @@
     currentPrint = null;
     if (!render.quiet) {
       aboutShown = false;
+      cardEdit = null; // a new visit to the race card opens with its header closed
       // The "targets saved" line shows on the first arrival at step 3 only, and stays while that screen redraws.
       if (savedNote === 'shown') savedNote = false;
       else if (savedNote === 'pending') savedNote = parts[0] === 'fuel' ? 'shown' : false;
@@ -519,14 +521,16 @@
 
   // Taper length (RD-011, RD-031): one tap for 10, 14 or 21 days, or pick the day it starts. Our guide is marked.
   // A picked day must fall 1 to 42 days before race day (pace.js, TAPER.limits); anything else is refused, not saved.
-  function taperPicker(r, tp) {
+  function taperPicker(r, tp) { return h('section', { class: 'card' }, taperControls(r, tp)); }
+  // The controls alone, so step 1 and the race card header share one set of rules.
+  function taperControls(r, tp) {
     var T_ = RD.pace.TAPER;
     var guide = RD.pace.taperDays(r.distance, null);
     var opts = T_.options.slice();
     if (opts.indexOf(guide) < 0) { opts.push(guide); opts.sort(function (a, b) { return a - b; }); }
     var picked = opts.indexOf(tp.len) >= 0 ? tp.len : null;
     var dateErr = errors['race.taperDate'];
-    return h('section', { class: 'card' },
+    return [
       h('p', { class: 'label' }, 'Taper length'),
       RD.ui.choice(opts.map(function (n) { return { value: n, label: n + ' days' + (n === guide ? ' (our guide)' : '') }; }), picked,
         function (v) { delete errors['race.taperDate']; delete raw['race.taperDate']; set('race.taperDays', v === guide ? null : v); refresh(); }, 'pill', 'Taper length'),
@@ -553,7 +557,7 @@
           })),
         dateErr ? h('p', { class: 'error', id: 'f-race-taperDate-err', role: 'alert' }, dateErr) : null),
       h('p', { class: 'help' }, 'We count back from race day. Our guide is ' + guide + ' days for ' + (r.distance === 'standard' ? 'an Olympic' : 'a 70.3') + ' race' +
-        (tp.own ? '. You chose ' + tp.len + '.' : '.') + ' If your coach says otherwise, go with your coach.'));
+        (tp.own ? '. You chose ' + tp.len + '.' : '.') + ' If your coach says otherwise, go with your coach.')];
   }
 
   function paceInput() {
@@ -778,8 +782,6 @@
   }
 
   function cardBody(r) {
-    var d = T.addDays(r.date, 0);
-    var days = T.daysUntil(r.date);
     var p = r.pace;
     var f = r.fuel;
     var paceSec;
@@ -816,17 +818,66 @@
         h('div', { class: 'sechead' }, h('p', { class: 'label' }, 'Nutrition'), h('a', { href: '#/fuel' }, 'Step 3')),
         p && r.splits ? h('p', null, 'Uses your splits: bike about ' + T.fmtHM(r.splits.bike) + ', run about ' + T.fmtHM(r.splits.run) + '.') : h('p', { class: 'small' }, 'Carbs, fluid and sodium per leg.'));
     }
-    return h('article', { class: 'racecard' },
-      h('div', { class: 'band' },
-        h('div', { class: 'date' },
-          h('strong', null, d ? String(d.getDate()) : '–'),
-          h('span', null, d ? d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase() : '')),
-        h('div', { style: 'flex:1;min-width:0' },
-          h('h1', { tabindex: '-1' }, raceTitle(r)),
-          h('p', null, [d ? d.toLocaleDateString('en-AU', { weekday: 'long' }) : '', daysText(days)].filter(Boolean).join(' · ')),
-          taperInfo(r) && taperInfo(r).short ? h('p', null, taperInfo(r).short) : null)),
-      paceSec,
-      nutSec);
+    return h('article', { class: 'racecard' }, heroBand(r), paceSec, nutSec);
+  }
+
+  // The race card header: race name and date, the countdown and the taper in one band. "Edit race" and "Edit taper"
+  // open a panel in the band, so nobody leaves the card. Details save as they are typed, so the panel has Done, not Save.
+  // The countdown stays in view and moves as the date or the taper changes.
+  function heroBand(r) {
+    var d = T.addDays(r.date, 0);
+    var days = T.daysUntil(r.date);
+    var tp = taperInfo(r);
+    var canTaper = !!tp && days >= 0; // the same rule as step 1: no taper to edit without a date, or after race day
+    var open = cardEdit === 'taper' && !canTaper ? null : cardEdit;
+    function toggle(which) {
+      return function () {
+        cardEdit = open === which ? null : which;
+        delete errors['race.taperDate'];
+        delete raw['race.taperDate'];
+        refresh();
+        var target = cardEdit === 'race' ? document.getElementById('f-race-name') : cardEdit === 'taper' ? document.getElementById('card-panel') : null;
+        if (target) target.focus();
+      };
+    }
+    function done() {
+      // Step 1 does the same: a race left without a name is called "My race".
+      if (!r.name) set('race.name', 'My race');
+      cardEdit = null;
+      delete errors['race.taperDate'];
+      delete raw['race.taperDate'];
+      refresh();
+      var back = document.getElementById('card-edit-' + open);
+      if (back) back.focus();
+    }
+    function panel(label, kids) {
+      return h('div', { class: 'panel', id: 'card-panel', role: 'group', 'aria-label': label, tabindex: '-1' },
+        kids, h('button', { type: 'button', class: 'btn second', onclick: done }, 'Done'));
+    }
+    var summary = h('div', { class: 'who' },
+      h('div', { class: 'date' },
+        h('strong', null, d ? String(d.getDate()) : '–'),
+        h('span', null, d ? d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase() : '')),
+      h('div', { style: 'flex:1;min-width:0' },
+        h('h1', { tabindex: '-1' }, raceTitle(r)),
+        d ? h('p', { class: 'bt' }, longDate(r.date)) : null));
+    var count = daysText(days);
+    return h('div', { class: 'band' },
+      h('div', { class: 'toprow' },
+        h('p', { class: 'k' }, 'YOUR RACE'),
+        h('button', { type: 'button', class: 'editbtn', id: 'card-edit-race', 'aria-expanded': String(open === 'race'), onclick: toggle('race') }, 'Edit race')),
+      open === 'race' ? null : summary,
+      open === 'race' ? panel('Edit race', [
+        bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3', live: refresh }),
+        bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
+        r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.')]) : null,
+      count || (tp && tp.short) ? h('div', { class: 'rule' }) : null,
+      h('div', { class: 'count' },
+        count ? h('p', { class: 'v' }, count) : null,
+        tp && tp.short || canTaper ? h('div', { class: 'taper' },
+          tp && tp.short ? h('p', { class: 'bt' }, tp.short) : null,
+          canTaper ? h('button', { type: 'button', class: 'editbtn', id: 'card-edit-taper', 'aria-expanded': String(open === 'taper'), onclick: toggle('taper') }, 'Edit taper') : null) : null),
+      open === 'taper' ? panel('Edit taper', taperControls(r, tp)) : null);
   }
 
   // The pace behind one leg of the pace plan, in the middle of its range: "~1:45 /100m", "~34 km/h", "~4:50 /km" (RD-030).

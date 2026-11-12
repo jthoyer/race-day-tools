@@ -29,13 +29,13 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Ink | `#182542` | Text and dark surfaces |
+| Ink | `#182542` | Text and dark surfaces, including the race card header |
 | Yellow | `#f8c44f` | The one primary button on a screen |
 | Text blue | `#0070a8` | Links. Never use the club's brand blue `#00a3e0` for text on white: it fails contrast at 2.9:1 |
 | Muted | `#566177` | Secondary text |
 | Line | `#d9dfe8` | Borders |
 | Canvas | `#f7f8fa` | Page background |
-| Green | `#116b43` | Done, and the race card band |
+| Green | `#116b43` | Done |
 | Light blue (`--info-bg`) | `#eaf7fc` | Step 4, the race card, in the rail and the step list |
 
 - DM Sans for body and controls, Outfit for headings and the wordmark. Both are open fonts (SIL Open Font License). They ship in `public/fonts/`, so no page asks another host for anything. The licence text is in `public/fonts/LICENSE.txt`.
