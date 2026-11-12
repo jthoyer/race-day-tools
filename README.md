@@ -1,6 +1,6 @@
 # Race-day tools
 
-Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can print for your top tube. It's a static web app. It runs on the athlete's phone with no account, no server and no health data held. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
+Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can print for your top tube. It's a static web app. It runs on the athlete's phone with no account and no health data held. It has no server of its own. The one planned exception is emailing the race card as a PDF (spec criterion 28, not built). Printing from the phone goes when that is built. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
 
 This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Countdown and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
 
@@ -54,7 +54,7 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 Set up outside the repo, so a rebuild would lose it: in the repo's **Settings → Pages**, *Source* is **GitHub Actions**.
 
-GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'none'` means the page can make no network request. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
+GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'none'` means the page can make no network request. That stays until email is built, when the policy names the email service and nothing else. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
 
 The longer-term host and domain are still open (D4).
 
@@ -119,7 +119,7 @@ These are from the blueprint and stay open. The code leaves room for each.
 
 - **D2** Restoring a purchase with no accounts. No payments yet.
 - **D3** Counting without tracking health data. No analytics yet.
-- **D4** Email, offline copy and hosting.
+- **D4** The email tool, an offline copy and hosting. Email is in scope (12 November 2026); the tool is not chosen.
 - **D6** Where the paywall sits in pace set-up. Everything is free in this build.
 
 Decided:
