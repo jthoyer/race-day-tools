@@ -77,6 +77,20 @@ const isoLocal = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padS
 const inDays = (d) => isoLocal(new Date(Date.now() + d * 86400000));
 const CLOCK = /\d{1,2}:\d\d ?(am|pm)/i;
 
+// RD-039 A12. The emailed PDF and the print card cannot drift: the print card's lines, without its race title and date,
+// equal the PDF's rows, in order and word for word. Needs the print card built (a beforeprint event) first.
+async function printMatchesPdfRows(where, fuelStale) {
+  const printed = await page.locator('.tt').evaluate((e) => [...e.children].map((c) => c.textContent));
+  const rows = await page.evaluate(([k, stale]) => {
+    const race = JSON.parse(localStorage.getItem(k)).race;
+    return window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
+  }, [KEY, fuelStale]);
+  const dated = await page.evaluate((k) => !!JSON.parse(localStorage.getItem(k)).race.date, KEY);
+  const lines = printed.slice(dated ? 2 : 1);
+  check(rows.length > 4 && JSON.stringify(lines) === JSON.stringify(rows.slice(1).map((r) => r.text)), `${where} text equals the PDF rows, line for line (${lines.length} lines)`);
+  check(/^TRI Momentum race card · (Olympic|70\.3)$/.test(rows[0].text) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the PDF title row has the distance and no race name, and no row has a time of day`);
+}
+
 // 28 and 29: no whole word "fuel" and no "Standard" in what a person reads.
 async function wordsClean(where) {
   const t = await appText();
@@ -555,6 +569,13 @@ check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test
 check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'Print card has your gel times, their km, the KM_NOTE and not medical advice');
 check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'Print card has no start time, no transition and no time of day');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
+await printMatchesPdfRows('Print card', false);
+const drawn = await page.evaluate((k) => {
+  const race = JSON.parse(localStorage.getItem(k)).race;
+  const bytes = window.RD.card.drawPdf(window.jspdf.jsPDF, window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: false }));
+  return { head: String.fromCharCode(...bytes.subarray(0, 5)), size: bytes.length };
+}, KEY);
+check(drawn.head === '%PDF-' && drawn.size > 500 && drawn.size < 33000, `The vendored library draws the card in the browser under the content policy (${drawn.size} bytes)`);
 const ttw = await page.locator('.tt').evaluate((e) => e.getBoundingClientRect().width);
 check(ttw > 230 && ttw < 300, `Print card is about 70 mm wide (${Math.round(ttw)} CSS px)`);
 await shot('print');
@@ -654,6 +675,7 @@ check(/changed since this plan/.test(await page.locator('.racecard').innerText()
 await page.emulateMedia({ media: 'print' });
 await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
 check(/Nutrition plan out of date\. Update it before race day\./.test(await page.locator('.tt').textContent()), 'The print card says "Nutrition plan out of date. Update it before race day."');
+await printMatchesPdfRows('Out-of-date print card', true);
 await page.emulateMedia({ media: 'screen' });
 await page.goto(base + '/index.html#/fuel');
 await page.getByRole('button', { name: 'Update my race card' }).click();

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const ROOT = path.join(__dirname, '..', 'public');
 const PAGES = ['index.html', 'guides/bike-pacing.html', 'guides/race-fuel.html'];
@@ -81,4 +82,20 @@ test('every font file app.css names is shipped, and the licence ships with them'
     assert.ok(fs.existsSync(path.resolve(ROOT, 'css', url)), `${url} is missing`);
   }
   assert.match(fs.readFileSync(path.join(ROOT, 'fonts', 'LICENSE.txt'), 'utf8'), /SIL OPEN FONT LICENSE/i);
+});
+
+test('the vendored PDF library ships with its licence, pinned, and has not been edited', () => {
+  const dir = path.join(ROOT, 'js', 'vendor');
+  const lib = fs.readFileSync(path.join(dir, 'jspdf.umd.min.js'));
+  const licence = fs.readFileSync(path.join(dir, 'jspdf.LICENSE.txt'), 'utf8');
+  assert.match(licence, /MIT/);
+  assert.match(licence, /Permission is hereby granted, free of charge/, 'the licence text itself is there');
+  const version = /^jsPDF (\d+\.\d+\.\d+), MIT licence\./.exec(licence);
+  assert.ok(version, 'the licence file header names the version');
+  assert.ok(lib.toString('utf8', 0, 400).includes('Version ' + version[1] + ' '), 'the file is the version the header says');
+  assert.equal(/SHA-256: ([0-9a-f]{64})/.exec(licence)[1], crypto.createHash('sha256').update(lib).digest('hex'), 'a vendored file is never edited by hand');
+  assert.equal(Number(/Size:\s+(\d+) bytes/.exec(licence)[1]), lib.length);
+  assert.ok(lib.length < 500 * 1024, 'the browser build stays under 500 KB: ' + lib.length);
+  assert.match(html['index.html'], /<script src="js\/vendor\/jspdf\.umd\.min\.js\?v=\d+"><\/script>[\s\S]*<script src="js\/card\.js\?v=\d+"><\/script>[\s\S]*<script src="js\/app\.js\?v=\d+"><\/script>/, 'loaded before the app script');
+  for (const p of PAGES.slice(1)) assert.doesNotMatch(html[p], /jspdf|card\.js/, p + ' has no race card, so it does not load the PDF code');
 });
