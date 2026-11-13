@@ -369,7 +369,7 @@ test('A17: an inline image hidden by a comment or a NUL, and fonts that carry a 
     assert.equal(r.d.fetch.calls.length, 0, what + ' reached the mail service');
   }
   // BI inside ordinary words and text is not an operator.
-  for (const ok of ['/BIG 1 /OBIT 2 /NUBIAN', '(BIG day BI)', '(A BIKE)', '/Name /BI']) assert.equal((await send(good({ pdf: pdfWith(ok) }))).res.status, 200, ok);
+  for (const ok of ['(/BIG 1 /OBIT 2 /NUBIAN)', '(BIG day BI)', '(A BIKE)', '(/Name /BI)']) assert.equal((await send(good({ pdf: pdfWith(ok) }))).res.status, 200, ok);
 });
 
 test('A17: /OpenAction only as jsPDF writes it, and /BaseFont only Helvetica or Helvetica-Bold', async () => {
@@ -378,9 +378,9 @@ test('A17: /OpenAction only as jsPDF writes it, and /BaseFont only Helvetica or 
     const r = await send(good({ pdf: pdfWith(extra) }));
     assert.equal(r.res.status, 400, extra);
   }
-  assert.equal((await send(good({ pdf: pdfWith('/BaseFont /Helvetica\n/BaseFont /Helvetica-Bold') }))).res.status, 200);
+  assert.equal((await send(good({ pdf: pdfWith('/Type /Font /BaseFont /Helvetica\n/Type /Font /BaseFont /Helvetica-Bold') }))).res.status, 200);
   for (const font of ['Courier', 'Helvetica-Oblique', 'Times-Roman', 'ABCDEF+Arial', 'HelveticaX', '']) {
-    const r = await send(good({ pdf: pdfWith('/BaseFont /' + font) }));
+    const r = await send(good({ pdf: pdfWith('/Type /Font /BaseFont /' + font) }));
     assert.equal(r.res.status, 400, 'font ' + font);
   }
 });
@@ -413,6 +413,167 @@ test('A20: IPv6 visitors are one visitor per /64, IPv4 per address', async () =>
   assert.equal((await send(good(), { ip: prefix + ':9:8:7:6', d })).res.status, 429);
   assert.equal((await send(good(), { ip: '2001:db8:' + (++n).toString(16) + ':2::1', d })).res.status, 200, 'another /64 is another visitor');
 });
+
+// ---- round 3: the allowlist (main rule), the grammar, and the deny list and BI pattern as a second layer ----
+
+const raw = (body) => b64(Buffer.from('%PDF-1.3\n' + body, 'latin1')); // no %%EOF: the body can end on a token
+// The deny list, written out here as a literal so that dropping a word from the code cannot also drop it from the test.
+const DENY_LIST = ['/JavaScript', '/JS', '/Launch', '/EmbeddedFile', '/RichMedia', '/XFA', '/AA', '/URI', '/SubmitForm', '/ImportData', '/Filter', '/ObjStm', '/Annots', '/XObject', '/Image', '/GoToR', '/GoToE', '/Encrypt', '/Names', '/Rendition', '/Sound', '/Movie', '/Named', '/FontDescriptor', '/FontFile', '/Type3', '/CharProcs', '/Type0', '/DescendantFonts', '/TrueType', '/CIDFont', '/ToUnicode', '/AcroForm', '/Metadata', '/OutputIntents', '/ICCBased', '/ColorSpace', '/Shading', '/Pattern', '/FunctionType', '/ExtGState', '/SMask', '/Group', '/Outlines', '/Thread', '/OCProperties', '/Collection', '/PieceInfo', '/AF'];
+const refused = async (pdf) => { const r = await send(good({ pdf })); return [r.res.status, r.d.fetch.calls.length]; };
+
+// Every PDF the real card can produce: normal, out of date, a 40-gel card, and the committed fixture.
+function realPdfs() {
+  const C = require('../public/js/card.js');
+  const P = require('../public/js/pace.js');
+  const F = require('../public/js/fuel.js');
+  const { jsPDF } = require('../public/js/vendor/jspdf.umd.min.js');
+  const pace = P.planPace({ distance: '70.3', mode: 'power', css: 105, ftp: 240, ftpRecent: true, runThreshold: 290, weight: 72, course: 'rolling', heat: 'warm' });
+  const [G, D] = F.DEFAULT_PRODUCTS;
+  const fuel = F.planFuel({ distance: '70.3', bikeMin: 110, runMin: 45, heat: 'warm', gut: 70, sweat: null, gel: G, drink: D });
+  const times = Array.from({ length: 40 }, (_, i) => 10 + i * 5);
+  const big = { ...fuel, bike: { ...fuel.bike, gels: 40, gelTimes: times, minutes: 300 }, run: { ...fuel.run, gels: 40, gelTimes: times, minutes: 300 } };
+  const draw = (f, stale) => Buffer.from(C.drawPdf(jsPDF, C.rows({ race: { distance: '70.3' }, pace, fuel: f, fuelStale: stale }))).toString('latin1');
+  return { normal: draw(fuel, false), stale: draw(fuel, true), gels40: draw(big, true), fixture: FIXTURE.toString('latin1') };
+}
+
+test('round 3 control: every name in real output is on the allowlist, and the allowlist holds nothing else', async () => {
+  const names = new Set();
+  for (const [what, bin] of Object.entries(realPdfs())) {
+    const text = mod.stripStrings(bin);
+    assert.notEqual(text, null, what + ': the real card must follow the grammar rules');
+    for (const m of text.matchAll(/\/[^\s\0()<>[\]{}/%]*/g)) names.add(m[0]);
+    assert.ok(mod.pdfStructureOk(bin), what + ': a name in real jsPDF output is not on the allowlist. A new name needs review: read it, then add it to ALLOWED_NAMES in functions/api/send.js.');
+    assert.equal((await send(good({ pdf: b64(Buffer.from(bin, 'latin1')) }))).res.status, 200, what + ' is accepted');
+  }
+  assert.deepEqual([...names].sort(), [...mod.ALLOWED_NAMES].sort(), 'the allowlist is exactly the union of the names the real card holds');
+  assert.deepEqual([...mod.ALLOWED_NAMES], [...mod.ALLOWED_NAMES].sort(), 'the allowlist is written alphabetically');
+});
+
+test('round 3 control: nothing on the deny list is in real output, so the second layer never refuses a real card', () => {
+  const denied = DENY_LIST;
+  assert.equal(denied.length, 49);
+  for (const [what, bin] of Object.entries(realPdfs())) {
+    const scrubbed = bin.replace(/\/ProcSet \[\/PDF \/Text \/ImageB \/ImageC \/ImageI\]/g, '').replace(/\/XObject <<\s*>>/g, '');
+    for (const word of denied) assert.ok(!scrubbed.includes(word), `${what} holds ${word}`);
+  }
+});
+
+// One test per crafted case. Each must be refused, and must never reach the mail service.
+const crafted = {
+  'BI with a % comment': 'q BI%x\n ID x EI Q',
+  'BI then NUL': 'q BI\0 ID x EI Q',
+  'BI after a digit (1BI)': 'q 1BI ID x EI Q',
+  'BI after a dot': 'q .BI ID x EI Q',
+  'BI after [': 'q [BI ID x EI] Q',
+  'BI after ]': 'q [1]BI ID x EI Q',
+  'BI after {': 'q {BI ID x EI} Q',
+  'BI after }': 'q {}BI ID x EI Q',
+  'BI after ) (a string, then BI)': 'q (a)BI ID x EI Q',
+  'BI after >': 'q <<>>BI ID x EI Q',
+  'BI after <': 'q <BI ID x EI> Q',
+  'BI inside a string': 'q (x BI y) Q',
+  'BI right after (': 'q (BI x) Q',
+  'BI after NUL': 'q\0BI ID x EI Q',
+  'BI after a space': 'q BI ID x EI Q',
+  'BI as the last token': null,
+  'BI then / inside a string': '(q BI/W 1)',
+  'BI then % inside a string': '(q BI%x)',
+  'BI then NUL inside a string': '(q BI\0x)',
+  'BI with names': 'q BI /W 1 /H 1 /CS /G /BPC 8 ID x EI Q',
+  '/BaseFont 9 0 R': '/Type /Font /Subtype /Type1 /BaseFont 9 0 R',
+  'a font with no /BaseFont': '/Type /Font /Subtype /Type1 /Encoding /WinAnsiEncoding',
+  '/Type0': '/Type /Font /Subtype /Type0',
+  '/CIDFontType0': '/Subtype /CIDFontType0',
+  '/TrueType': '/Subtype /TrueType',
+  '/AcroForm': '/AcroForm << >>',
+  '/ICCBased': '[/ICCBased 5 0 R]',
+  '/Metadata': '/Metadata 7 0 R',
+  '/Pattern': '/Pattern << >>',
+  '/Shading': '/Shading << >>',
+  '/Function': '/Function 4 0 R',
+  '/FunctionType': '/FunctionType 2',
+  '/ExtGState': '/ExtGState << >>',
+  '/OutputIntents': '/OutputIntents [7 0 R]',
+  '/Outlines': '/Outlines 8 0 R',
+  '/Dests': '/Dests 9 0 R',
+  '/Link': '/Subtype /Link',
+  '/Uri': '/Uri (https://x.example.test)',
+  '/Annot': '/Type /Annot',
+  '/S /Thread': '/S /Thread /F 5 0 R',
+  '/S /GoTo': '/S /GoTo /D [3 0 R /Fit]',
+  '/S /Hide': '/S /Hide',
+  '/SetOCGState': '/S /SetOCGState',
+  'an unclosed string': 'BT (abc ET',
+  'a stray )': 'BT abc) ET',
+  'an unbalanced ( inside a string': 'BT (a (b) ET',
+  'a string closed by an escaped )': 'BT (abc\\) ET',
+  'a comment in a stream': 'BT %hello\nET',
+  'a comment after the body': '%not the marker\n',
+  'a name hidden by a #xx escape': '/T#79pe0',
+  'a name hidden by a #xx escape (allowed letters)': '/Pa#67e',
+  'a name not on the list': '/Notes 1'
+};
+for (const [what, body] of Object.entries(crafted)) {
+  test(`round 3 refuses: ${what}`, async () => {
+    const pdf = body === null ? raw('q 1 0 0 1 0 0 cm BI') : body.startsWith('%') ? b64(Buffer.from('%PDF-1.3\n1 0 obj\n' + body + '\n%%EOF\n', 'latin1')) : pdfWith(body);
+    assert.deepEqual(await refused(pdf), [400, 0]);
+  });
+}
+
+test('round 3: every name on the deny list is refused when only a string mentions it (the second layer, by itself)', async () => {
+  const denied = DENY_LIST;
+  for (const word of denied) {
+    assert.equal(mod.pdfStructureOk(pdfWithText(`(${word})`)), true, word + ' inside a string is not a name to the allowlist');
+    assert.deepEqual(await refused(pdfWith(`(${word})`)), [400, 0], word + ' is on the deny list');
+  }
+});
+
+function pdfWithText(extra) { return Buffer.from(atob(pdfWith(extra)), 'latin1').toString('latin1'); }
+
+test('round 3: a name inside a balanced literal string is text, not a name (the allowlist step)', () => {
+  for (const text of ['(see /Type0)', '(a \\) still /Type0)', '(a (b /Type0) c)', '(\\\\)', '(a\\(b)', '(/AcroForm /Pattern)']) {
+    assert.equal(mod.pdfStructureOk(pdfWithText(text)), true, text);
+  }
+  // The same words outside a string are names and are refused.
+  for (const text of ['/Type0', '(ok) /Type0', '(a) /Type0 (b)']) assert.equal(mod.pdfStructureOk(pdfWithText(text)), false, text);
+  // An attacker's unbalanced "(" or ")" is refused, so a string cannot be used to hide a name from the reading above.
+  for (const text of ['(abc /Type0', 'abc) /Type0', '(a (b) /Type0', '(a \\) /Type0']) assert.equal(mod.pdfStructureOk(pdfWithText(text)), false, text);
+});
+
+test('round 3: a % comment is allowed only in the header, the marker line and the final %%EOF', () => {
+  const ok = '%PDF-1.3\n%\xba\xdf\xac\xe0\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n';
+  assert.equal(mod.pdfStructureOk(ok), true);
+  assert.equal(mod.pdfStructureOk('%PDF-1.3\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF'), true, 'the marker line is optional');
+  assert.equal(mod.pdfStructureOk(ok.replace('endobj', '% sneaky\nendobj')), false, 'a comment in the body');
+  assert.equal(mod.pdfStructureOk(ok + '%trailing comment\n'), false, 'a comment after %%EOF');
+  assert.equal(mod.pdfStructureOk(ok.replace('\n%%EOF', '\n%%EOF extra')), false);
+  assert.equal(mod.pdfStructureOk('%PDF-1.3\n%marker\n%second comment line\n1 0 obj\n%%EOF'), false, 'only one marker line');
+  assert.equal(mod.pdfStructureOk('PDF-1.3\n'), false);
+  assert.equal(mod.pdfStructureOk('%PDF-1.3'), false, 'no header line ending');
+});
+
+test('round 3: a % inside a literal string is text, not a comment', () => {
+  assert.equal(mod.pdfStructureOk(pdfWithText('(100% sure)')), true);
+});
+
+test('round 3: text injected into the page stream is accepted, with a name-like word in it as plain text', async () => {
+  const bin = realPdfs().normal.replace('Water at each aid station', 'Water at each aid station (see /Type0 and BIG)');
+  // Both the allowlist step and the second layer see "/Type0" in a string: the second layer refuses it, by design, and the
+  // allowlist alone accepts it. Plain words with no name-like token pass both.
+  const plain = realPdfs().normal.replace('Water at each aid station', 'Water at each aid station, and a sip');
+  assert.equal((await send(good({ pdf: b64(Buffer.from(plain, 'latin1')) }))).res.status, 200);
+  assert.equal(mod.pdfStructureOk(bin), true);
+  assert.equal((await send(good({ pdf: b64(Buffer.from(bin, 'latin1')) }))).res.status, 400);
+});
+
+test('round 3: a hostile font entry is refused whatever comes next', async () => {
+  for (const base of ['/BaseFont 9 0 R', '/BaseFont [/Helvetica]', '/BaseFont (Helvetica)', '/BaseFont', '/BaseFont /Helvetica-Oblique', '/BaseFont/Courier']) {
+    assert.deepEqual(await refused(pdfWith('/Type /Font ' + base)), [400, 0], base);
+  }
+  assert.equal((await send(good({ pdf: pdfWith('/Type /Font /BaseFont/Helvetica') }))).res.status, 200, 'a direct name with no space is the same token');
+  assert.deepEqual(await refused(pdfWith('/Type /Font /BaseFont /Helvetica /Type /Font')), [400, 0], 'a font with no BaseFont of its own');
+});
+
 
 test('A17: the committed fixture, drawn by the vendored library from made-up data, is accepted, with room to spare', async () => {
   assert.ok(FIXTURE.subarray(0, 5).toString() === '%PDF-');

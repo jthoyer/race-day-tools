@@ -27,27 +27,94 @@ const MAX_BODY_BYTES = 140000; // the whole request body
 const MAX_PDF_BYTES = 100000; // the PDF once decoded. The real card is about 2 KB.
 const PROVIDER_TIMEOUT_MS = 10000;
 
-// What this checks cuts down what can be sent from our sender address; it does NOT stop phishing. Anyone can type
-// text and a web address into a PDF, and plain text passes every check below. Only a PDF built on the server from the
-// plan would close that, and the owner declined it. So the PDF is held to what our own card holds: no script, link,
-// form, file, image, encryption or compressed stream, one catalog entry in jsPDF's own form, and Helvetica only.
+// WHAT THIS CHECKS, and what it does not. The PDF is read the way a PDF reader reads it, and held to what our own card
+// holds, in two layers:
+//   1. An ALLOWLIST (the main rule). Literal strings ( ... ) are removed by the PDF grammar (balanced parentheses,
+//      backslash escapes; an unclosed string is refused). A % comment is allowed only in the header line, the binary
+//      marker line after it, and the final %%EOF. Then every /Name in the file, streams included (the PDF must be
+//      uncompressed), must be one of ALLOWED_NAMES, the names the real card holds. A name with a # escape is refused,
+//      and every /BaseFont must be followed directly by /Helvetica or /Helvetica-Bold. Fonts, images, forms, actions,
+//      links, colour spaces and the rest need names that are not on the list, so they are refused without this file
+//      having to know about each of them.
+//   2. A DENY LIST of names and an inline-image pattern, run over the raw bytes, strings included. It is defence in depth:
+//      it does not depend on the reading above being right, and it refuses even where a string only mentions a name.
+// WHAT IT DOES NOT DO: stop phishing. Anyone can type text, including a web address a reader turns into a link, into a
+// PDF's page text, and plain text passes both layers. Only a PDF built on the server from the plan would close that;
+// the owner declined it. This cuts down what can be sent from our address. It does not make what is sent trustworthy.
+
+// Every name in jsPDF 4.2.1's output for the card: the normal, the out-of-date and a 40-gel card, and the committed
+// fixture (tests/fixtures/race-card.pdf), collected by reading the real bytes and taking the union. Alphabetical.
+// A jsPDF upgrade that writes a new name fails the control test in tests/send.test.js: review the name, then add it here.
+export const ALLOWED_NAMES = new Set(['/BaseFont', '/Catalog', '/Contents', '/Count', '/CreationDate', '/Encoding', '/F1', '/F2', '/FirstChar', '/FitH', '/Font',
+  '/Helvetica', '/Helvetica-Bold', '/ID', '/ImageB', '/ImageC', '/ImageI', '/Info', '/Kids', '/LastChar', '/Length', '/MediaBox', '/OneColumn', '/OpenAction',
+  '/PDF', '/Page', '/PageLayout', '/Pages', '/Parent', '/ProcSet', '/Producer', '/Resources', '/Root', '/Size', '/Subtype', '/Text', '/Title', '/Type', '/Type1',
+  '/WinAnsiEncoding', '/XObject']);
+
 const DENIED = ['/JavaScript', '/JS', '/Launch', '/EmbeddedFile', '/RichMedia', '/XFA', '/AA', '/URI', '/SubmitForm', '/ImportData', '/Filter', '/ObjStm',
   '/Annots', '/XObject', '/Image', '/GoToR', '/GoToE', '/Encrypt', '/Names', '/Rendition', '/Sound', '/Movie', '/Named',
-  '/FontDescriptor', '/FontFile', '/Type3', '/CharProcs'];
-// jsPDF writes these two on every page. Each is removed (exact text only) before the list above is applied: the first
+  '/FontDescriptor', '/FontFile', '/Type3', '/CharProcs',
+  '/Type0', '/DescendantFonts', '/TrueType', '/CIDFont', '/ToUnicode', '/AcroForm', '/Metadata', '/OutputIntents', '/ICCBased', '/ColorSpace', '/Shading',
+  '/Pattern', '/FunctionType', '/ExtGState', '/SMask', '/Group', '/Outlines', '/Thread', '/OCProperties', '/Collection', '/PieceInfo', '/AF'];
+// jsPDF writes these two on every page. Each is removed (exact text only) before the deny list is applied: the first
 // names image types the page does not use, the second is an empty dictionary. Anything else with those names is refused.
 const JSPDF_OWN = [/\/ProcSet \[\/PDF \/Text \/ImageB \/ImageC \/ImageI\]/g, /\/XObject <<\s*>>/g];
 // A "#xx" hex escape inside a name can spell any of the above without the plain text matching.
 const NAME_WITH_HEX_ESCAPE = /\/[^\s/[\]<>(){}%]*#[0-9A-Fa-f]{2}/;
-// An inline image starts with the operator BI. In PDF, whitespace, NUL and a few delimiters end a token, and a % comment or a
-// name can follow BI with no space, so those are all boundaries.
-const INLINE_IMAGE = /(?:^|[\s\0\])>])BI(?=[\s\0%/]|$)/;
-// Names and actions a PDF may carry only in the form jsPDF writes: an open-at-page entry, and the two Helvetica faces.
-function oddCatalogOrFont(bin) {
-  const opens = (bin.match(/\/OpenAction/g) || []).length;
-  const own = (bin.match(/\/OpenAction \[\d+ 0 R \/FitH null\]/g) || []).length;
-  if (opens !== own) return true;
-  return [...bin.matchAll(/\/BaseFont\s*\/([^\s/[\]<>()]*)/g)].some((m) => m[1] !== 'Helvetica' && m[1] !== 'Helvetica-Bold');
+// An inline image starts with the operator BI. Whitespace, NUL and the PDF delimiters (and a digit or dot before it) end a
+// token, and a % comment or a name can follow BI with no space, so all of those are boundaries.
+const INLINE_IMAGE = /[\s\0()<>[\]{}0-9.]BI(?=[\s\0%/]|$)/;
+
+// The PDF read as a reader reads it. Returns the text with literal strings emptied to "()", or null if the PDF breaks the
+// grammar rules above (a comment where none is allowed, an unclosed or unbalanced string, a "(" or ")" the reader would
+// treat differently).
+export function stripStrings(bin) {
+  const head = /^%PDF-\d\.\d[^\r\n]*(\r\n|\r|\n)/.exec(bin);
+  if (!head) return null;
+  let i = head[0].length;
+  const marker = /^%[^\r\n]*(\r\n|\r|\n)/.exec(bin.slice(i)); // the optional binary-marker line
+  if (marker) i += marker[0].length;
+  const tail = /\r?\n?%%EOF\s*$/.exec(bin);
+  const end = tail && tail.index >= i ? tail.index : bin.length;
+  let out = '';
+  while (i < end) {
+    const c = bin[i];
+    if (c === '%') return null; // a comment anywhere else
+    if (c === '(') {
+      let depth = 1;
+      i += 1;
+      while (i < end && depth > 0) {
+        const d = bin[i];
+        if (d === '\\') i += 1;
+        else if (d === '(') depth += 1;
+        else if (d === ')') depth -= 1;
+        i += 1;
+      }
+      if (depth !== 0) return null; // an unclosed string
+      out += '()';
+      continue;
+    }
+    if (c === ')') return null; // a ")" with no "(" before it
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+// True if the PDF follows the grammar rules and every name is on the allowlist (the main rule).
+export function pdfStructureOk(bin) {
+  const text = stripStrings(bin);
+  if (text === null) return false;
+  for (const m of text.matchAll(/\/[^\s\0()<>[\]{}/%]*/g)) {
+    if (m[0].includes('#') || !ALLOWED_NAMES.has(m[0])) return false;
+  }
+  // Every font names itself, directly, as one of the two Helvetica faces.
+  const base = (text.match(/\/BaseFont(?![^\s\0()<>[\]{}/%])/g) || []).length;
+  const good = (text.match(/\/BaseFont\s*\/Helvetica(?:-Bold)?(?=[\s\0()<>[\]{}/%]|$)/g) || []).length;
+  const fonts = (text.match(/\/Type\s*\/Font(?![^\s\0()<>[\]{}/%])/g) || []).length;
+  if (base !== good || fonts !== base) return false;
+  // The open-at-page entry only in the form jsPDF writes.
+  const opens = (text.match(/\/OpenAction/g) || []).length;
+  return opens === (text.match(/\/OpenAction \[\d+ 0 R \/FitH null\]/g) || []).length;
 }
 
 const LATER = { status: 503, result: 'later' };
@@ -204,7 +271,8 @@ function checkPdf(pdf) {
   const bin = atob(pdf);
   if (!bin.startsWith('%PDF-')) return { reply: REFUSED(400) };
   const scan = JSPDF_OWN.reduce((t, re) => t.replace(re, ''), bin);
-  if (DENIED.some((word) => scan.includes(word)) || NAME_WITH_HEX_ESCAPE.test(scan) || INLINE_IMAGE.test(scan) || oddCatalogOrFont(scan)) return { reply: REFUSED(400) };
+  if (!pdfStructureOk(bin)) return { reply: REFUSED(400) };
+  if (DENIED.some((word) => scan.includes(word)) || NAME_WITH_HEX_ESCAPE.test(scan) || INLINE_IMAGE.test(scan)) return { reply: REFUSED(400) };
   return { bin };
 }
 
