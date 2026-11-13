@@ -58,6 +58,17 @@ GitHub Pages can't set response headers, so each page carries its content policy
 
 The longer-term host and domain are still open (D4).
 
+**Owner set-up for email, not done.** None of these has been done:
+
+- Create the Resend account and a send-only key. Not done.
+- Set `RESEND_API_KEY` and `MAIL_FROM` as secrets on the host, never in the repo. Not done.
+- A separate sending subdomain with SPF, DKIM and DMARC (the domain is not chosen). Not done.
+- A Cloudflare rate-limiting rule on POST `/api/send`; the in-code limiter is best-effort per instance and is not a real limit. Not done.
+- Resend usage alerts or a cap. Not done.
+- The host move from GitHub Pages to Cloudflare Pages (step 5; the owner decides). Not done.
+- Check Resend's data retention against the "We don't keep it" wording. Not done.
+- Check the Resend request shape (endpoint, header, body), which is UNVERIFIED against Resend's docs. Not done.
+
 ## Contributing
 
 Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUTING.md](CONTRIBUTING.md). Agents also follow [AGENTS.md](AGENTS.md).
@@ -77,7 +88,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/app.js` | The screens: home (the front page, and coming back, with the guide links at the bottom of the front page), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, print, and the rail (Race, Pacing, Nutrition, Race card) that joins them. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
-| `functions/api/send.js` | The one server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing, logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
+| `functions/api/send.js` | The one server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing durable (the limiter keeps hashes of the address and visitor in memory only); logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
 | `public/_headers` | Security headers and the content policy. |
 | `public/fonts/` | DM Sans and Outfit as variable `.woff2` files, in two subsets each (Latin, and Latin Extended for other letters), with their licence. Declared at the top of `css/app.css`. |
 | `tests/` | Unit tests (`node --test`). |
@@ -114,6 +125,8 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Gel timing limits | `TIMING_EVERY`, `END_GAP` | a gel every 5–120 min; none in the last 10 min of a leg |
 | Carb list on My products | `CARB_PICK` | 20–50 g in 5 g steps (a figure off the list goes under Other) |
 
+**Email must not go live while these ranges are marked UNCHECKED (RD-005):** the PDF carries them off the phone and has no DRAFT mark (the owner decided no DRAFT mark, 13 Nov 2026).
+
 Good places to check them: the ACSM position stands on nutrition and on fluid replacement, and the consensus statements on exercise-associated hyponatraemia.
 
 ## Open decisions
@@ -122,7 +135,7 @@ These are from the blueprint and stay open. The code leaves room for each.
 
 - **D2** Restoring a purchase with no accounts. No payments yet.
 - **D3** Counting without tracking health data. No analytics yet.
-- **D4** Email, offline copy and hosting.
+- **D4** Hosting and an offline copy. The email path is decided (13 Nov 2026); the offline copy and the host move are open.
 - **D6** Where the paywall sits in pace set-up. Everything is free in this build.
 
 Decided:

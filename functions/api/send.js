@@ -1,9 +1,10 @@
 /*
  * POST /api/send: email one race card PDF to one address (RD-039). A Cloudflare Pages Function. It runs on Cloudflare
- * only; GitHub Pages has no /api/send, and the app says plainly that email is not working there.
+ * only. GitHub Pages has no /api/send, so the app hides the email block on github.io (canEmailHere in card.js); on another
+ * static host without the function it says plainly that email is not working.
  *
- * What it holds: nothing. No database, no KV, no cache, no file. It logs a status code and a count of sends, and
- * nothing else: never the address, the PDF, the visitor's IP or the key. The mail key (env.RESEND_API_KEY) and the
+ * What it holds: nothing durable. No database, no KV, no cache, no file. The limiter keeps SHA-256 hashes of the address and
+ * the visitor, and counters, in memory only. It logs a status code and a count of sends, and nothing else: never the address, the PDF, the visitor's IP or the key. The mail key (env.RESEND_API_KEY) and the
  * sender (env.MAIL_FROM) come from the environment and are never in the repo. Those are the only two env names used.
  *
  * What it takes: JSON with exactly the keys `email` and `pdf` (the PDF as base64), same origin only. The subject,
