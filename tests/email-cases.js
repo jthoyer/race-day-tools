@@ -15,9 +15,12 @@ module.exports = {
   bad: [
     '', '   ', 'sam', 'sam@', '@example.test', 'sam@example', 'a@b.c',
     'sam@@example.test', 'sam@a@example.test',
+    'sam@a.test@b.test', // two "@" with a dot after each
+    'sam,lee@example.test', 'sam;lee@example.test', 'sam@exam,ple.test', 'sam@exam;ple.test', // one "@" and a comma or semicolon
     'sam@example.test, lee@example.test', 'sam@example.test,lee@example.test', 'sam@example.test;lee@example.test',
     'sam@example.test lee@example.test', 'sam @example.test', 'sam\t@example.test',
     'sam\n@example.test', 'sam@example.test\nBcc: lee@example.test', 'sam@example.test\r\nBcc: lee@example.test', 'sam\u0000@example.test',
+    'sam<lee@example.test', 'sam>lee@example.test', // one angle bracket each
     '<sam@example.test>', 'Sam Lee <sam@example.test>', '"sam"@example.test', "o'neil@example.test", 'sam`@example.test', 'sam\\@example.test',
     'sämm@example.test', 'sam@exämple.test', 'sam@example.test x',
     'sam@.example.test', 'sam@example.test.', 'sam@exa..mple.test',

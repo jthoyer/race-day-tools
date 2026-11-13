@@ -1,0 +1,244 @@
+/*
+ * POST /api/send: email one race card PDF to one address (RD-039). A Cloudflare Pages Function. It runs on Cloudflare
+ * only; GitHub Pages has no /api/send, and the app says plainly that email is not working there.
+ *
+ * What it holds: nothing. No database, no KV, no cache, no file. It logs a status code and a count of sends, and
+ * nothing else: never the address, the PDF, the visitor's IP or the key. The mail key (env.RESEND_API_KEY) and the
+ * sender (env.MAIL_FROM) come from the environment and are never in the repo. Those are the only two env names used.
+ *
+ * What it takes: JSON with exactly the keys `email` and `pdf` (the PDF as base64), same origin only. The subject,
+ * the body and the attachment name are fixed below, so a caller cannot choose what is sent from our sender address.
+ *
+ * LIMITS, said plainly. The limiter below lives in this isolate's memory. Cloudflare runs many isolates, in many
+ * places, and restarts them often, so each one counts for itself and forgets. It slows a loop down; it is NOT a real
+ * limit. The real limit is a Cloudflare rate-limiting rule on /api/send, which the owner sets in the dashboard
+ * (RD-039 step 5), plus the mail service's own quota. The PDF is made by the visitor's phone, so anyone can post any
+ * PDF to any address: the exact keys, the size caps, the content checks and the limits cut that down; they do not
+ * remove it.
+ *
+ * Module format: this file is an ES module (functions/package.json says so). The tests load it with import().
+ */
+
+const SUBJECT = 'Your TRI Momentum race card';
+const BODY_TEXT = 'Your race card is attached as a PDF.\n\nTypical ranges, not medical advice.\n\nTRI Momentum';
+const ATTACHMENT_NAME = 'race-card.pdf';
+
+const MAX_BODY_BYTES = 140000; // the whole request body
+const MAX_PDF_BYTES = 100000; // the PDF once decoded. The real card is about 2 KB.
+const PROVIDER_TIMEOUT_MS = 10000;
+
+// A PDF holding any of these could run script, open a link, post a form, carry a file, or hide its text from the
+// checks below. Our own PDF holds none of them (tests/send.test.js runs the real file through this list).
+const DENIED = ['/JavaScript', '/JS', '/Launch', '/EmbeddedFile', '/RichMedia', '/XFA', '/AA', '/URI', '/SubmitForm', '/ImportData', '/Filter', '/ObjStm'];
+// A "#xx" hex escape inside a name can spell any of the above without the plain text matching.
+const NAME_WITH_HEX_ESCAPE = /\/[^\s/[\]<>(){}%]*#[0-9A-Fa-f]{2}/;
+
+const LATER = { status: 503, result: 'later' };
+const REFUSED = (status) => ({ status, result: 'refused' });
+
+let sendCount = 0; // sends the mail service accepted, since this isolate started. In memory only.
+
+// ---------- the address ----------
+
+// The same rules as normaliseEmail in public/js/card.js, which checks the same address on the phone first.
+// tests/email-cases.js drives both. One plain address: 6 to 254 characters after trimming, one "@", ASCII only, no
+// whitespace or control characters, none of , ; < > ' " ` \, and a dot in the domain.
+function normaliseEmail(value) {
+  if (typeof value !== 'string') return null;
+  const s = value.trim();
+  if (s.length < 6 || s.length > 254) return null;
+  if (!/^[\x21-\x7e]+$/.test(s)) return null;
+  if (/[,;<>"'`\\]/.test(s)) return null;
+  const parts = s.split('@');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  const dom = parts[1];
+  if (!dom.includes('.') || dom.startsWith('.') || dom.endsWith('.') || dom.includes('..')) return null;
+  return s;
+}
+
+// ---------- the limiter (best effort, in memory, see the note at the top) ----------
+
+export function createLimiter({ perVisitor = 3, visitorWindowMs = 10 * 60 * 1000, perAddress = 3, addressWindowMs = 60 * 60 * 1000, perDay = 100, maxEntries = 1000 } = {}) {
+  const visitors = new Map(); // key -> send times inside the window. Map order is oldest-touched first.
+  const addresses = new Map();
+  let day = { id: null, n: 0 };
+
+  function recent(map, key, now, windowMs) {
+    return (map.get(key) || []).filter((t) => now - t < windowMs);
+  }
+  // Entries expire: drop from the oldest end while the newest send in the entry is outside its window.
+  function sweep(map, now, windowMs) {
+    for (const [key, times] of map) {
+      if (now - times[times.length - 1] < windowMs) break;
+      map.delete(key);
+    }
+  }
+  function remember(map, key, times) {
+    map.delete(key);
+    map.set(key, times);
+    while (map.size > maxEntries) map.delete(map.keys().next().value); // bounded: the oldest entry goes first
+  }
+
+  return {
+    // True and counted if this send is inside every limit; false and not counted if not.
+    take(visitorKey, addressKey, now) {
+      sweep(visitors, now, visitorWindowMs);
+      sweep(addresses, now, addressWindowMs);
+      const dayId = Math.floor(now / 86400000); // UTC day
+      if (day.id !== dayId) day = { id: dayId, n: 0 };
+      const v = recent(visitors, visitorKey, now, visitorWindowMs);
+      const a = recent(addresses, addressKey, now, addressWindowMs);
+      if (v.length >= perVisitor || a.length >= perAddress || day.n >= perDay) return false;
+      v.push(now);
+      a.push(now);
+      day.n += 1;
+      remember(visitors, visitorKey, v);
+      remember(addresses, addressKey, a);
+      return true;
+    },
+    size() { return { visitors: visitors.size, addresses: addresses.size }; }
+  };
+}
+
+const limiter = createLimiter();
+
+// The limiter holds only these hashes, never the address or the IP themselves.
+async function digest(text) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------- the mail adapter: the only place that knows the mail service ----------
+
+// Input { to, pdfBase64 } and the env; output { ok, retry }. ok: the service took it. retry: worth trying again later.
+// Swapping provider changes this function and nothing else.
+// UNVERIFIED against Resend docs (the session could not reach resend.com): the endpoint, the Bearer header, and the
+// body shape { from, to, subject, text, attachments: [{ filename, content (base64) }] }, with `to` as a string.
+// Check each against https://resend.com/docs/api-reference/emails/send-email before this goes live.
+async function sendMail({ to, pdfBase64 }, env, deps) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), deps.timeoutMs || PROVIDER_TIMEOUT_MS);
+  try {
+    const res = await deps.fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: env.MAIL_FROM, to, subject: SUBJECT, text: BODY_TEXT, attachments: [{ filename: ATTACHMENT_NAME, content: pdfBase64 }] }),
+      signal: ctl.signal,
+      redirect: 'error'
+    });
+    if (res.status >= 200 && res.status < 300) return { ok: true, retry: false };
+    if (res.status === 429 || res.status >= 500) return { ok: false, retry: true };
+    return { ok: false, retry: false };
+  } catch (err) {
+    // A timeout or a network failure: the athlete can try again. The error is dropped on purpose, because its
+    // message can carry the request, and so the address. Nothing is logged from it.
+    return { ok: false, retry: true };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------- the request ----------
+
+// The body as bytes, read in full but never past the cap, so a missing or false Content-Length cannot get past it.
+async function readCapped(request, cap) {
+  if (!request.body) return new Uint8Array(0);
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > cap) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) { out.set(c, at); at += c.byteLength; }
+  return out;
+}
+
+// The PDF as a binary string when it is acceptable, else the reply to give.
+function checkPdf(pdf) {
+  if (typeof pdf !== 'string' || pdf.length === 0) return { reply: REFUSED(400) };
+  if (pdf.length > Math.ceil(MAX_PDF_BYTES / 3) * 4) return { reply: REFUSED(413) };
+  if (pdf.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(pdf)) return { reply: REFUSED(400) };
+  const size = (pdf.length / 4) * 3 - (pdf.endsWith('==') ? 2 : pdf.endsWith('=') ? 1 : 0);
+  if (size > MAX_PDF_BYTES) return { reply: REFUSED(413) };
+  const bin = atob(pdf);
+  if (!bin.startsWith('%PDF-')) return { reply: REFUSED(400) };
+  if (DENIED.some((word) => bin.includes(word)) || NAME_WITH_HEX_ESCAPE.test(bin)) return { reply: REFUSED(400) };
+  return { bin };
+}
+
+// deps = { fetch, log, now }. The handler reads nothing from the platform's globals for those three, so a test
+// can stub each. deps.timeoutMs is optional (tests only). log is called once a reply, with a status code and the
+// count of sends so far: numbers only.
+export async function handler(request, env, deps) {
+  function reply({ status, result }, extra) {
+    deps.log(status, sendCount);
+    return new Response(JSON.stringify({ result }), {
+      status,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra }
+    });
+  }
+  try {
+    if (request.method !== 'POST') return reply(REFUSED(405), { Allow: 'POST' });
+
+    const origin = request.headers.get('Origin');
+    if (!origin || origin !== new URL(request.url).origin) return reply(REFUSED(403));
+
+    const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+    if (type !== 'application/json') return reply(REFUSED(415));
+
+    const declared = request.headers.get('Content-Length');
+    if (declared !== null && /^\d+$/.test(declared) && Number(declared) > MAX_BODY_BYTES) return reply(REFUSED(413));
+    const bytes = await readCapped(request, MAX_BODY_BYTES);
+    if (bytes === null) return reply(REFUSED(413));
+
+    let body;
+    try {
+      body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    } catch (err) {
+      return reply(REFUSED(400)); // not JSON: the parse error is not logged, it can quote the body
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(REFUSED(400));
+    const keys = Object.keys(body).sort();
+    if (keys.length !== 2 || keys[0] !== 'email' || keys[1] !== 'pdf') return reply(REFUSED(400));
+
+    const to = normaliseEmail(body.email);
+    if (!to) return reply(REFUSED(400));
+    const checked = checkPdf(body.pdf);
+    if (checked.reply) return reply(checked.reply);
+
+    if (!env || !env.RESEND_API_KEY || !env.MAIL_FROM) return reply(LATER);
+
+    const visitor = await digest(request.headers.get('CF-Connecting-IP') || 'unknown');
+    if (!limiter.take(visitor, await digest(to.toLowerCase()), deps.now())) return reply({ status: 429, result: 'later' });
+
+    const sent = await sendMail({ to, pdfBase64: body.pdf }, env, deps);
+    if (sent.ok) {
+      sendCount += 1;
+      return reply({ status: 200, result: 'sent' });
+    }
+    return reply(sent.retry ? LATER : REFUSED(400));
+  } catch (err) {
+    // Anything unexpected is "try again later". The error is not logged: its message could hold the address.
+    return reply(LATER);
+  }
+}
+
+// The Pages entries. POST goes to onRequestPost; any other method goes to onRequest, which answers 405.
+// fetch is wrapped, because some runtimes refuse a platform function called without its owner.
+export function onRequestPost(context) {
+  return handler(context.request, context.env, {
+    fetch: (...args) => fetch(...args),
+    log: (status, count) => console.log('send status=' + status + ' count=' + count),
+    now: () => Date.now()
+  });
+}
+export const onRequest = onRequestPost;
