@@ -39,7 +39,8 @@ const PROVIDER_TIMEOUT_MS = 10000;
 //   2. A DENY LIST of names and an inline-image pattern, run over the raw bytes, strings included. It is defence in depth:
 //      it does not depend on the reading above being right, and it refuses even where a string only mentions a name.
 //   Hex strings <...> are read too (a reader closes them at ">" and skips non-hex bytes, so only hex digits and PDF
-//   whitespace are allowed inside), and a literal string may not hold "stream" or "endobj", because a reader skips stream
+//   whitespace are allowed inside), the header line and the marker line are fixed shapes (a reader can be sent to a byte offset inside either), and a literal
+//   string may not hold "stream" or "obj", because a reader skips stream
 //   data by its /Length and could otherwise disagree with this reading about where a string starts. Every font must have
 //   a valid /BaseFont, a /Type /Font and a /Subtype /Type1, one each.
 // WHAT IT DOES NOT DO: stop phishing. Anyone can type text, including a web address a reader turns into a link, into a
@@ -72,10 +73,10 @@ const INLINE_IMAGE = /[\s\0()<>[\]{}0-9.+-]BI(?=[\s\0%/]|$)/;
 // grammar rules above (a comment where none is allowed, an unclosed or unbalanced string, a "(" or ")" the reader would
 // treat differently).
 export function stripStrings(bin) {
-  const head = /^%PDF-\d\.\d[^\r\n]*(\r\n|\r|\n)/.exec(bin);
+  const head = /^%PDF-\d\.\d(\r\n|\r|\n)/.exec(bin); // nothing else on the header line
   if (!head) return null;
   let i = head[0].length;
-  const marker = /^%[^\r\n]*(\r\n|\r|\n)/.exec(bin.slice(i)); // the optional binary-marker line
+  const marker = /^%[\x80-\xff]+(\r\n|\r|\n)/.exec(bin.slice(i)); // the optional binary-marker line: high bytes only, as jsPDF writes it
   if (marker) i += marker[0].length;
   const tail = /\r?\n?%%EOF\s*$/.exec(bin);
   const end = tail && tail.index >= i ? tail.index : bin.length;
@@ -106,9 +107,10 @@ export function stripStrings(bin) {
         i += 1;
       }
       if (depth !== 0) return null; // an unclosed string
-      // Stream data and object boundaries are not text. A string that holds them is trying to make this reading and a
+      // A reader that jumps to a cross-reference offset can land inside a string and lex from there. Stream data and
+      // object boundaries are not text. A string that holds them is trying to make this reading and a
       // reader's (which skips stream data by /Length) disagree about where a string starts.
-      if (/stream|endobj/.test(bin.slice(start, i - 1))) return null;
+      if (/stream|obj/.test(bin.slice(start, i - 1))) return null;
       out += '()';
       continue;
     }

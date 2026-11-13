@@ -642,6 +642,53 @@ test('round 4: PDF whitespace only: a vertical tab or a non-breaking space is no
 });
 
 
+// ---- round 5: a reader can jump to a byte offset inside the header, the marker line or a string ----
+
+const HIDDEN_OBJ = '6 0 obj << /Type /Catalog /Pages 2 0 R /PageMode /FullScreen /Bogus /OpenAction << /S /Hide /T 9 0 R >> >> endobj';
+const R5 = {
+  'a hidden object on the header line': '%PDF-1.3 ' + HIDDEN_OBJ + '\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n',
+  'a hidden object on the same line as the header, no space': '%PDF-1.3%x ' + HIDDEN_OBJ + '\n%%EOF\n',
+  'a hidden object on the marker line': '%PDF-1.3\n%\xba\xdf\xac\xe0 ' + HIDDEN_OBJ + '\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n',
+  'a marker line with an ASCII byte': '%PDF-1.3\n%\xba\xdfa\xe0\n1 0 obj\n%%EOF\n',
+  'an empty marker line': '%PDF-1.3\n%\n1 0 obj\n%%EOF\n',
+  'a string holding a hidden font object': '%PDF-1.3\n1 0 obj\n<< /Type /Catalog /Title (7 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier /Bogus >>) >>\nendobj\n%%EOF\n',
+  'a string holding endobj': '%PDF-1.3\n1 0 obj\n<< /Title (a endobj b) >>\nendobj\n%%EOF\n',
+  'a string holding obj': '%PDF-1.3\n1 0 obj\n<< /Title (a 6 0 obj b) >>\nendobj\n%%EOF\n',
+  'a string holding endstream': '%PDF-1.3\n1 0 obj\n<< /Title (a endstream b) >>\nendobj\n%%EOF\n'
+};
+for (const [what, pdf] of Object.entries(R5)) {
+  test(`round 5 refuses: ${what}`, async () => {
+    assert.equal(mod.pdfStructureOk(pdf), false, 'the structure check refuses it by itself');
+    assert.equal(mod.stripStrings(pdf), null);
+    const r = await send(good({ pdf: b64(Buffer.from(pdf, 'latin1')) }));
+    assert.deepEqual([r.res.status, r.d.fetch.calls.length], [400, 0]);
+  });
+}
+
+test('round 5 setup: the hidden objects use names on neither list, so the structure check alone does the refusing', () => {
+  for (const name of HIDDEN_OBJ.match(/\/[A-Za-z0-9]+/g)) {
+    if (mod.ALLOWED_NAMES.has(name)) continue;
+    assert.ok(name === '/Bogus' || name === '/PageMode' || name === '/FullScreen' || name === '/Hide' || name === '/S' || name === '/T', name);
+    assert.ok(!DENY_LIST.includes(name), name + ' is on the deny list');
+  }
+  assert.ok(!DENY_LIST.some((w) => '/Bogus'.includes(w)));
+});
+
+test('round 5 controls: the real header and marker line pass, and the real cards and the fixture still do', async () => {
+  const real = realPdfs();
+  for (const [what, bin] of Object.entries(real)) {
+    assert.match(bin.slice(0, 16), /^%PDF-1\.3\n%[\x80-\xff]{4}\n/, what + ': a header and a high-byte marker line');
+    assert.equal(mod.pdfStructureOk(bin), true, what);
+    assert.equal((await send(good({ pdf: b64(Buffer.from(bin, 'latin1')) }))).res.status, 200, what);
+    for (const str of bin.match(/\((?:[^()\\]|\\.)*\)/g) || []) assert.doesNotMatch(str, /stream|obj/, what + ': a real string holds stream or obj');
+  }
+  const ok = '%PDF-1.3\r\n%\xba\xdf\xac\xe0\r\n1 0 obj\r\n<< /Type /Catalog >>\r\nendobj\r\n%%EOF\r\n';
+  assert.equal(mod.pdfStructureOk(ok), true, 'CRLF line ends');
+  assert.equal(mod.pdfStructureOk(ok.replace(/\r\n/g, '\r')), true, 'CR line ends');
+  assert.equal(mod.pdfStructureOk('%PDF-1.7\n1 0 obj\n%%EOF'), true, 'no marker line is fine');
+});
+
+
 test('A17: the committed fixture, drawn by the vendored library from made-up data, is accepted, with room to spare', async () => {
   assert.ok(FIXTURE.subarray(0, 5).toString() === '%PDF-');
   assert.ok(FIXTURE.length * 3 <= 100000, 'the real card is at most a third of the PDF cap: ' + FIXTURE.length);
