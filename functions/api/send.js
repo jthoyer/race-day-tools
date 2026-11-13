@@ -32,13 +32,16 @@ const PROVIDER_TIMEOUT_MS = 10000;
 // plan would close that, and the owner declined it. So the PDF is held to what our own card holds: no script, link,
 // form, file, image, encryption or compressed stream, one catalog entry in jsPDF's own form, and Helvetica only.
 const DENIED = ['/JavaScript', '/JS', '/Launch', '/EmbeddedFile', '/RichMedia', '/XFA', '/AA', '/URI', '/SubmitForm', '/ImportData', '/Filter', '/ObjStm',
-  '/Annots', '/XObject', '/Image', '/GoToR', '/GoToE', '/Encrypt', '/Names', '/Rendition', '/Sound', '/Movie', '/Named'];
+  '/Annots', '/XObject', '/Image', '/GoToR', '/GoToE', '/Encrypt', '/Names', '/Rendition', '/Sound', '/Movie', '/Named',
+  '/FontDescriptor', '/FontFile', '/Type3', '/CharProcs'];
 // jsPDF writes these two on every page. Each is removed (exact text only) before the list above is applied: the first
 // names image types the page does not use, the second is an empty dictionary. Anything else with those names is refused.
 const JSPDF_OWN = [/\/ProcSet \[\/PDF \/Text \/ImageB \/ImageC \/ImageI\]/g, /\/XObject <<\s*>>/g];
 // A "#xx" hex escape inside a name can spell any of the above without the plain text matching.
 const NAME_WITH_HEX_ESCAPE = /\/[^\s/[\]<>(){}%]*#[0-9A-Fa-f]{2}/;
-const INLINE_IMAGE = /(?:^|\s)BI\s*\/[A-Za-z]/;
+// An inline image starts with the operator BI. In PDF, whitespace, NUL and a few delimiters end a token, and a % comment or a
+// name can follow BI with no space, so those are all boundaries.
+const INLINE_IMAGE = /(?:^|[\s\0\])>])BI(?=[\s\0%/]|$)/;
 // Names and actions a PDF may carry only in the form jsPDF writes: an open-at-page entry, and the two Helvetica faces.
 function oddCatalogOrFont(bin) {
   const opens = (bin.match(/\/OpenAction/g) || []).length;

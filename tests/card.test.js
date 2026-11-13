@@ -207,15 +207,15 @@ test('a card with many gels and every note still fits on one page', () => {
 test('the PDF carries a fixed creation date and nothing from today (RD-039 A11, spec 29)', () => {
   const { jsPDF } = require(path.join(VENDOR, 'jspdf.umd.min.js'));
   assert.equal(C.CREATION_DATE, "D:20260101000000+00'00'");
-  const rowsNow = C.rows(input());
-  for (const tz of [undefined]) {
-    const s = Buffer.from(C.drawPdf(jsPDF, rowsNow)).toString('latin1');
-    assert.equal(/\/CreationDate \(([^)]*)\)/.exec(s)[1], C.CREATION_DATE);
-    const d = new Date();
-    const today = String(d.getFullYear()) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
-    assert.ok(!s.includes('D:' + today) && !s.includes('D:' + String(d.getUTCFullYear()) + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0')), 'no date from today');
-    assert.doesNotMatch(s, /\/(Creation|Mod)Date \(D:\d{8}(?!000000\+)/, 'no time of day');
-  }
+  const s = Buffer.from(C.drawPdf(jsPDF, C.rows(input()))).toString('latin1');
+  assert.equal(/\/CreationDate \(([^)]*)\)/.exec(s)[1], C.CREATION_DATE);
+  // Compared with the clock at run time, in local and UTC terms: the PDF must not hold today's date. (Only a run on
+  // 1 Jan 2026 itself could trip this, and that day has passed.)
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const days = ['' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()), '' + d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate())];
+  for (const day of days) assert.ok(!s.includes('D:' + day), 'no date from today: ' + day);
+  assert.doesNotMatch(s, /\/(Creation|Mod)Date \(D:\d{8}(?!000000\+)/, 'no time of day');
   const fixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'race-card.pdf'), 'latin1');
   assert.match(fixture, /\/CreationDate \(D:20260101000000\+00'00'\)/, 'the committed fixture was drawn with the fixed date');
 });

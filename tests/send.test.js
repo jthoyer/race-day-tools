@@ -351,6 +351,27 @@ test('A17: names and shapes the real card never holds are refused, one at a time
   assert.equal((await send(good({ pdf: pdfWith('/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]\n/XObject <<\n/I1 5 0 R\n>>') }))).res.status, 400);
 });
 
+test('A17: an inline image hidden by a comment or a NUL, and fonts that carry a program, are refused', async () => {
+  const cases = {
+    'BI then a % comment': 'q\nBI%x\n/W 1 /H 1 /CS /G /BPC 8 ID \x00 EI\nQ',
+    'BI then NUL': 'q\nBI\0/W 1 /H 1 /CS /G /BPC 8 ID \x00 EI\nQ',
+    'BI after NUL': 'q\0BI /W 1 /H 1 ID x EI',
+    'BI after a closing bracket': '[(a)]BI/W 1 ID x EI',
+    'a Type3 font': '/Type /Font /Subtype /Type3 /FontBBox [0 0 1 1]',
+    'an embedded font program under Helvetica': '/BaseFont /Helvetica /FontDescriptor 7 0 R /FontFile2 8 0 R',
+    'a font descriptor on its own': '/BaseFont /Helvetica /FontDescriptor 7 0 R',
+    'a FontFile3': '/FontFile3 9 0 R',
+    'CharProcs': '/CharProcs << /a 5 0 R >>'
+  };
+  for (const [what, extra] of Object.entries(cases)) {
+    const r = await send(good({ pdf: pdfWith(extra) }));
+    assert.equal(r.res.status, 400, what);
+    assert.equal(r.d.fetch.calls.length, 0, what + ' reached the mail service');
+  }
+  // BI inside ordinary words and text is not an operator.
+  for (const ok of ['/BIG 1 /OBIT 2 /NUBIAN', '(BIG day BI)', '(A BIKE)', '/Name /BI']) assert.equal((await send(good({ pdf: pdfWith(ok) }))).res.status, 200, ok);
+});
+
 test('A17: /OpenAction only as jsPDF writes it, and /BaseFont only Helvetica or Helvetica-Bold', async () => {
   assert.equal((await send(good({ pdf: pdfWith('/OpenAction [3 0 R /FitH null]') }))).res.status, 200);
   for (const extra of ['/OpenAction << /S /GoTo /D [3 0 R /Fit] >>', '/OpenAction 7 0 R', '/OpenAction [3 0 R /FitH null] /OpenAction 7 0 R', '/OpenAction [3 0 R /FitH 10]', '/OpenAction << /FS 4 0 R >>']) {
