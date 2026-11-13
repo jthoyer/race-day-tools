@@ -1,6 +1,6 @@
 # Contributing
 
-Race-day tools is a static web app in `public/`, with no build step and no server. It runs on the athlete's phone. This guide is for people and for AI agents, who must also follow [AGENTS.md](AGENTS.md). [README.md](README.md) explains how it works; [docs/spec.md](docs/spec.md) lists what every change must keep.
+Race-day tools is a static web app in `public/`, with no build step. It runs on the athlete's phone. It has one small server function, `functions/api/send.js`, that only emails a race card when the athlete asks. This guide is for people and for AI agents, who must also follow [AGENTS.md](AGENTS.md). [README.md](README.md) explains how it works; [docs/spec.md](docs/spec.md) lists what every change must keep.
 
 The working rules are adapted from the Balance Tri Club maintainer docs (`balancetriclub/docs`), so the club's apps and this suite work the same way. The suite is not a club app. It shares the club apps' look, not their sign-in, data or branding.
 
@@ -39,7 +39,8 @@ One logical change per commit, subject in the imperative and about 72 characters
 
 - **No `innerHTML` built from a variable.** Anything a person types (race names, product names) goes in as text. `public/js/ui.js` builds every element with text nodes; use it.
 - **Don't catch and discard errors** (`catch (e) {}`). Storage may be blocked, so the store catches its errors, warns once and carries on. That is the pattern to follow.
-- **No build, no bundler, no framework.** Plain scripts loaded with `<script>` tags. Only `public/` is published. Don't add `import` or a build step without agreeing it first.
+- **No build, no bundler, no framework.** Plain scripts loaded with `<script>` tags. Only `public/` and `functions/` are published; `functions/` holds the one server function, `functions/api/send.js`, and nothing else belongs there. Don't add `import` to a page script or a build step without agreeing it first. (The function is the one ES module: `functions/package.json` marks it, so the tests load it with `import()`.)
+- **A vendored file has a pinned version, its licence beside it, and is never edited by hand.** `public/js/vendor/` holds the PDF library as it came from its package. Its licence file records the version, size and SHA-256, and a new version replaces the file whole, with a `?v=` bump on every page that loads it.
 - **Bump the `?v=` on a `<script>` or stylesheet tag when its file changes**, in `public/index.html` and both guide pages, so a stale copy can't be served.
 - **No secrets in the repo.** The app has none today and should keep it that way.
 - **Use made-up data.** Tests, fixtures, screenshots and issues use invented athletes and numbers, never a real person's weight, test results or race times.

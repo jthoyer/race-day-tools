@@ -1,6 +1,6 @@
 # Race-day tools
 
-Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can print for your top tube. It's a static web app. It runs on the athlete's phone with no account, no server and no health data held. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
+Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can print for your top tube. It's a static web app. It runs on the athlete's phone with no account and no health data held. The one thing that leaves the phone is a PDF of the race card, and only when the athlete types an address and taps to email it. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
 
 This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Countdown and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
 
@@ -72,9 +72,12 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/time.js` | Parsing and formatting times and dates. |
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
+| `public/js/card.js` | The race card as a PDF: the rows of text (the same words as the print card, no DOM), the one-page drawing, and the address check. Reads the saved plan; does no maths. |
+| `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the phone. |
 | `public/js/app.js` | The screens: home (the front page, and coming back, with the guide links at the bottom of the front page), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, print, and the rail (Race, Pacing, Nutrition, Race card) that joins them. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
+| `functions/api/send.js` | The one server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing, logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
 | `public/_headers` | Security headers and the content policy. |
 | `public/fonts/` | DM Sans and Outfit as variable `.woff2` files, in two subsets each (Latin, and Latin Extended for other letters), with their licence. Declared at the top of `css/app.css`. |
 | `tests/` | Unit tests (`node --test`). |
