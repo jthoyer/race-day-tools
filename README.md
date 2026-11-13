@@ -1,6 +1,6 @@
 # Race-day tools
 
-Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can print for your top tube. It's a static web app. It runs on the athlete's phone with no account, no server and no health data held. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
+Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can print for your top tube. It's a static web app. It runs on the athlete's phone with no account and no health data held. The one thing that leaves the phone is a PDF of the race card, and only when the athlete types an address and taps to email it. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
 
 This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Countdown and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
 
@@ -54,9 +54,20 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 Set up outside the repo, so a rebuild would lose it: in the repo's **Settings → Pages**, *Source* is **GitHub Actions**.
 
-GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'none'` means the page can make no network request. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
+GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'self'` means the page can call only its own address, for the one send function, and no other host. On GitHub Pages that function does not exist and an address would be posted to GitHub, so the email block is hidden on `github.io` (`canEmailHere` in `public/js/card.js`); it appears when the app is served from Cloudflare or localhost. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
 
 The longer-term host and domain are still open (D4).
+
+**Owner set-up for email, not done.** None of these has been done:
+
+- Create the Resend account and a send-only key. Not done.
+- Set `RESEND_API_KEY` and `MAIL_FROM` as secrets on the host, never in the repo. Not done.
+- A separate sending subdomain with SPF, DKIM and DMARC (the domain is not chosen). Not done.
+- A Cloudflare rate-limiting rule on POST `/api/send`; the in-code limiter is best-effort per instance and is not a real limit. Not done.
+- Resend usage alerts or a cap. Not done.
+- The host move from GitHub Pages to Cloudflare Pages (step 5; the owner decides). Not done.
+- Check Resend's data retention against the "We don't keep it" wording. Not done.
+- Check the Resend request shape (endpoint, header, body), which is UNVERIFIED against Resend's docs. Not done.
 
 ## Contributing
 
@@ -72,9 +83,12 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/time.js` | Parsing and formatting times and dates. |
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
+| `public/js/card.js` | The race card as a PDF: the rows of text (the same words as the print card, no DOM), the one-page drawing, and the address check. Reads the saved plan; does no maths. |
+| `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the phone. |
 | `public/js/app.js` | The screens: home (the front page, and coming back, with the guide links at the bottom of the front page), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, print, and the rail (Race, Pacing, Nutrition, Race card) that joins them. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
+| `functions/api/send.js` | The one server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing durable (the limiter keeps hashes of the address and visitor in memory only); logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
 | `public/_headers` | Security headers and the content policy. |
 | `public/fonts/` | DM Sans and Outfit as variable `.woff2` files, in two subsets each (Latin, and Latin Extended for other letters), with their licence. Declared at the top of `css/app.css`. |
 | `tests/` | Unit tests (`node --test`). |
@@ -111,6 +125,8 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Gel timing limits | `TIMING_EVERY`, `END_GAP` | a gel every 5–120 min; none in the last 10 min of a leg |
 | Carb list on My products | `CARB_PICK` | 20–50 g in 5 g steps (a figure off the list goes under Other) |
 
+**Email must not go live while these ranges are marked UNCHECKED (RD-005):** the PDF carries them off the phone and has no DRAFT mark (the owner decided no DRAFT mark, 13 Nov 2026).
+
 Good places to check them: the ACSM position stands on nutrition and on fluid replacement, and the consensus statements on exercise-associated hyponatraemia.
 
 ## Open decisions
@@ -119,7 +135,7 @@ These are from the blueprint and stay open. The code leaves room for each.
 
 - **D2** Restoring a purchase with no accounts. No payments yet.
 - **D3** Counting without tracking health data. No analytics yet.
-- **D4** Email, offline copy and hosting.
+- **D4** Hosting and an offline copy. The email path is decided (13 Nov 2026); the offline copy and the host move are open.
 - **D6** Where the paywall sits in pace set-up. Everything is free in this build.
 
 Decided:

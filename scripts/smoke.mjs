@@ -48,14 +48,31 @@ let n = 0;
 let page; // the page the checks below talk to
 const KEY = 'race-day-tools.v1';
 
+// RD-039 A24. The one request the app may make besides loading itself is a POST to /api/send, made by its own address.
+// Anything else under /api/ is a failure, and so is any request to another host. Kept as a function so it can be tried
+// on made-up requests below: a guard that has never been seen to fail is not a guard.
+function badRequest(method, url) {
+  const u = new URL(url);
+  if (/^https?:$/.test(u.protocol) && u.hostname !== 'localhost') return 'outside request';
+  if ((u.pathname === '/api' || u.pathname.startsWith('/api/')) && !(method === 'POST' && u.pathname === '/api/send')) return 'unexpected /api/ request';
+  return null;
+}
+// Set while a scenario expects /api/send to fail (a 404, an offline phone, a refused call): the browser's own console
+// error for that one address is not a problem there. Any other console error still is.
+let sendErrorsExpected = false;
+
 // Every scenario below says how it is isolated. A "fresh" one is a new browser context: empty storage, no shared module state.
 async function fresh(label, { width = 390, init } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height: 844 } });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => problems.push(`page error (${label}): ` + e.message));
-  p.on('console', (m) => { if (m.type() === 'error') problems.push(`console (${label}): ` + m.text()); });
-  // Fonts ship with the app, so nothing may be requested from another host.
-  p.on('request', (r) => { const u = new URL(r.url()); if (/^https?:$/.test(u.protocol) && u.hostname !== 'localhost') problems.push(`outside request (${label}): ` + r.url()); });
+  p.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    if (sendErrorsExpected && (m.location().url || '').endsWith('/api/send')) return;
+    problems.push(`console (${label}): ` + m.text());
+  });
+  // Fonts ship with the app, so nothing may be requested from another host, and only POST /api/send may be called.
+  p.on('request', (r) => { const bad = badRequest(r.method(), r.url()); if (bad) problems.push(`${bad} (${label}): ${r.method()} ` + r.url()); });
   // A content-policy violation shows as a console error above, and as a securitypolicyviolation event here.
   await p.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error('CSP blocked ' + e.violatedDirective + ' ' + e.blockedURI)));
   if (init) await p.addInitScript(init.fn, init.arg);
@@ -76,6 +93,20 @@ const plainName = (t) => t.replace(/,\s*done/, '').replace(/^\d\s*/, '').trim();
 const isoLocal = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
 const inDays = (d) => isoLocal(new Date(Date.now() + d * 86400000));
 const CLOCK = /\d{1,2}:\d\d ?(am|pm)/i;
+
+// RD-039 A12. The emailed PDF and the print card cannot drift: the print card's lines, without its race title and date,
+// equal the PDF's rows, in order and word for word. Needs the print card built (a beforeprint event) first.
+async function printMatchesPdfRows(where, fuelStale) {
+  const printed = await page.locator('.tt').evaluate((e) => [...e.children].map((c) => c.textContent));
+  const rows = await page.evaluate(([k, stale]) => {
+    const race = JSON.parse(localStorage.getItem(k)).race;
+    return window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
+  }, [KEY, fuelStale]);
+  const dated = await page.evaluate((k) => !!JSON.parse(localStorage.getItem(k)).race.date, KEY);
+  const lines = printed.slice(dated ? 2 : 1);
+  check(rows.length > 4 && JSON.stringify(lines) === JSON.stringify(rows.slice(1).map((r) => r.text)), `${where} text equals the PDF rows, line for line (${lines.length} lines)`);
+  check(/^TRI Momentum race card · (Olympic|70\.3)$/.test(rows[0].text) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the PDF title row has the distance and no race name, and no row has a time of day`);
+}
 
 // 28 and 29: no whole word "fuel" and no "Standard" in what a person reads.
 async function wordsClean(where) {
@@ -130,9 +161,19 @@ check(await gl.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().h
 check((await guides.locator('.btn, button').count()) === 0, 'S0 guide links are plain links, not buttons or cards');
 check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(guides)) && (await guides.evaluate((e) => e.getBoundingClientRect().bottom)) >= (await page.locator('body').evaluate((b) => b.getBoundingClientRect().bottom)) - 40, 'S0 puts the guides below the note, at the very bottom');
 await wordsClean('S0');
-// The probe is expected to be refused; its console errors are dropped at the end by its unique address.
-const sent = await page.evaluate(() => fetch('/__csp_probe__').then(() => true, () => false));
-check(sent === false, 'Content policy blocks every network request (connect-src none)');
+// The probe is expected to be refused; its console errors are dropped at the end by its unique address. It asks for another
+// host, which no network request can reach, so it is the policy that refuses it, and the violation event proves that.
+const probe = await page.evaluate(() => new Promise((done) => {
+  let violated = '';
+  document.addEventListener('securitypolicyviolation', (e) => { violated = e.violatedDirective + ' ' + e.blockedURI; }, { once: true });
+  fetch('https://outside.example.test/__csp_probe__').then(() => done({ sent: true, violated }), () => setTimeout(() => done({ sent: false, violated }), 100));
+}));
+check(probe.sent === false && /^connect-src https:\/\/outside\.example\.test\/__csp_probe__$/.test(probe.violated), `Content policy refuses a request to another host (${probe.violated})`);
+const own = await page.evaluate(() => fetch('/css/app.css').then((r) => r.status, () => 0));
+check(own === 200, "connect-src 'self' lets the page call its own address");
+// The two guards, tried on made-up requests: each must say no where it should, and yes where it should.
+check(badRequest('GET', 'https://outside.example.test/x') === 'outside request' && badRequest('POST', 'http://localhost:8000/api/send') === null && badRequest('GET', 'http://localhost:8000/js/app.js') === null, 'The outside-host guard refuses another host and lets the app load itself');
+check(badRequest('GET', 'http://localhost:8000/api/send') && badRequest('PUT', 'http://localhost:8000/api/send') && badRequest('POST', 'http://localhost:8000/api/other') && badRequest('POST', 'http://localhost:8000/api') && badRequest('POST', 'http://localhost:8000/api/send/x') && badRequest('POST', 'http://localhost:8000/api/send') === null, 'The /api/ guard allows POST /api/send and nothing else under /api/');
 const fontsLoaded = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, '')); });
 check(fontsLoaded.includes('DM Sans') && fontsLoaded.includes('Outfit'), 'DM Sans and Outfit load from the app, with no outside request');
 await noHorizontalScroll('S0');
@@ -555,6 +596,13 @@ check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test
 check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'Print card has your gel times, their km, the KM_NOTE and not medical advice');
 check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'Print card has no start time, no transition and no time of day');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
+await printMatchesPdfRows('Print card', false);
+const drawn = await page.evaluate((k) => {
+  const race = JSON.parse(localStorage.getItem(k)).race;
+  const bytes = window.RD.card.drawPdf(window.jspdf.jsPDF, window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: false }));
+  return { head: String.fromCharCode(...bytes.subarray(0, 5)), size: bytes.length };
+}, KEY);
+check(drawn.head === '%PDF-' && drawn.size > 500 && drawn.size < 33000, `The vendored library draws the card in the browser under the content policy (${drawn.size} bytes)`);
 const ttw = await page.locator('.tt').evaluate((e) => e.getBoundingClientRect().width);
 check(ttw > 230 && ttw < 300, `Print card is about 70 mm wide (${Math.round(ttw)} CSS px)`);
 await shot('print');
@@ -654,6 +702,7 @@ check(/changed since this plan/.test(await page.locator('.racecard').innerText()
 await page.emulateMedia({ media: 'print' });
 await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
 check(/Nutrition plan out of date\. Update it before race day\./.test(await page.locator('.tt').textContent()), 'The print card says "Nutrition plan out of date. Update it before race day."');
+await printMatchesPdfRows('Out-of-date print card', true);
 await page.emulateMedia({ media: 'screen' });
 await page.goto(base + '/index.html#/fuel');
 await page.getByRole('button', { name: 'Update my race card' }).click();
@@ -870,6 +919,280 @@ check((await brokenText()).length === 0, 'Long name at 320px: no word is broken 
 await noHorizontalScroll('Step 3 with a long product name', 320);
 await shot('long-name-320');
 await page.context().close();
+
+// ---------------------------------------------------------------------------------------------------------------
+// Scenarios 8 to 18: email the race card (RD-039, criterion 29). Each one is a fresh browser context, seeded from the same
+// made-up save as scenario 4 (an Olympic plan for Sam Lee with pace and nutrition saved), so none inherits another's state.
+// /api/send is stubbed with page.route in each, and no scenario touches a real network or a real mail service. The
+// function itself runs only on Cloudflare, and is tested in tests/send.test.js.
+const ADDRESS = 'sam@example.test';
+const MAIL_SENT = 'Sent. It should arrive in a few minutes. Check your junk folder if not.';
+const MAIL_REFUSED = "That address didn't work. Check it and try again.";
+const MAIL_LATER = "Email isn't working right now. Your plan is saved on this phone, and you can still print it.";
+const MAIL_BAD = 'Type one email address, such as sam@example.test.';
+const MAIL_STALE = 'Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first.';
+const STALE_PDF = 'Nutrition plan out of date. Update it before race day.';
+const YELLOW = 'rgb(248, 196, 79)';
+const mailSave = () => { const v = JSON.parse(JSON.stringify(fixture)); v.race.date = inDays(30); return v; };
+const seedWith = (save) => ({ fn: ([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, arg: [KEY, JSON.stringify(save)] });
+const sendBtn = () => page.getByRole('button', { name: 'Email my race card', exact: true });
+const mailStatus = () => page.locator('.mail .mailnote');
+const json = (status, result, extra = {}) => ({ status, contentType: 'application/json', body: JSON.stringify({ result }), ...extra });
+// Opens the race card with /api/send stubbed. handler is (route) => ..., or null for no stub at all: the smoke server
+// then answers 404, which is what GitHub Pages does for an address it does not have. Returns the requests the stub saw.
+async function mailPage(label, save, handler, { errorsExpected = false } = {}) {
+  sendErrorsExpected = errorsExpected;
+  await fresh(label, { init: seedWith(save) });
+  const seen = [];
+  if (handler) await page.route('**/api/send', async (route) => { seen.push(route.request()); await handler(route); });
+  await page.goto(base + '/index.html#/card');
+  await page.locator('.racecard').waitFor();
+  return seen;
+}
+// What a person should be left with after any result: the card, the saved plan, and Print, all as they were.
+async function stillWorks(where, before) {
+  check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === before, `${where}: the saved plan is exactly as it was`);
+  await page.emulateMedia({ media: 'print' });
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  const printed = await page.locator('.tt').textContent();
+  await page.emulateMedia({ media: 'screen' });
+  check(/Bike nutrition/.test(printed) && (await page.locator('.racecard').isVisible()) && (await page.getByRole('button', { name: 'Print top-tube card' }).isEnabled()), `${where}: the card and Print still work`);
+  check((await sendBtn().isEnabled()) && (await sendBtn().innerText()) === 'Email my race card', `${where}: the button is back to "Email my race card"`);
+}
+const storeText = () => page.evaluate((k) => localStorage.getItem(k), KEY);
+const said = () => page.evaluate(() => window.__said);
+async function watchStatus() {
+  await page.evaluate(() => {
+    window.__said = [];
+    const el = document.querySelector('.mail .mailnote');
+    new MutationObserver((records) => records.forEach(() => window.__said.push(el.textContent))).observe(el, { childList: true, characterData: true, subtree: true });
+  });
+}
+async function typeAndSend(address) {
+  await page.locator('#f-mail').fill(address);
+  await sendBtn().click();
+}
+
+// 8. The block: where it is, what it says, how big it is. Isolation: fresh context, seeded save. Nothing is sent.
+{
+  const seen = await mailPage('email block', mailSave(), (route) => route.fulfill(json(200, 'sent')));
+  const m = page.locator('section.mail');
+  check((await m.count()) === 1 && (await m.getAttribute('class')).split(' ').includes('noprint'), 'The email block is on the race card and is marked noprint');
+  check((await page.getByLabel('Email me this race card', { exact: true }).count()) === 1, 'The email field is labelled "Email me this race card"');
+  const f = page.locator('#f-mail');
+  check((await f.getAttribute('type')) === 'email' && (await f.getAttribute('inputmode')) === 'email' && (await f.getAttribute('autocomplete')) === 'email' && (await f.inputValue()) === '', 'The field is type email, inputmode email, autocomplete email, and starts empty');
+  check((await m.getByText("We use this address once, to send this card. We don't keep it.", { exact: true }).count()) === 1 && (await f.getAttribute('aria-describedby')) === 'mail-hint', 'The block says the address is used once and not kept, and the field points at that line');
+  check((await sendBtn().count()) === 1 && (await m.locator('[role=status]').count()) === 1, 'There is one button, "Email my race card", and one result line with role=status');
+  const geo = await page.evaluate(() => {
+    const top = (e) => e.getBoundingClientRect().top; const bottom = (e) => e.getBoundingClientRect().bottom;
+    const print = [...document.querySelectorAll('.app button.btn')].find((b) => /Print top-tube card/.test(b.textContent));
+    return { card: bottom(document.querySelector('.racecard')), mailTop: top(document.querySelector('section.mail')), mailBottom: bottom(document.querySelector('section.mail')), print: top(print) };
+  });
+  check(geo.card <= geo.mailTop && geo.mailBottom <= geo.print, `The block sits below the card and above Print (${Math.round(geo.card)} <= ${Math.round(geo.mailTop)}, ${Math.round(geo.mailBottom)} <= ${Math.round(geo.print)})`);
+  const bg = await sendBtn().evaluate((e) => getComputedStyle(e).backgroundColor);
+  await sendBtn().hover();
+  const bgHover = await sendBtn().evaluate((e) => getComputedStyle(e).backgroundColor);
+  check(bg !== YELLOW && bgHover !== YELLOW && /ghost/.test(await sendBtn().getAttribute('class')) && (await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.locator('.btn:not(.ghost)').innerText()).includes('Print top-tube card'), `The email button is outlined, not yellow, also on hover (${bg}, ${bgHover}); Print is the one yellow button`);
+  const sizes = await page.evaluate(() => ['#f-mail', 'section.mail .btn'].map((q) => { const r = document.querySelector(q).getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
+  check(sizes.every(([w, hh]) => w >= 44 && hh >= 44), `The field and the button are at least 44 px (${JSON.stringify(sizes)})`);
+  await shot('email-block');
+  for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('The race card with the email block', w); }
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await noHorizontalScroll('The race card with the email block', 1200);
+  await shot('email-block-1200');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ media: 'print' });
+  check((await m.evaluate((e) => getComputedStyle(e).display)) === 'none', 'The email block is not in the print view');
+  await page.emulateMedia({ media: 'screen' });
+  // The card redraws when its header opens for editing; what was typed in the email field stays.
+  await page.locator('#f-mail').fill(ADDRESS);
+  await page.locator('.racecard .band').getByRole('button', { name: 'Edit race' }).click();
+  await page.locator('#f-race-name').waitFor();
+  check((await page.locator('#f-mail').inputValue()) === ADDRESS && (await page.locator('.mail').count()) === 1, 'Opening "Edit race" redraws the card and keeps the typed address');
+  check(seen.length === 0, 'Looking at the block sends nothing');
+  await page.context().close();
+}
+
+// 9. A blank or bad address makes no request. Isolation: fresh context, seeded save, a stub that counts.
+{
+  const seen = await mailPage('email validation', mailSave(), (route) => route.fulfill(json(200, 'sent')));
+  const before = await storeText();
+  const err = page.locator('#mail-err');
+  const bad = [['blank', ''], ['two addresses with a comma', 'sam@example.test, lee@example.test'], ['two addresses, a line break between', 'sam@example.test\nlee@example.test'], ['no dot in the domain', 'sam@example'], ['no @', 'sam.example.test'], ['a semicolon', 'sam@example.test;lee@example.test']];
+  for (const [what, value] of bad) {
+    await page.locator('#f-mail').fill(value);
+    await sendBtn().click();
+    check((await err.isVisible()) && (await err.innerText()) === MAIL_BAD && (await page.locator('#f-mail').getAttribute('aria-invalid')) === 'true' && /mail-err/.test(await page.locator('#f-mail').getAttribute('aria-describedby')), `${what}: the message shows by the field`);
+    check((await page.locator('#f-mail').evaluate((e) => e === document.activeElement)), `${what}: focus goes back to the field`);
+  }
+  await page.waitForTimeout(150);
+  check(seen.length === 0, 'A blank or bad address made no request (route counter stays 0)');
+  await page.locator('#f-mail').fill('sam@example.test');
+  check(!(await err.isVisible()) && !(await page.locator('#f-mail').getAttribute('aria-invalid')), 'Typing again clears the message');
+  check((await storeText()) === before, 'Validation changed nothing saved');
+  await page.context().close();
+}
+
+// 10. Sent. Isolation: fresh context, seeded save. The stub holds its reply for 300 ms, so a double tap lands while sending.
+{
+  const save = mailSave();
+  const seen = await mailPage('email sent', save, async (route) => { await page.waitForTimeout(300); await route.fulfill(json(200, 'sent')); });
+  const before = await storeText();
+  await watchStatus();
+  await page.locator('#f-mail').fill(`  ${ADDRESS}  `);
+  await sendBtn().dblclick();
+  const busyBtn = page.locator('section.mail .btn');
+  check((await busyBtn.isDisabled()) && (await busyBtn.innerText()) === 'Sending...', 'While sending the button is disabled and says "Sending..."');
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_SENT);
+  await page.waitForTimeout(400);
+  check(seen.length === 1, `A double tap sent once (${seen.length} request)`);
+  const req = seen[0];
+  const body = req.postDataJSON();
+  check(req.method() === 'POST' && new URL(req.url()).pathname === '/api/send' && (await req.headerValue('content-type')) === 'application/json', 'The request is a POST of JSON to /api/send');
+  check((await req.headerValue('origin')) === base, `The request's Origin header is the page's own origin, never "null" (${await req.headerValue('origin')})`);
+  check(Object.keys(body).sort().join(',') === 'email,pdf' && body.email === ADDRESS, 'The body holds only email and pdf, and the address is trimmed');
+  const pdfBytes = Buffer.from(body.pdf, 'base64');
+  const pdf = pdfBytes.toString('latin1');
+  check(pdf.startsWith('%PDF-') && pdfBytes.length > 500 && pdfBytes.length * 3 < 100000, `The PDF starts %PDF- and is ${pdfBytes.length} bytes, under a third of the 100,000 byte cap`);
+  check(/not medical advice/.test(pdf) && /TRI Momentum race card/.test(pdf) && /Olympic/.test(pdf) && /Water at each aid station/.test(pdf), 'The PDF holds the card words, the distance and "not medical advice"');
+  check(!pdf.includes(save.race.name) && !/Sprint Cup|Sam Lee/.test(pdf) && !CLOCK.test(pdf) && !/Transition|start time/i.test(pdf) && !/NaN|undefined/.test(pdf), 'The PDF has no race name, no time of day, no transition and no junk');
+  check(!pdf.includes(STALE_PDF) && !/\/Filter|\/JavaScript|\/JS\b|\/URI|\/EmbeddedFile|\/Launch/.test(pdf) && (pdf.match(/\/Type \/Page\b(?!s)/g) || []).length === 1, 'A current plan has no out-of-date line; the PDF is one page, uncompressed, with no script or link');
+  check((await mailStatus().innerText()) === MAIL_SENT && !/delivered/i.test(await mailStatus().innerText()), 'The result says "Sent. It should arrive in a few minutes. Check your junk folder if not." and never "delivered"');
+  const history = await said();
+  check(history.length === 1 && history[0] === MAIL_SENT, `The result line was written once (${JSON.stringify(history)})`);
+  check((await mailStatus().getAttribute('role')) === 'status', 'The result is in a role=status line');
+  await stillWorks('After sent', before);
+  // The address is held in the page for this visit only: leaving the card and coming back starts blank.
+  await page.locator('#f-mail').fill(ADDRESS);
+  await page.goto(base + '/index.html#/');
+  await page.getByRole('heading', { name: /Sprint Cup/ }).waitFor();
+  await page.goto(base + '/index.html#/card');
+  await page.locator('.racecard').waitFor();
+  check((await page.locator('#f-mail').inputValue()) === '' && (await mailStatus().innerText()) === '', 'Leaving the card and coming back shows an empty field and a blank result line');
+  // The address is held in the page for this visit only.
+  check(!(await storeText()).includes(ADDRESS) && !(await page.evaluate(() => location.href)).includes('sam') && !(await page.evaluate(() => document.cookie)).includes('sam') && !(await page.evaluate(() => JSON.stringify(sessionStorage) + JSON.stringify(localStorage))).includes(ADDRESS), 'After sending, the address is not in storage, the page address or a cookie');
+  await page.reload();
+  await page.locator('.racecard').waitFor();
+  check((await page.locator('#f-mail').inputValue()) === '' && (await mailStatus().innerText()) === '', 'After a reload the field is empty and the result line is blank');
+  await page.context().close();
+}
+
+// 11. Refused (a 400 from the function). Isolation: fresh context, seeded save.
+{
+  const seen = await mailPage('email refused', mailSave(), (route) => route.fulfill(json(400, 'refused')), { errorsExpected: true });
+  const before = await storeText();
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_REFUSED);
+  check(seen.length === 1 && (await mailStatus().innerText()) === MAIL_REFUSED && (await mailStatus().isVisible()), 'A refused reply says "That address didn\'t work. Check it and try again."');
+  await stillWorks('After refused', before);
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction(() => document.querySelector('section.mail .btn').textContent === 'Email my race card');
+  check(seen.length === 2, 'The person can try again after a refusal');
+  await page.context().close();
+}
+
+// 12. The function asks to try later (503) and a 429. Isolation: fresh context per status.
+for (const status of [503, 429]) {
+  sendErrorsExpected = true;
+  const seen = await mailPage(`email later ${status}`, mailSave(), (route) => route.fulfill(json(status, 'later')), { errorsExpected: true });
+  const before = await storeText();
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_LATER);
+  check(seen.length === 1 && (await mailStatus().innerText()) === MAIL_LATER && (await mailStatus().isVisible()), `A ${status} "later" reply says email is not working right now, and the plan is saved`);
+  await stillWorks(`After ${status}`, before);
+  await page.context().close();
+}
+
+// 13. Offline. Isolation: fresh context, then the context goes offline before the tap.
+{
+  const seen = await mailPage('email offline', mailSave(), (route) => route.fulfill(json(200, 'sent')), { errorsExpected: true });
+  const before = await storeText();
+  await page.context().setOffline(true);
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_LATER);
+  check(seen.length === 0 && (await mailStatus().innerText()) === MAIL_LATER, 'Offline: the message says email is not working, and no request goes out');
+  await stillWorks('After offline', before);
+  await page.context().close();
+}
+
+// 14. The network fails after the tap (the phone thinks it is online). Isolation: fresh context.
+{
+  const seen = await mailPage('email network failure', mailSave(), (route) => route.abort('connectionreset'), { errorsExpected: true });
+  const before = await storeText();
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_LATER);
+  check(seen.length === 1 && (await mailStatus().innerText()) === MAIL_LATER, 'A failed request says email is not working');
+  await stillWorks('After a network failure', before);
+  await page.context().close();
+}
+
+// 15. No /api/send at all: the smoke server's 404, which is what GitHub Pages gives. Isolation: fresh context, no stub.
+{
+  const seen = await mailPage('email no function', mailSave(), null, { errorsExpected: true });
+  const before = await storeText();
+  let hit = null;
+  page.on('response', (r) => { if (new URL(r.url()).pathname === '/api/send') hit = [r.request().method(), r.status()]; });
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_LATER);
+  check(JSON.stringify(hit) === '["POST",404]' && seen.length === 0, `With no function behind /api/send (a static host's 404) the message says email is not working (${JSON.stringify(hit)})`);
+  await stillWorks('After a 404', before);
+  await page.context().close();
+}
+
+// 16. A 200 that is not the function's JSON (a static host that answers every address with a page), and a 405. Isolation: fresh context each.
+for (const [what, reply] of [['a page, not JSON', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>x</title>' })], ['JSON with no result', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })], ['a 405', (route) => route.fulfill(json(405, 'refused'))]]) {
+  const seen = await mailPage('email odd reply', mailSave(), reply, { errorsExpected: true });
+  const before = await storeText();
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_LATER);
+  check(seen.length === 1 && (await mailStatus().innerText()) === MAIL_LATER, `A reply that is ${what} says email is not working, never "sent"`);
+  await stillWorks(`After ${what}`, before);
+  await page.context().close();
+}
+
+// 17. A reply that never comes. Isolation: fresh context. The page's clock is faked so the 15 second wait takes no real time.
+{
+  const seen = await mailPage('email timeout', mailSave(), async () => { /* never answers */ }, { errorsExpected: true });
+  const before = await storeText();
+  await page.clock.install();
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction(() => document.querySelector('section.mail .btn').textContent === 'Sending...');
+  await page.clock.fastForward(14000);
+  check((await sendBtn().count()) === 0 && (await mailStatus().innerText()) === '', 'After 14 seconds it is still sending');
+  await page.clock.fastForward(2000);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_LATER);
+  check(seen.length === 1 && (await mailStatus().innerText()) === MAIL_LATER, 'After about 15 seconds with no reply the message says email is not working');
+  await stillWorks('After a timeout', before);
+  await page.context().close();
+}
+
+// 18. An out-of-date plan. Isolation: fresh context, the seeded save with the gut figure changed after the plan was made.
+{
+  const save = mailSave();
+  save.details.gut = 50;
+  const seen = await mailPage('email stale', save, (route) => route.fulfill(json(200, 'sent')));
+  const notice = page.locator('section.mail p.notice.warn');
+  check((await notice.count()) === 1 && (await notice.innerText()) === MAIL_STALE, 'An out-of-date plan shows "Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first."');
+  const order = await page.evaluate(() => { const q = (s) => document.querySelector(s).getBoundingClientRect().top; return q('section.mail p.notice.warn') < q('section.mail .btn') && q('#f-mail') < q('section.mail p.notice.warn'); });
+  check(order, 'The notice sits above the button');
+  await shot('email-block-stale');
+  await noHorizontalScroll('The race card with the email block and its out-of-date notice', 390);
+  await typeAndSend(ADDRESS);
+  await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_SENT);
+  const pdf = Buffer.from(seen[0].postDataJSON().pdf, 'base64').toString('latin1');
+  check(seen.length === 1 && pdf.includes(STALE_PDF), 'Sending was still allowed, and the PDF says "Nutrition plan out of date. Update it before race day."');
+  await page.context().close();
+}
+
+// 19. No block without a finished plan. Isolation: fresh context each, the seeded save with one half taken away.
+for (const [what, edit] of [['no nutrition plan', (v) => { v.race.fuel = null; }], ['no pace plan', (v) => { v.race.pace = null; }]]) {
+  const save = mailSave();
+  edit(save);
+  const seen = await mailPage(`email ${what}`, save, (route) => route.fulfill(json(200, 'sent')));
+  check((await page.locator('section.mail, #f-mail').count()) === 0 && seen.length === 0, `The race card with ${what} has no email block`);
+  await page.context().close();
+}
+sendErrorsExpected = false;
 
 await browser.close();
 server.close();

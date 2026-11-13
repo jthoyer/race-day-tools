@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const ROOT = path.join(__dirname, '..', 'public');
 const PAGES = ['index.html', 'guides/bike-pacing.html', 'guides/race-fuel.html'];
@@ -51,10 +52,23 @@ test('every script and stylesheet a page loads has a ?v=, and the file exists', 
   }
 });
 
-test('the three content-policy tags are identical and block every network request', () => {
+// "default-src 'self'; connect-src 'self'" -> { 'default-src': "'self'", 'connect-src': "'self'" }
+function directives(policy) {
+  return Object.fromEntries(policy.split(';').map((d) => d.trim()).filter(Boolean).map((d) => [d.split(/\s+/)[0], d.split(/\s+/).slice(1).join(' ')]));
+}
+
+test('the three content-policy tags are identical, and allow only same-origin requests', () => {
   const csp = PAGES.map((p) => /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html[p])[1]);
   assert.equal(new Set(csp).size, 1);
-  assert.match(csp[0], /connect-src 'none'/);
+  const meta = directives(csp[0]);
+  assert.equal(meta['connect-src'], "'self'", 'a page may call its own address and no other');
+  assert.equal(meta['form-action'], "'none'");
+  const headers = directives(/Content-Security-Policy:\s*(.*)/.exec(fs.readFileSync(path.join(ROOT, '_headers'), 'utf8'))[1]);
+  assert.equal(headers['connect-src'], meta['connect-src'], '_headers and the meta tags say the same about connections');
+  assert.equal(headers['form-action'], meta['form-action']);
+  // The two are kept in step: every directive a meta tag carries is the same in _headers (which adds frame-ancestors).
+  for (const [name, value] of Object.entries(meta)) assert.equal(headers[name], value, name);
+  assert.deepEqual(Object.keys(headers).filter((k) => !(k in meta)), ['frame-ancestors']);
 });
 
 test('the content policy names no outside host, and no page loads from one', () => {
@@ -81,4 +95,40 @@ test('every font file app.css names is shipped, and the licence ships with them'
     assert.ok(fs.existsSync(path.resolve(ROOT, 'css', url)), `${url} is missing`);
   }
   assert.match(fs.readFileSync(path.join(ROOT, 'fonts', 'LICENSE.txt'), 'utf8'), /SIL OPEN FONT LICENSE/i);
+});
+
+test('the vendored PDF library ships with its licence, pinned, and has not been edited', () => {
+  const dir = path.join(ROOT, 'js', 'vendor');
+  const lib = fs.readFileSync(path.join(dir, 'jspdf.umd.min.js'));
+  const licence = fs.readFileSync(path.join(dir, 'jspdf.LICENSE.txt'), 'utf8');
+  assert.match(licence, /MIT/);
+  assert.match(licence, /Permission is hereby granted, free of charge/, 'the licence text itself is there');
+  const version = /^jsPDF (\d+\.\d+\.\d+), MIT licence\./.exec(licence);
+  assert.ok(version, 'the licence file header names the version');
+  assert.ok(lib.toString('utf8', 0, 400).includes('Version ' + version[1] + ' '), 'the file is the version the header says');
+  assert.equal(/SHA-256: ([0-9a-f]{64})/.exec(licence)[1], crypto.createHash('sha256').update(lib).digest('hex'), 'a vendored file is never edited by hand');
+  assert.equal(Number(/Size:\s+(\d+) bytes/.exec(licence)[1]), lib.length);
+  assert.ok(lib.length < 500 * 1024, 'the browser build stays under 500 KB: ' + lib.length);
+  assert.match(html['index.html'], /<script src="js\/vendor\/jspdf\.umd\.min\.js\?v=\d+"><\/script>[\s\S]*<script src="js\/card\.js\?v=\d+"><\/script>[\s\S]*<script src="js\/app\.js\?v=\d+"><\/script>/, 'loaded before the app script');
+  for (const p of PAGES.slice(1)) assert.doesNotMatch(html[p], /jspdf|card\.js/, p + ' has no race card, so it does not load the PDF code');
+});
+
+// Every file under a folder, as text (binary files read as latin1, which is enough to look for words).
+function filesUnder(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? filesUnder(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+}
+
+test('no file in public/ names the mail service or holds a key, and none in functions/ holds a key (RD-039)', () => {
+  const publicFiles = filesUnder(ROOT);
+  const functionFiles = filesUnder(path.join(__dirname, '..', 'functions'));
+  assert.ok(publicFiles.length > 10 && functionFiles.length >= 2, 'looked at the files');
+  for (const f of publicFiles) {
+    const text = fs.readFileSync(f, 'latin1');
+    assert.doesNotMatch(text, /resend/i, `${path.relative(ROOT, f)} names the mail service: it belongs in functions/ only`);
+  }
+  for (const f of [...publicFiles, ...functionFiles]) {
+    assert.doesNotMatch(fs.readFileSync(f, 'latin1'), /re_[A-Za-z0-9_]{16,}/, `${f} holds something shaped like a mail key`);
+  }
+  // The check can see a key: the pattern matches the shape it is for.
+  assert.match('re_' + 'a1B2c3D4e5F6g7H8', /re_[A-Za-z0-9_]{16,}/);
 });
