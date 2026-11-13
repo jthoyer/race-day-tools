@@ -378,9 +378,9 @@ test('A17: /OpenAction only as jsPDF writes it, and /BaseFont only Helvetica or 
     const r = await send(good({ pdf: pdfWith(extra) }));
     assert.equal(r.res.status, 400, extra);
   }
-  assert.equal((await send(good({ pdf: pdfWith('/Type /Font /BaseFont /Helvetica\n/Type /Font /BaseFont /Helvetica-Bold') }))).res.status, 200);
+  assert.equal((await send(good({ pdf: pdfWith('/Type /Font /Subtype /Type1 /BaseFont /Helvetica\n/Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold') }))).res.status, 200);
   for (const font of ['Courier', 'Helvetica-Oblique', 'Times-Roman', 'ABCDEF+Arial', 'HelveticaX', '']) {
-    const r = await send(good({ pdf: pdfWith('/Type /Font /BaseFont /' + font) }));
+    const r = await send(good({ pdf: pdfWith('/Type /Font /Subtype /Type1 /BaseFont /' + font) }));
     assert.equal(r.res.status, 400, 'font ' + font);
   }
 });
@@ -511,7 +511,17 @@ const crafted = {
   'a comment after the body': '%not the marker\n',
   'a name hidden by a #xx escape': '/T#79pe0',
   'a name hidden by a #xx escape (allowed letters)': '/Pa#67e',
-  'a name not on the list': '/Notes 1'
+  'a name not on the list': '/Notes 1',
+  'BI after +': 'q +BI ID x EI Q',
+  'BI after -': 'q -BI ID x EI Q',
+  'a font with no /Type and no /BaseFont': '/Subtype /Type1 /Encoding /WinAnsiEncoding',
+  'a literal string holding endstream': '(abc endstream def)',
+  'a literal string holding stream': '(abc stream def)',
+  'a literal string holding endobj': '(abc endobj def)',
+  'a hex string with a non-hex byte': '/ID [<4A4Z>]',
+  'a hex string with a ( in it': '/ID [<41(42>]',
+  'a hex string holding a comment': '/ID [<41%42\n>]',
+  'a /Length lie: a name hidden in "stream data"': '<< /Length 5 >> stream\n/Bogus\nendstream'
 };
 for (const [what, body] of Object.entries(crafted)) {
   test(`round 3 refuses: ${what}`, async () => {
@@ -570,8 +580,65 @@ test('round 3: a hostile font entry is refused whatever comes next', async () =>
   for (const base of ['/BaseFont 9 0 R', '/BaseFont [/Helvetica]', '/BaseFont (Helvetica)', '/BaseFont', '/BaseFont /Helvetica-Oblique', '/BaseFont/Courier']) {
     assert.deepEqual(await refused(pdfWith('/Type /Font ' + base)), [400, 0], base);
   }
-  assert.equal((await send(good({ pdf: pdfWith('/Type /Font /BaseFont/Helvetica') }))).res.status, 200, 'a direct name with no space is the same token');
+  assert.equal((await send(good({ pdf: pdfWith('/Type /Font /Subtype /Type1 /BaseFont/Helvetica') }))).res.status, 200, 'a direct name with no space is the same token');
   assert.deepEqual(await refused(pdfWith('/Type /Font /BaseFont /Helvetica /Type /Font')), [400, 0], 'a font with no BaseFont of its own');
+});
+
+
+// ---- round 4: hex strings and stream data. A "(" a reader never sees as a string opener must not hide objects ----
+
+// Names that are on NEITHER list, so the allowlist and the hex rules, not the deny list, do the refusing.
+const HIDDEN = {
+  'Verifier 1: names after <(>': '<(> /Function /Dests /Link /GoTo /Hide /SetOCGState /Annot /Uri /Bogus ) ',
+  'Verifier 2: /OpenAction GoTo hidden': '<(>\n/OpenAction << /S /GoTo /D 9 0 R >> /Bogus\n)',
+  'Verifier 3: /OpenAction Hide hidden': '<(> /OpenAction << /S /Hide /T 9 0 R >> )',
+  'Verifier 4: a font hidden': '<(> /Type /Font /Subtype /Type1 )',
+  'Verifier 5: a comment hidden': '<(> % comment\n )',
+  'Verifier 6: in a content stream': 'stream\nBT <(> /Bogus ) Tj ET\nendstream',
+  'Reviewer A: objects hidden between <(> and <)>': '3 0 obj <(> endobj 4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier >> endobj 1 0 obj << /Type /Catalog /Pages 2 0 R /PageMode /FullScreen >> endobj 5 0 obj <)> endobj',
+  'Reviewer B: stream data holding ( and )': '<< /Length 1 >> stream\n(\nendstream\n/Bogus /Type /Font /Subtype /Type1 /BaseFont /Courier\n<< /Length 1 >> stream\n)\nendstream'
+};
+test('round 4 setup: the hidden names are on neither the deny list nor the allowlist', () => {
+  for (const [what, body] of Object.entries(HIDDEN)) {
+    for (const name of body.match(/\/[A-Za-z0-9]+/g) || []) {
+      if (mod.ALLOWED_NAMES.has(name)) continue;
+      assert.ok(!DENY_LIST.some((w) => name.includes(w) || w === name), `${what}: ${name} is on the deny list, so it would not prove the allowlist`);
+    }
+  }
+});
+for (const [what, body] of Object.entries(HIDDEN)) {
+  test(`round 4 refuses: ${what}`, async () => {
+    assert.equal(mod.pdfStructureOk(pdfWithText(body)), false, 'the structure check refuses it by itself');
+    assert.deepEqual(await refused(pdfWith(body)), [400, 0]);
+  });
+}
+
+test('round 4: a ( inside a hex string is not a string opener (red if hex is read like a literal string)', () => {
+  assert.equal(mod.stripStrings(pdfWithText('<(> /Bogus )')), null, 'the hex string holds a non-hex byte');
+  assert.equal(mod.pdfStructureOk(pdfWithText('<(> /Bogus )')), false);
+  assert.equal(mod.pdfStructureOk(pdfWithText('<)> /Bogus (x)')), false);
+  // The hidden name must not be hidden by a lone ( that only a literal-string reader would see.
+  assert.equal(mod.pdfStructureOk(pdfWithText('<41> (a) /Bogus')), false, 'a name after a real hex string and a real literal string is still seen');
+});
+
+test('round 4 refuses: an unterminated hex string', async () => {
+  assert.equal(mod.pdfStructureOk('%PDF-1.3\n1 0 obj\n/ID [<4142 \n'), false);
+  assert.deepEqual(await refused(raw('1 0 obj\n/ID [<4142 \n')), [400, 0]);
+});
+
+test('round 4: real hex strings pass: the /ID pair jsPDF writes, with PDF whitespace inside', async () => {
+  const id = '/ID [ <BBB7BB2006E054B716DF5B9DAC421D9C> <BBB7BB2006E054B716DF5B9DAC421D9C> ]';
+  assert.match(FIXTURE.toString('latin1'), /\/ID \[ <[0-9A-F]{32}> <[0-9A-F]{32}> \]/, 'the real card holds a hex /ID');
+  assert.equal(mod.pdfStructureOk(pdfWithText(id)), true);
+  assert.equal(mod.pdfStructureOk(pdfWithText('/ID [<41 42\n43\t44\r\n45>]')), true);
+  assert.equal(mod.pdfStructureOk(pdfWithText('/ID [<>] << /Type /Catalog >>')), true, 'an empty hex string and a dictionary start');
+  assert.equal((await send(good({ pdf: pdfWith(id) }))).res.status, 200);
+});
+
+test('round 4: PDF whitespace only: a vertical tab or a non-breaking space is not whitespace to a reader', () => {
+  assert.equal(mod.pdfStructureOk(pdfWithText('/Type /Font /Subtype /Type1 /BaseFont /Helvetica')), true);
+  assert.equal(mod.pdfStructureOk(pdfWithText('/Type /Font /Subtype /Type1 /BaseFont\v/Helvetica')), false, 'a \\v after /BaseFont');
+  assert.equal(mod.pdfStructureOk(pdfWithText('/Type /Font /Subtype /Type1 /BaseFont /Helvetica')), false, 'a non-breaking space after /BaseFont');
 });
 
 

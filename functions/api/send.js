@@ -38,6 +38,10 @@ const PROVIDER_TIMEOUT_MS = 10000;
 //      having to know about each of them.
 //   2. A DENY LIST of names and an inline-image pattern, run over the raw bytes, strings included. It is defence in depth:
 //      it does not depend on the reading above being right, and it refuses even where a string only mentions a name.
+//   Hex strings <...> are read too (a reader closes them at ">" and skips non-hex bytes, so only hex digits and PDF
+//   whitespace are allowed inside), and a literal string may not hold "stream" or "endobj", because a reader skips stream
+//   data by its /Length and could otherwise disagree with this reading about where a string starts. Every font must have
+//   a valid /BaseFont, a /Type /Font and a /Subtype /Type1, one each.
 // WHAT IT DOES NOT DO: stop phishing. Anyone can type text, including a web address a reader turns into a link, into a
 // PDF's page text, and plain text passes both layers. Only a PDF built on the server from the plan would close that;
 // the owner declined it. This cuts down what can be sent from our address. It does not make what is sent trustworthy.
@@ -62,7 +66,7 @@ const JSPDF_OWN = [/\/ProcSet \[\/PDF \/Text \/ImageB \/ImageC \/ImageI\]/g, /\/
 const NAME_WITH_HEX_ESCAPE = /\/[^\s/[\]<>(){}%]*#[0-9A-Fa-f]{2}/;
 // An inline image starts with the operator BI. Whitespace, NUL and the PDF delimiters (and a digit or dot before it) end a
 // token, and a % comment or a name can follow BI with no space, so all of those are boundaries.
-const INLINE_IMAGE = /[\s\0()<>[\]{}0-9.]BI(?=[\s\0%/]|$)/;
+const INLINE_IMAGE = /[\s\0()<>[\]{}0-9.+-]BI(?=[\s\0%/]|$)/;
 
 // The PDF read as a reader reads it. Returns the text with literal strings emptied to "()", or null if the PDF breaks the
 // grammar rules above (a comment where none is allowed, an unclosed or unbalanced string, a "(" or ")" the reader would
@@ -79,8 +83,20 @@ export function stripStrings(bin) {
   while (i < end) {
     const c = bin[i];
     if (c === '%') return null; // a comment anywhere else
+    if (c === '<' && bin[i + 1] === '<') { out += '<<'; i += 2; continue; }
+    if (c === '<') {
+      // A hex string. A reader closes it at ">" and skips anything that is not a hex digit, so a "(" in here is not a
+      // string opener to the reader. Only hex digits and PDF whitespace are allowed inside; anything else is refused.
+      const close = bin.indexOf('>', i + 1);
+      if (close < 0 || close >= end) return null; // unterminated
+      if (!/^[0-9A-Fa-f\0\t\n\f\r ]*$/.test(bin.slice(i + 1, close))) return null;
+      out += '<>';
+      i = close + 1;
+      continue;
+    }
     if (c === '(') {
       let depth = 1;
+      const start = i + 1;
       i += 1;
       while (i < end && depth > 0) {
         const d = bin[i];
@@ -90,6 +106,9 @@ export function stripStrings(bin) {
         i += 1;
       }
       if (depth !== 0) return null; // an unclosed string
+      // Stream data and object boundaries are not text. A string that holds them is trying to make this reading and a
+      // reader's (which skips stream data by /Length) disagree about where a string starts.
+      if (/stream|endobj/.test(bin.slice(start, i - 1))) return null;
       out += '()';
       continue;
     }
@@ -104,14 +123,15 @@ export function stripStrings(bin) {
 export function pdfStructureOk(bin) {
   const text = stripStrings(bin);
   if (text === null) return false;
-  for (const m of text.matchAll(/\/[^\s\0()<>[\]{}/%]*/g)) {
+  for (const m of text.matchAll(/\/[^\0\t\n\f\r ()<>[\]{}/%]*/g)) {
     if (m[0].includes('#') || !ALLOWED_NAMES.has(m[0])) return false;
   }
   // Every font names itself, directly, as one of the two Helvetica faces.
-  const base = (text.match(/\/BaseFont(?![^\s\0()<>[\]{}/%])/g) || []).length;
-  const good = (text.match(/\/BaseFont\s*\/Helvetica(?:-Bold)?(?=[\s\0()<>[\]{}/%]|$)/g) || []).length;
-  const fonts = (text.match(/\/Type\s*\/Font(?![^\s\0()<>[\]{}/%])/g) || []).length;
-  if (base !== good || fonts !== base) return false;
+  const base = (text.match(/\/BaseFont(?![^\0\t\n\f\r ()<>[\]{}/%])/g) || []).length;
+  const good = (text.match(/\/BaseFont[\0\t\n\f\r ]*\/Helvetica(?:-Bold)?(?=[\0\t\n\f\r ()<>[\]{}/%]|$)/g) || []).length;
+  const fonts = (text.match(/\/Type[\0\t\n\f\r ]*\/Font(?![^\0\t\n\f\r ()<>[\]{}/%])/g) || []).length;
+  const type1 = (text.match(/\/Subtype[\0\t\n\f\r ]*\/Type1(?![^\0\t\n\f\r ()<>[\]{}/%])/g) || []).length;
+  if (base !== good || fonts !== base || type1 !== base) return false;
   // The open-at-page entry only in the form jsPDF writes.
   const opens = (text.match(/\/OpenAction/g) || []).length;
   return opens === (text.match(/\/OpenAction \[\d+ 0 R \/FitH null\]/g) || []).length;
