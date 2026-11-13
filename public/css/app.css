@@ -530,32 +530,70 @@ h2 {
   padding-left: 18px;
 }
 
-.countdown {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.strip {
   border-radius: var(--r);
   background: var(--ink);
   color: #fff;
-  padding: 16px 18px;
+  overflow: hidden;
 }
-.countdown .k {
-  margin: 0;
+/* Each row is one button, at least 60 px tall and the full width of the strip. */
+.strip .srow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 16px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 400 14px/1.3 var(--body);
+  text-align: left;
+  cursor: pointer;
+}
+.strip .srow + .srow {
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+.strip .srow:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+.strip .rn,
+.strip .cl {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.strip .rn b {
+  margin-right: 6px;
+  font: 700 18px var(--display);
+}
+.strip .cl {
+  display: grid;
+}
+.strip .d {
+  font: 700 20px/1.2 var(--display);
+}
+.strip .et {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
   color: var(--accent-hover);
-  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 1.2px;
 }
-.countdown .v {
-  margin: 2px 0 0;
-  font: 700 22px var(--display);
+.strip .srow:hover .et {
+  color: #fff;
 }
-.countdown .n {
+.strip .srow[aria-expanded='true'] .et svg {
+  transform: rotate(180deg);
+}
+.strip .panel {
+  margin: 0 12px 12px;
+}
+.strip .panel .when {
   margin: 0;
-  max-width: 170px;
-  color: #edf0f7;
-  font-size: 13px;
-  line-height: 1.4;
+  font-weight: 700;
 }
 
 /* Pace targets (F5) */
@@ -980,7 +1018,8 @@ details.test p {
 .racecard .band .taper .editbtn {
   margin: 0 -6px -10px;
 }
-.racecard .band .panel {
+.racecard .band .panel,
+.strip .panel {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -988,7 +1027,8 @@ details.test p {
   background: var(--surface);
   color: var(--ink);
 }
-.racecard .band .panel:focus {
+.racecard .band .panel:focus,
+.strip .panel:focus {
   outline: 0;
 }
 .racecard .date {
@@ -1079,10 +1119,14 @@ details.test p {
   font-weight: 700;
 }
 /* A link in a card line is a tap target of its own: at least 44 px high. */
-.sec p.small a {
+.sec p.small a,
+.home p.small a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+}
+.home p.small a {
+  margin-left: 12px;
 }
 p.notice.go {
   margin: 0;

@@ -16,7 +16,10 @@
   var raw = {}; // what the person is typing, before it parses
   var errors = {}; // field -> message, shown after they press Next
   var currentPrint = null; // what the print button and Ctrl+P print
-  var cardEdit = null; // which part of the race card header is open for editing: 'race', 'taper' or null
+  // Which editor is open on the race card header or the race strip: 'race', 'taper' or null. Never saved. Every new
+  // screen visit starts it closed (render), except the one arrival pendingEdit asks for.
+  var raceEdit = null;
+  var pendingEdit = null; // set by home's "Edit taper" link: the next screen opens with that editor already open
   var view = document.getElementById('view');
 
   function commit() { store.save(S); }
@@ -51,6 +54,8 @@
     var d = T.addDays(iso, 0);
     return d ? d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
   }
+  // "Mon, 16 Nov" (Chromium's en-AU puts a comma after the weekday; June, July and Sept are not three letters), for the race strip and the taper line.
+  function shortDate(d) { return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }); }
   function daysText(n) {
     if (n == null) return '';
     if (n > 1) return n + ' days to go';
@@ -84,7 +89,7 @@
     var start = T.addDays(r.date, -len);
     if (days == null || !start) return null;
     var longDay = start.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
-    var shortDay = start.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    var shortDay = shortDate(start);
     var tDays = T.daysUntil(isoOf(start));
     return {
       days: days, len: len, own: len === r.taperDays, iso: isoOf(start),
@@ -217,6 +222,7 @@
     return s;
   }
   var TICK = 'M5 12l5 5 9-10';
+  var CHEVRON = 'M6 9l6 6 6-6';
 
   // The four steps, and where each opens. Home and the rail both read this, so they never disagree about what is done.
   // Race is done when the race has a date, Pacing when pace is saved, Nutrition when nutrition is saved. The race card
@@ -288,7 +294,9 @@
     currentPrint = null;
     if (!render.quiet) {
       aboutShown = false;
-      cardEdit = null; // a new visit to the race card opens with its header closed
+      // A new visit opens the race card header and the race strip closed, unless home's "Edit taper" link asked otherwise.
+      raceEdit = pendingEdit;
+      pendingEdit = null;
       // The "targets saved" line shows on the first arrival at step 3 only, and stays while that screen redraws.
       if (savedNote === 'shown') savedNote = false;
       else if (savedNote === 'pending') savedNote = parts[0] === 'fuel' ? 'shown' : false;
@@ -297,7 +305,10 @@
     var out = fn(parts.slice(1));
     view.appendChild(out);
     var h1 = view.querySelector('h1');
-    if (h1 && !render.quiet) h1.focus();
+    // An arrival with the taper editor already open puts focus in its panel; every other arrival focuses the title.
+    var arrive = !render.quiet && raceEdit ? document.getElementById('strip-panel-' + raceEdit) : null;
+    if (arrive) arrive.focus();
+    else if (h1 && !render.quiet) h1.focus();
     render.quiet = false;
   }
   // Re-render after a tap on the same screen without stealing focus from where the person is.
@@ -419,7 +430,14 @@
         days != null ? h('p', { class: 'label' }, daysText(days)) : null,
         h('h1', { tabindex: '-1' }, raceTitle(r)),
         h('p', { class: 'sub' }, (r.date ? longDate(r.date) : 'No date yet') + '. ' + COUNT_SENTENCE[count]),
-        tp && tp.short ? h('p', { class: 'small' }, tp.short) : null),
+        // "Edit taper" opens the taper editor on the race strip, already open (criterion 29).
+        tp && tp.short ? h('p', { class: 'small' }, tp.short,
+          h('a', {
+            href: pacingHref(r),
+            onclick: function (e) {
+              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) pendingEdit = 'taper';
+            }
+          }, 'Edit taper')) : null),
       h('ol', { class: 'steps' }, items),
       h('div', { class: 'actions' },
         h('a', { class: 'btn', href: action[0] }, action[1]),
@@ -458,6 +476,7 @@
     return h('div', { class: 'app' },
       topBar(wordmark(), myPlan()),
       rail('pacing'),
+      raceStrip(r),
       partBar(n),
       parts[n](r));
   }
@@ -490,7 +509,6 @@
 
   function setupRace(r) {
     var tp = taperInfo(r);
-    var days = tp ? tp.days : null;
     function checkRace() {
       if (!r.name) set('race.name', 'My race');
       return {};
@@ -509,10 +527,8 @@
         bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
         // A date field shows nothing at all on some phones while it is empty, so say what to do.
         r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.'),
-        tp ? h('section', { class: 'countdown' },
-          h('div', { style: 'flex:1' }, h('p', { class: 'k' }, 'COUNTDOWN'), h('p', { class: 'v' }, daysText(days))),
-          h('p', { class: 'n' }, tp.line)) : null,
-        tp && days >= 0 ? taperPicker(r, tp) : null,
+        // The countdown and the taper are on the race strip from step 2. A date that has passed still says so here.
+        tp && tp.days < 0 ? h('p', { class: 'help' }, tp.line) : null,
         h('div', { class: 'actions' },
           h('button', { type: 'button', class: 'btn', onclick: next('pacing/1', checkRace) }, 'Next: choose pacing'),
           hasPlan(r) ? backToCard(checkRace) : null,
@@ -521,8 +537,7 @@
 
   // Taper length (RD-011, RD-031): one tap for 10, 14 or 21 days, or pick the day it starts. Our guide is marked.
   // A picked day must fall 1 to 42 days before race day (pace.js, TAPER.limits); anything else is refused, not saved.
-  function taperPicker(r, tp) { return h('section', { class: 'card' }, taperControls(r, tp)); }
-  // The controls alone, so step 1 and the race card header share one set of rules.
+  // The race strip and the race card header share these controls and their rules.
   function taperControls(r, tp) {
     var T_ = RD.pace.TAPER;
     var guide = RD.pace.taperDays(r.distance, null);
@@ -821,39 +836,82 @@
     return h('article', { class: 'racecard' }, heroBand(r), paceSec, nutSec);
   }
 
+  // The race editor, shared by the race card header (prefix 'card') and the race strip (prefix 'strip'): "Edit race"
+  // (name and date) and "Edit taper" each open a panel in place, so nobody leaves the screen. Details save as they are
+  // typed, so the panel has Done, never Save. One implementation, so the two places cannot drift apart. The prefix makes
+  // the ids, so Done returns focus to its own screen's button. canTaper: there is a taper to edit (a date, not past).
+  function raceEditor(r, prefix, canTaper) {
+    var open = raceEdit === 'taper' && !canTaper ? null : raceEdit;
+    function clearTaperError() { delete errors['race.taperDate']; delete raw['race.taperDate']; }
+    function done() {
+      // Step 1 does the same: a race left without a name is called "My race".
+      if (!r.name) set('race.name', 'My race');
+      raceEdit = null;
+      clearTaperError();
+      refresh();
+      // With no date left to count to, the strip is gone and there is no button to return to: the title is next best.
+      var back = document.getElementById(prefix + '-edit-' + open) || view.querySelector('h1');
+      if (back) back.focus();
+    }
+    return {
+      open: open,
+      buttonId: function (which) { return prefix + '-edit-' + which; },
+      toggle: function (which) {
+        return function () {
+          raceEdit = open === which ? null : which;
+          clearTaperError();
+          refresh();
+          var target = raceEdit === 'race' ? document.getElementById('f-race-name') : raceEdit === 'taper' ? document.getElementById(prefix + '-panel-taper') : null;
+          // Closing the race panel with no date left removes the strip, and its row with it: the title is next best.
+          if (!target && !document.getElementById(prefix + '-edit-' + which)) target = view.querySelector('h1');
+          if (target) target.focus();
+        };
+      },
+      // The race name and date, the same fields and rules as step 1. They redraw as they are typed, so the countdown moves.
+      raceFields: function () {
+        return [
+          bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3', live: refresh }),
+          bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
+          r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.')];
+      },
+      panel: function (which, kids) {
+        return h('div', { class: 'panel', id: prefix + '-panel-' + which, role: 'group', 'aria-label': which === 'race' ? 'Edit race' : 'Edit taper', tabindex: '-1' },
+          kids, h('button', { type: 'button', class: 'btn second', onclick: done }, 'Done'));
+      }
+    };
+  }
+
+  // The race strip (OF-06, criterion 29): the race, the days to go and the taper, under the rail on steps 2 and 3. Each
+  // of the two rows is one button that opens its editor in place. It shows only while there is a date to count to,
+  // except while the race panel is open: then it stays, so the field being typed in never vanishes mid-edit.
+  function raceStrip(r) {
+    var tp = taperInfo(r);
+    var canTaper = !!tp && isNum(tp.days) && tp.days >= 0;
+    if (!r || (!canTaper && raceEdit !== 'race')) return null;
+    var ed = raceEditor(r, 'strip', canTaper);
+    var d = T.addDays(r.date, 0);
+    function row(which, words, label) {
+      return h('button', {
+        type: 'button', class: 'srow', id: ed.buttonId(which), 'aria-expanded': String(ed.open === which), 'aria-controls': 'strip-panel-' + which,
+        onclick: ed.toggle(which)
+      }, words, h('span', { class: 'et' }, label, svg(CHEVRON, 14)));
+    }
+    return h('section', { class: 'strip noprint', 'aria-label': 'Your race' },
+      row('race', h('span', { class: 'rn' }, h('b', null, raceTitle(r)), d ? ' ' + shortDate(d) : ''), 'Edit race'),
+      canTaper ? row('taper', h('span', { class: 'cl' }, h('span', { class: 'd' }, daysText(tp.days)), ' ', h('span', { class: 'tp' }, tp.short)), 'Edit taper') : null,
+      ed.open === 'race' ? ed.panel('race', ed.raceFields()) : null,
+      ed.open === 'taper' ? ed.panel('taper', [h('p', { class: 'when' }, tp.line), taperControls(r, tp)]) : null);
+  }
+
   // The race card header: race name and date, the countdown and the taper in one band. "Edit race" and "Edit taper"
-  // open a panel in the band, so nobody leaves the card. Details save as they are typed, so the panel has Done, not Save.
-  // The countdown stays in view and moves as the date or the taper changes.
+  // open a panel in the band, so nobody leaves the card. The countdown stays in view and moves as the date or the taper changes.
   function heroBand(r) {
     var d = T.addDays(r.date, 0);
     var days = T.daysUntil(r.date);
     var tp = taperInfo(r);
-    var canTaper = !!tp && days >= 0; // the same rule as step 1: no taper to edit without a date, or after race day
-    var open = cardEdit === 'taper' && !canTaper ? null : cardEdit;
-    function toggle(which) {
-      return function () {
-        cardEdit = open === which ? null : which;
-        delete errors['race.taperDate'];
-        delete raw['race.taperDate'];
-        refresh();
-        var target = cardEdit === 'race' ? document.getElementById('f-race-name') : cardEdit === 'taper' ? document.getElementById('card-panel') : null;
-        if (target) target.focus();
-      };
-    }
-    function done() {
-      // Step 1 does the same: a race left without a name is called "My race".
-      if (!r.name) set('race.name', 'My race');
-      cardEdit = null;
-      delete errors['race.taperDate'];
-      delete raw['race.taperDate'];
-      refresh();
-      var back = document.getElementById('card-edit-' + open);
-      if (back) back.focus();
-    }
-    function panel(label, kids) {
-      return h('div', { class: 'panel', id: 'card-panel', role: 'group', 'aria-label': label, tabindex: '-1' },
-        kids, h('button', { type: 'button', class: 'btn second', onclick: done }, 'Done'));
-    }
+    var canTaper = !!tp && days >= 0; // no taper to edit without a date, or after race day
+    var ed = raceEditor(r, 'card', canTaper);
+    var open = ed.open;
     var summary = h('div', { class: 'who' },
       h('div', { class: 'date' },
         h('strong', null, d ? String(d.getDate()) : '–'),
@@ -865,19 +923,16 @@
     return h('div', { class: 'band' },
       h('div', { class: 'toprow' },
         h('p', { class: 'k' }, 'YOUR RACE'),
-        h('button', { type: 'button', class: 'editbtn', id: 'card-edit-race', 'aria-expanded': String(open === 'race'), onclick: toggle('race') }, 'Edit race')),
+        h('button', { type: 'button', class: 'editbtn', id: ed.buttonId('race'), 'aria-expanded': String(open === 'race'), onclick: ed.toggle('race') }, 'Edit race')),
       open === 'race' ? null : summary,
-      open === 'race' ? panel('Edit race', [
-        bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3', live: refresh }),
-        bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
-        r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.')]) : null,
+      open === 'race' ? ed.panel('race', ed.raceFields()) : null,
       count || (tp && tp.short) ? h('div', { class: 'rule' }) : null,
       h('div', { class: 'count' },
         count ? h('p', { class: 'v' }, count) : null,
         tp && tp.short || canTaper ? h('div', { class: 'taper' },
           tp && tp.short ? h('p', { class: 'bt' }, tp.short) : null,
-          canTaper ? h('button', { type: 'button', class: 'editbtn', id: 'card-edit-taper', 'aria-expanded': String(open === 'taper'), onclick: toggle('taper') }, 'Edit taper') : null) : null),
-      open === 'taper' ? panel('Edit taper', taperControls(r, tp)) : null);
+          canTaper ? h('button', { type: 'button', class: 'editbtn', id: ed.buttonId('taper'), 'aria-expanded': String(open === 'taper'), onclick: ed.toggle('taper') }, 'Edit taper') : null) : null),
+      open === 'taper' ? ed.panel('taper', taperControls(r, tp)) : null);
   }
 
   // The pace behind one leg of the pace plan, in the middle of its range: "~1:45 /100m", "~34 km/h", "~4:50 /km" (RD-030).
@@ -1192,6 +1247,7 @@
     return h('div', { class: 'app' },
       topBar(wordmark(), myPlan()),
       rail('nutrition'),
+      raceStrip(r),
       title('Review nutrition', fromPlan ? 'Built from your pacing. Change anything that looks wrong.' : 'Add your bike and run times. Change anything that looks wrong.'),
       savedNote ? statusLine('Pace targets saved to your race card') : null,
       splitsBox,

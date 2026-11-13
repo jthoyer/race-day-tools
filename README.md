@@ -2,7 +2,7 @@
 
 Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can print for your top tube. It's a static web app. It runs on the athlete's phone with no account, no server and no health data held. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
 
-This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Countdown and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
+This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Steps 2 and 3 carry a race strip with the days to go and when the taper starts. The Countdown tool (a 14-day plan and a race-morning timeline) and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
 
 > **Not ready to publish.** Every pacing and fuelling range is a typical value that has not yet been checked against current sources. See *Numbers to verify* below.
 
@@ -72,7 +72,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/time.js` | Parsing and formatting times and dates. |
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
-| `public/js/app.js` | The screens: home (the front page, and coming back, with the guide links at the bottom of the front page), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, print, and the rail (Race, Pacing, Nutrition, Race card) that joins them. |
+| `public/js/app.js` | The screens: home (the front page, and coming back, with the guide links at the bottom of the front page), step 1 race, step 2 pacing in three parts, step 3 nutrition, the race strip on steps 2 and 3 (days to go and the taper, each editable in place), step 4 race card, My products, print, and the rail (Race, Pacing, Nutrition, Race card) that joins them. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
 | `public/_headers` | Security headers and the content policy. |

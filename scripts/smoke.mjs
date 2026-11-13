@@ -167,30 +167,19 @@ const s1text = await appText();
 check(/Every step works back from race day\./.test(s1text) && !/Start time|Transition opens|Clear start|Clear transition/.test(s1text) && (await page.locator('input[type=time]').count()) === 0, 'Step 1 has its subtitle and no start time, no Transition opens, no Clear buttons');
 check(!(await page.getByRole('button', { name: 'Save and back to race card' }).count()), 'A first pass through the steps has no "back to race card" yet');
 await page.getByLabel('Race name').fill('Spring 70.3');
-// Olympic stores "standard", shows its legs, and marks 10 days as our guide.
+// Olympic stores "standard" and shows its legs. (Its 10-day taper guide is checked on the race strip, scenario 4.)
 await page.getByLabel('Race date').fill(inDays(20));
 await page.getByRole('button', { name: 'Olympic' }).click();
-check((await store()).race.distance === 'standard' && (await page.getByText('Swim 1.5 km · Bike 40 km · Run 10 km').isVisible()) && /10 days \(our guide\)/.test(await page.getByRole('button', { name: /10 days/ }).innerText()), 'Choosing Olympic stores "standard", shows 1.5 / 40 / 10 km and marks 10 days (our guide)');
+check((await store()).race.distance === 'standard' && (await page.getByText('Swim 1.5 km · Bike 40 km · Run 10 km').isVisible()), 'Choosing Olympic stores "standard" and shows 1.5 / 40 / 10 km');
 check(!/\bstandard\b/i.test(await appText()), 'Step 1 never shows "Standard"');
 await page.getByRole('button', { name: '70.3', exact: true }).click();
 check(await page.getByText('Swim 1.9 km · Bike 90 km · Run 21.1 km').isVisible() && (await store()).race.distance === '70.3', 'Choosing 70.3 shows the 70.3 leg distances');
-check(await page.getByText(/days to go/).first().isVisible(), 'Step 1 shows days to go');
-// RD-011, RD-031. Taper length: our guide (14 days for a 70.3) is marked, one tap changes it, and a picked day works.
-const taperStore = async () => (await store()).race.taperDays;
-check((await page.getByRole('button', { name: /14 days/ }).getAttribute('aria-pressed')) === 'true' && /14 days \(our guide\)/.test(await page.getByRole('button', { name: /14 days/ }).innerText()), 'Step 1 marks our 14-day taper guide for a 70.3');
-const taperBefore = await page.locator('.countdown .n').innerText();
-await page.getByRole('button', { name: /21 days/ }).click();
-check((await taperStore()) === 21 && (await page.locator('.countdown .n').innerText()) !== taperBefore, 'Picking a 21-day taper saves it and moves the start');
-check(/You are in your taper/.test(await page.locator('.countdown .n').innerText()), 'A taper longer than the days to go says you are in it');
-const raceDay = new Date(Date.now() + 20 * 86400000);
-const sevenBefore = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() - 7);
-await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(sevenBefore));
-check((await taperStore()) === 7, 'Picking the day the taper starts saves a 7-day taper');
-const after = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() + 3);
-await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(after));
-check(await page.getByText(/Pick a day 1 to 42 days before race day/).isVisible() && (await taperStore()) === 7 && (await page.getByLabel('Or pick the day your taper starts').inputValue()) === isoLocal(after), 'A taper day after the race is refused, not saved, and stays on screen with its message');
-await page.getByRole('button', { name: /14 days/ }).click();
-check((await taperStore()) == null && !(await page.getByText(/Pick a day 1 to 42/).isVisible()), 'Going back to 14 days uses our guide again');
+// Criterion 29: the countdown and the taper are not on step 1. A date that has passed still says so.
+check(!/days to go|Taper length|taper starts/i.test(await appText()) && (await page.locator('.countdown').count()) === 0 && (await page.locator('section.strip').count()) === 0, 'Step 1 has no countdown, no days to go, no taper controls and no race strip');
+await page.getByLabel('Race date').fill(inDays(-2));
+check(await page.getByText('This date has passed. Pick your next race.').isVisible() && !/days to go|Taper length|taper starts/i.test(await appText()), 'Step 1 says a date that has passed has passed, with no countdown');
+await page.getByLabel('Race date').fill(inDays(20));
+check(!(await page.getByText('This date has passed. Pick your next race.').count()), 'A date that has not passed shows no passed line on step 1');
 await wordsClean('Step 1');
 for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('Step 1', w); }
 await page.setViewportSize({ width: 390, height: 844 });
@@ -199,6 +188,94 @@ await page.getByRole('button', { name: 'Next: choose pacing' }).click();
 
 // Step 2, part 1: Your fitness.
 await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
+// Criterion 29, the race strip. Same session, deliberately: each check below starts from the state the one before left,
+// and the strip is put back (name, date, taper guide, both panels closed) before the rest of part 1 runs.
+check(await page.evaluate(() => document.activeElement && document.activeElement.tagName === 'H1' && document.activeElement.textContent === 'Choose pacing'), 'The strip holds no heading: arriving on part 1 focuses the "Choose pacing" title');
+const strip = page.locator('section.strip');
+const stripRace = strip.getByRole('button', { name: /Edit race/ });
+const stripTaper = strip.getByRole('button', { name: /Edit taper/ });
+const stripPanel = page.locator('section.strip .panel'); // only one panel is ever in the page
+const stripPlaced = (sel) => page.evaluate((q) => { const st = document.querySelector('section.strip'); const rail = document.querySelector('nav.rail'); const nx = document.querySelector(q); return !!st && !!nx && rail.nextElementSibling === st && !!(st.compareDocumentPosition(nx) & Node.DOCUMENT_POSITION_FOLLOWING); }, sel);
+const stripText = async () => (await strip.innerText()).replace(/\s+/g, ' ');
+const taperStore = async () => (await store()).race.taperDays;
+check((await strip.count()) === 1 && (await strip.getAttribute('aria-label')) === 'Your race' && (await strip.locator('h1').count()) === 0 && (await strip.evaluate((e) => { const rail = document.querySelector('nav.rail').getBoundingClientRect(); const bar = document.querySelector('.progress').getBoundingClientRect(); const b = e.getBoundingClientRect(); return b.top >= rail.bottom - 1 && b.bottom <= bar.top + 1; })), 'The race strip is the first thing under the rail on part 1, above the part bar, and holds no heading');
+check(/^Spring 70\.3 \w{3},? \d+ \w{3,4} Edit race 20 days to go Taper starts \w{3},? \d+ \w{3,4} Edit taper$/.test(await stripText()), 'The closed strip says the race, the short date, the days to go and the taper start, with its two edits: ' + (await stripText()));
+const rowBox = (l) => l.evaluate((e) => { const b = e.getBoundingClientRect(); const sb = e.closest('section.strip').getBoundingClientRect(); return [b.height, Math.abs(b.width - sb.width)]; });
+const [rh, rw] = await rowBox(stripRace);
+const [th, tw] = await rowBox(stripTaper);
+check(rh >= 60 && th >= 60 && rw <= 1 && tw <= 1 && (await stripRace.getAttribute('aria-expanded')) === 'false' && (await stripTaper.getAttribute('aria-expanded')) === 'false' && (await stripRace.getAttribute('aria-controls')) === 'strip-panel-race' && (await stripTaper.getAttribute('aria-controls')) === 'strip-panel-taper', `Each strip row is a full-width button, at least 60 px tall (${Math.round(rh)}, ${Math.round(th)}), closed to start, each with its own aria-controls`);
+for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('Part 1 with the closed strip', w); }
+await page.setViewportSize({ width: 390, height: 844 });
+await shot('strip-closed');
+await page.evaluate(() => window.scrollTo(0, 600));
+const [stripTop, railTop1] = [await topOf(strip), await topOf(page.locator('nav.rail'))];
+check(stripTop < 0 && railTop1 >= 0, `The strip is not sticky: it scrolls away under the rail (strip ${Math.round(stripTop)}px, rail ${Math.round(railTop1)}px)`);
+await page.evaluate(() => window.scrollTo(0, 0));
+// RD-011, RD-031. Taper length, moved here from step 1: our guide (14 days for a 70.3) is marked, one tap changes it, and a picked day works.
+await stripTaper.click();
+check((await stripPanel.getByRole('button', { name: 'Done' }).count()) === 1 && (await stripPanel.getByRole('button', { name: /Save|Cancel/ }).count()) === 0, 'The taper panel has Done and no Save or Cancel');
+check((await stripTaper.getAttribute('aria-expanded')) === 'true' && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'strip-panel-taper' && /Your taper starts/.test(await stripPanel.innerText()), 'Edit taper opens a panel under the rows, says when the taper starts, and moves focus to the panel');
+check((await stripPanel.getByRole('button', { name: /14 days/ }).getAttribute('aria-pressed')) === 'true' && /14 days \(our guide\)/.test(await stripPanel.getByRole('button', { name: /14 days/ }).innerText()), 'The race strip marks our 14-day taper guide for a 70.3');
+const taperBefore = await stripPanel.locator('.when').innerText();
+await stripPanel.getByRole('button', { name: /21 days/ }).click();
+check((await taperStore()) === 21 && (await stripPanel.locator('.when').innerText()) !== taperBefore, 'Picking a 21-day taper on the race strip saves it and moves the start');
+check(/You are in your taper/.test(await stripPanel.locator('.when').innerText()) && /20 days to go In your taper Edit taper/.test(await stripText()), 'A taper longer than the days to go says you are in it, in the panel and in the strip');
+const raceDay = new Date(Date.now() + 20 * 86400000);
+const sevenBefore = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() - 7);
+await stripPanel.getByLabel('Or pick the day your taper starts').fill(isoLocal(sevenBefore));
+check((await taperStore()) === 7, 'Picking the day the taper starts saves a 7-day taper');
+const after = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() + 3);
+await stripPanel.getByLabel('Or pick the day your taper starts').fill(isoLocal(after));
+check(await stripPanel.getByText(/Pick a day 1 to 42 days before race day/).isVisible() && (await taperStore()) === 7 && (await stripPanel.getByLabel('Or pick the day your taper starts').inputValue()) === isoLocal(after), 'A taper day after the race is refused, not saved, and stays on screen with its message');
+for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('Part 1 with Edit taper open', w); }
+await page.setViewportSize({ width: 390, height: 844 });
+await shot('strip-edit-taper');
+await stripPanel.getByRole('button', { name: /14 days/ }).click();
+check((await taperStore()) == null && !(await stripPanel.getByText(/Pick a day 1 to 42/).count()), 'Going back to 14 days uses our guide again');
+// Opening one panel closes the other, and only one is ever in the page.
+await stripRace.click();
+check((await stripRace.getAttribute('aria-expanded')) === 'true' && (await stripTaper.getAttribute('aria-expanded')) === 'false' && (await page.locator('section.strip .panel').count()) === 1 && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'f-race-name', 'Edit race closes Edit taper, leaves one panel, and moves focus to the race name');
+check((await stripPanel.getByRole('button', { name: 'Done' }).count()) === 1 && (await stripPanel.getByRole('button', { name: /Save|Cancel/ }).count()) === 0, 'The race panel has Done and no Save or Cancel');
+await stripRace.click();
+check((await stripRace.getAttribute('aria-expanded')) === 'false' && (await stripPanel.count()) === 0 && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'strip-edit-race', 'Tapping an open row again closes its panel and keeps focus on the row');
+await stripRace.click();
+await page.locator('#f-race-name').fill('Autumn 70.3');
+await page.getByLabel('Race date').fill(inDays(25));
+check((await store()).race.name === 'Autumn 70.3' && (await store()).race.date === inDays(25) && /Autumn 70\.3 .* 25 days to go/.test(await stripText()) && (await stripRace.getAttribute('aria-expanded')) === 'true', 'Editing the race name and date on the strip saves them and moves the countdown, with the panel still open');
+const longRace = 'W'.repeat(40);
+await page.locator('#f-race-name').fill(longRace);
+for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('Part 1 with Edit race open and a 40-character name', w); }
+await page.setViewportSize({ width: 390, height: 844 });
+await shot('strip-edit-race');
+// A date cleared while the race panel is open: the strip and the field stay, with no days or taper text.
+await page.getByLabel('Race date').fill('');
+check((await page.locator('#f-race-name').count()) === 1 && (await stripPanel.count()) === 1 && (await strip.count()) === 1 && !/days to go|Taper starts|In your taper/.test(await stripText()) && (await stripTaper.count()) === 0 && (await stripPanel.getByText('Tap the date to choose it.').isVisible()), 'A date cleared in the race panel keeps the strip and the field on screen, with no days or taper text');
+// Done with no date to count to: the strip goes and focus moves to the page title. Then the date is put back through step 1.
+const titleFocused = () => page.evaluate(() => document.activeElement && document.activeElement.tagName === 'H1' && document.activeElement.textContent === 'Choose pacing');
+const backToPart1 = async () => {
+  await page.goto(base + '/index.html#/setup/1');
+  await page.getByLabel('Race date').fill(inDays(20));
+  await page.getByRole('button', { name: 'Next: choose pacing' }).click();
+  await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
+  await stripRace.click();
+};
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+check((await strip.count()) === 0 && (await titleFocused()), 'Done with the date blank removes the strip and focuses the page title');
+await backToPart1();
+// Closing the race panel by tapping its row, with no date left, does the same.
+await page.getByLabel('Race date').fill('');
+await stripRace.click();
+check((await strip.count()) === 0 && (await titleFocused()), 'Tapping the race row to close the panel with the date blank removes the strip and focuses the page title');
+await backToPart1();
+await page.getByLabel('Race date').fill(inDays(20));
+await page.locator('#f-race-name').fill('');
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+check((await store()).race.name === 'My race' && /^My race /.test(await stripText()) && (await stripRace.getAttribute('aria-expanded')) === 'false' && (await stripPanel.count()) === 0 && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'strip-edit-race', 'Done closes the panel, turns a blank name into "My race" and returns focus to Edit race');
+await stripRace.click();
+await page.locator('#f-race-name').fill('Spring 70.3');
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+check((await store()).race.name === 'Spring 70.3' && (await store()).race.date === inDays(20) && (await taperStore()) == null, 'The strip is put back: Spring 70.3, 20 days out, our taper guide');
+check(!(await stripPanel.count()) && !(await page.getByRole('button', { name: 'Done' }).count()), 'With both panels closed there is no Done button');
 await headerIs('Pacing part 1');
 await railIs('Pacing', 'Pacing part 1');
 const bar = (await page.locator('.progress').innerText()).replace(/\s+/g, ' ');
@@ -252,10 +329,18 @@ check((await runBox.inputValue()) === '4:50', 'Typing 450 shows 4:50');
 await page.getByLabel('Body weight').fill('72');
 await shot('pacing-1');
 await noHorizontalScroll('Pacing part 1');
+// Done on the taper panel returns focus to the Edit taper row. Then the panel is opened again and left open, to see that
+// the next screen starts closed.
+await stripTaper.click();
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+check((await stripTaper.getAttribute('aria-expanded')) === 'false' && (await stripPanel.count()) === 0 && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'strip-edit-taper', 'Done on the taper panel closes it and returns focus to Edit taper');
+await stripTaper.click();
 await page.getByRole('button', { name: 'Next: course and heat' }).click();
 
 // Part 2.
 await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
+check((await strip.count()) === 1 && (await stripRace.getAttribute('aria-expanded')) === 'false' && (await stripTaper.getAttribute('aria-expanded')) === 'false' && (await stripPanel.count()) === 0, 'Part 2 shows the strip with both rows closed, though the taper was open on part 1');
+check(await stripPlaced('.progress'), 'On part 2 the strip is directly after the rail and before the part bar');
 check(/Pacing · part 2 of 3/i.test(await page.locator('.progress').innerText()) && (await page.locator('.progress .parts b').innerText()) === 'Course and heat', 'Part 2 shows part 2 of 3 with Course and heat in bold');
 await railIs('Pacing', 'Pacing part 2');
 await page.getByRole('button', { name: /Rolling/ }).click();
@@ -267,6 +352,7 @@ await page.getByRole('button', { name: 'Next: your targets' }).click();
 
 // Part 3.
 await page.getByRole('heading', { name: 'Your pace targets' }).waitFor();
+check((await strip.count()) === 1 && /Spring 70\.3/.test(await stripText()) && (await stripPlaced('.progress')) && (await stripPlaced('h1')), 'Part 3 shows the strip directly after the rail and before the part bar and title');
 await railIs('Pacing', 'Pacing part 3');
 const targets = await page.locator('.targets').innerText();
 check(/175–185 W/.test(targets), 'Part 3 bike target is 175–185 W');
@@ -312,6 +398,7 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
 check(page.url().endsWith('#/fuel') && (await page.getByRole('status').filter({ hasText: 'Pace targets saved to your race card' }).isVisible()), 'The first save opens step 3 with "Pace targets saved to your race card"');
 await railIs('Nutrition', 'Step 3');
+check((await strip.count()) === 1 && (await strip.evaluate((e) => { const rail = document.querySelector('nav.rail').getBoundingClientRect(); const t = document.querySelector('h1').getBoundingClientRect(); const b = e.getBoundingClientRect(); return b.top >= rail.bottom - 1 && b.bottom <= t.top + 1; })) && (await stripRace.getAttribute('aria-expanded')) === 'false', 'Step 3 shows the strip, closed, between the rail and the title');
 check((await page.locator('nav.rail a.done').allInnerTexts()).map(plainName).join(',') === 'Race,Pacing', 'The rail marks Race and Pacing done, and never Race card');
 
 // S5, after pacing is saved. Isolation: same session, a reload (full page load) to home.
@@ -324,16 +411,26 @@ check(/Two steps done, two to go\./.test(s5a) && /Next: check your gut figure an
 check((await page.getByRole('link', { name: 'Continue: review nutrition' }).isVisible()) && (await page.locator('.btn').count()) === 1, 'S5 after pacing has one yellow action, "Continue: review nutrition"');
 check(/Bike 175–185 W · finish \d:\d\d–\d:\d\d/.test(s5a) && /days to go/i.test(s5a) && /Taper starts|In your taper/.test(s5a), 'S5 shows the days to go, the taper line and the pacing summary');
 check((await page.locator('nav.rail').count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'My plan' }).count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).count()) === 1, 'S5 has the wordmark, no My plan and no rail');
-check(!/n of 2 done|Your details|Open race card/.test(s5a) && (await page.getByRole('link', { name: 'Edit' }).count()) === 2 && (await page.getByRole('link', { name: 'Edit' }).evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'S5 has two Edit links (steps 1 and 2) at least 44 px high, and none of the old home');
+check(!/n of 2 done|Your details|Open race card/.test(s5a) && (await page.getByRole('link', { name: 'Edit', exact: true }).count()) === 2 && (await page.getByRole('link', { name: 'Edit', exact: true }).evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'S5 has two Edit links (steps 1 and 2) at least 44 px high, and none of the old home');
 check((await page.locator('section.guides').count()) === 0 && !/Guides/.test(s5a), 'S5 has no guide links (they are on S0 only)');
 check(/Ready once nutrition is done/.test(s5a) && (await page.locator('li.step.goal').count()) === 1, 'S5 keeps step 4 on the light blue until it is done');
 await headerIs('S5', { myPlan: false });
 await wordsClean('S5');
 await shot('s5-after-pacing');
 await noHorizontalScroll('S5');
+// OF-06-N2: the taper line has its own "Edit taper" link, which opens the strip's taper editor already open.
+const s5Taper = page.getByRole('link', { name: 'Edit taper' });
+check((await page.locator('section.strip').count()) === 0 && (await s5Taper.count()) === 1 && (await s5Taper.evaluate((e) => e.getBoundingClientRect().height >= 44)), 'S5 has an "Edit taper" link of at least 44 px beside the taper line, and no strip');
+await s5Taper.click();
+await page.getByRole('heading', { name: 'Your pace targets' }).waitFor();
+check(page.url().endsWith('#/pacing/3') && (await stripTaper.getAttribute('aria-expanded')) === 'true' && (await stripRace.getAttribute('aria-expanded')) === 'false' && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'strip-panel-taper', 'S5 "Edit taper" lands on pacing with the taper editor already open and focus in its panel');
+await page.goBack();
+await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
+check(!page.url().includes('pacing') && (await page.getByRole('link', { name: 'Continue: review nutrition' }).isVisible()), 'Browser Back from there returns home');
 await page.getByRole('link', { name: 'Continue: review nutrition' }).click();
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
 check(!(await page.getByText('Pace targets saved to your race card').count()), 'The "targets saved" line is gone on a later visit to step 3');
+check((await stripTaper.getAttribute('aria-expanded')) === 'false' && (await stripPanel.count()) === 0, 'The taper editor stays closed on a later screen: only the S5 link opens it on arrival');
 
 // Step 3, first time: the gut figure has no default; the plan waits.
 check((await page.getByText('Built from your pacing. Change anything that looks wrong.').isVisible()), 'Step 3 has its subtitle');
@@ -489,9 +586,10 @@ await page.locator('.racecard').waitFor();
 await headerIs('The race card');
 await railIs('Race card', 'The race card');
 const card = await page.locator('.racecard').innerText();
+check((await page.locator('section.strip').count()) === 0 && (await page.locator('.racecard .band').count()) === 1, 'The race card has no race strip: it has its own header');
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pacing and nutrition');
 const cardFlat = card.replace(/\s+/g, ' ');
-check(/^YOUR RACE Edit race \d+ [A-Z]{3} Spring 70\.3 (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) \d+ \w+ \d+ days to go /.test(cardFlat) && /(Taper starts|In your taper).* Edit taper/.test(cardFlat), 'The card header has the date box, the race, the countdown and the taper, each with its edit button');
+check(/^YOUR RACE Edit race \d+ [A-Z]{3,4} Spring 70\.3 (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) \d+ \w+ \d+ days to go /.test(cardFlat) && /(Taper starts|In your taper).* Edit taper/.test(cardFlat), 'The card header has the date box, the race, the countdown and the taper, each with its edit button');
 check(/Taper starts|In your taper/.test(card) && /\bPacing\b/i.test(card) && /\bNutrition\b/i.test(card), 'The card has Pacing and Nutrition sections and the taper line');
 check((await page.locator('.racecard .sechead a', { hasText: 'Step 2' }).getAttribute('href')) === '#/pacing/3' && (await page.locator('.racecard .sechead a', { hasText: 'Step 3' }).getAttribute('href')) === '#/fuel', 'The card links Step 2 to pacing part 3 and Step 3 to step 3');
 check(!CLOCK.test(card) && !/Transition|start time/i.test(card), 'The card has no time of day, no transition and no start time');
@@ -526,7 +624,7 @@ for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height
 await page.setViewportSize({ width: 390, height: 844 });
 await hero.getByRole('button', { name: /14 days/ }).click();
 await hero.getByRole('button', { name: 'Done' }).click();
-check((await taperStore()) == null && (await hero.locator('#card-panel').count()) === 0 && (await hero.getByRole('button', { name: 'Edit taper' }).evaluate((e) => e === document.activeElement)), 'Back to 14 days uses our guide again; Done closes the panel and returns focus to Edit taper');
+check((await taperStore()) == null && (await hero.locator('.panel').count()) === 0 && (await hero.getByRole('button', { name: 'Edit taper' }).evaluate((e) => e === document.activeElement)), 'Back to 14 days uses our guide again; Done closes the panel and returns focus to Edit taper');
 check(/Changeovers: T1 0:04–0:05 · T2 0:02–0:04/.test(card) && /Finish \d:\d\d–\d:\d\d/.test(card), 'Race card shows the finish range and the changeovers it includes');
 const cardRows = await page.locator('.racecard .tl').first().locator('.tlrow').evaluateAll((els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
 check(cardRows.length === 3 && /^0:30 Gel ~\d+ km$/.test(cardRows[0]), 'The card has the same leg cards, with your own first gel and its km');
@@ -607,7 +705,7 @@ await page.reload();
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
 const s5b = await appText();
 check(/All four steps done\./.test(s5b) && (await page.getByRole('link', { name: 'Open my race card' }).isVisible()) && /Bike \d+ g\/hr · run \d+ g\/hr/.test(s5b) && /Ready to print/.test(s5b), 'S5 after nutrition says "All four steps done." with "Open my race card"');
-check((await page.locator('li.step.goal').count()) === 0 && (await page.getByRole('link', { name: 'Edit' }).count()) === 3 && (await page.getByRole('link', { name: 'Open', exact: true }).count()) === 1, 'S5 shows step 4 done (no light blue) with Edit on steps 1 to 3 and Open on step 4');
+check((await page.locator('li.step.goal').count()) === 0 && (await page.getByRole('link', { name: 'Edit', exact: true }).count()) === 3 && (await page.getByRole('link', { name: 'Open', exact: true }).count()) === 1, 'S5 shows step 4 done (no light blue) with Edit on steps 1 to 3 and Open on step 4');
 await shot('s5-all-done');
 
 // Stale targets (15 and 4). Change FTP on part 1, leave by the rail's Race card without saving.
@@ -662,6 +760,42 @@ const updated = await page.locator('.racecard').innerText();
 const bikeG = Number((/Bike\s+(\d+) g\/hr/.exec(updated) || [])[1]);
 check(!/changed since this plan/.test(updated) && bikeG > 0 && bikeG <= 50, `Updating nutrition clears the flag and keeps under the new gut figure (${bikeG} g/hr)`);
 
+// Criterion 29: a strip edit never makes a plan out of date. Same session, deliberately: both plans are saved and
+// current here, and this is the state the edits are made against. The strip is put back at the end.
+await page.goto(base + '/index.html#/fuel');
+await page.reload();
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+const before16 = await store();
+await stripTaper.click();
+await stripPanel.getByRole('button', { name: /21 days/ }).click();
+await stripPanel.getByLabel('Or pick the day your taper starts').fill(isoLocal(sevenBefore));
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+await stripRace.click();
+await page.locator('#f-race-name').fill('Autumn 70.3');
+await page.getByLabel('Race date').fill(inDays(25));
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+const after16 = await store();
+check(after16.race.taperDays === 7 && after16.race.name === 'Autumn 70.3' && after16.race.date === inDays(25), 'The strip edits took: a 7-day taper, a new name and a new date');
+check(!!before16.race.pace && !!before16.race.fuel && JSON.stringify(after16.race.pace) === JSON.stringify(before16.race.pace) && JSON.stringify(after16.race.fuel) === JSON.stringify(before16.race.fuel), 'Strip edits leave race.pace and race.fuel exactly as they were');
+await page.goto(base + '/index.html#/card');
+await page.reload();
+check(!/changed since|out of date/i.test(await appText()), 'After strip edits the race card shows no "changed since" or out-of-date notice');
+await page.goto(base + '/index.html#/');
+await page.reload();
+check(!/Out of date/i.test(await appText()), 'After strip edits home shows no "Out of date"');
+await page.goto(base + '/index.html#/fuel');
+await page.reload();
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+check(!/changed since this plan|out of date/i.test(await appText()), 'After strip edits step 3 says the plan is not out of date');
+await stripTaper.click();
+await stripPanel.getByRole('button', { name: /14 days/ }).click();
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+await stripRace.click();
+await page.locator('#f-race-name').fill('Spring 70.3');
+await page.getByLabel('Race date').fill(inDays(20));
+await stripPanel.getByRole('button', { name: 'Done' }).click();
+check((await store()).race.name === 'Spring 70.3' && (await store()).race.date === inDays(20) && (await taperStore()) == null, 'The strip edits are put back: Spring 70.3, 20 days out, our taper guide');
+
 // Old addresses (7). Same session, full navigations.
 for (const [hash, want] of [['#/setup/2', 'Choose pacing'], ['#/setup/3', 'Choose pacing'], ['#/setup/4', 'Course and heat'], ['#/setup/5', 'Your pace targets']]) {
   await page.goto(base + '/index.html' + hash);
@@ -676,6 +810,7 @@ check(await page.locator('.racecard').isVisible(), 'Old address #/saved opens th
 await page.goto(base + '/index.html#/products');
 await page.getByRole('button', { name: 'Add a product' }).click();
 await headerIs('My products', { myPlan: false });
+check((await page.locator('section.strip').count()) === 0, 'My products has no race strip');
 check(await page.getByRole('link', { name: 'Nutrition' }).first().isVisible() && (await page.locator('nav.rail').count()) === 0, 'My products keeps a back link named Nutrition and has no rail');
 await wordsClean('My products');
 const names = page.getByLabel('Name');
@@ -759,6 +894,42 @@ for (const hash of ['#/setup/1', '#/pacing/3', '#/fuel']) {
 await page.goto(base + '/index.html#/fuel');
 await page.reload();
 check(/Your gut handles\s*70 g\/hr/.test((await appText()).replace(/\n+/g, ' ')) && !/Out of date|changed since/i.test(await appText()), 'Old save: step 3 shows the saved gut figure as a summary');
+// Criterion 29 and 17: the Olympic save's strip marks the 10-day taper guide (moved here from step 1, where the journey is a 70.3).
+await page.goto(base + '/index.html#/pacing/3');
+await page.reload();
+await page.getByRole('heading', { name: 'Your pace targets' }).waitFor();
+await page.locator('section.strip').getByRole('button', { name: /Edit taper/ }).click();
+const oldTen = page.locator('section.strip .panel').getByRole('button', { name: /10 days/ });
+check((await oldTen.getAttribute('aria-pressed')) === 'true' && /10 days \(our guide\)/.test(await oldTen.innerText()) && !/Out of date|changed since/i.test(await appText()), 'Old save: the strip marks "10 days (our guide)" for an Olympic race, pressed, and the plan is not out of date');
+await page.context().close();
+
+// Criterion 29: no strip with no date to count to. Isolation: a fresh context per case, seeded from the same fixture.
+for (const [label, date] of [['race day has passed', inDays(-1)], ['no date', '']]) {
+  const gone = JSON.parse(JSON.stringify(fixture));
+  gone.race.date = date;
+  await fresh('old save, ' + label, { init: { fn: ([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, arg: [KEY, JSON.stringify(gone)] } });
+  for (const hash of ['#/pacing/1', '#/pacing/2', '#/pacing/3', '#/fuel']) {
+    await page.goto(base + '/index.html' + hash);
+    await page.reload();
+    await page.locator('h1').waitFor();
+    check((await page.locator('section.strip').count()) === 0 && (await page.locator('nav.rail').count()) === 1, `No race strip on ${hash} when ${label}, and the rail is still there`);
+  }
+  await page.context().close();
+}
+
+// Criterion 29: part 3 in its "A number is missing" state still carries the strip. Isolation: fresh context, a race with a
+// date and no fitness numbers, reached through step 1.
+await fresh('missing number');
+await page.goto(base + '/index.html#/setup/1');
+await page.getByLabel('Race name').fill('Lake Run 70.3');
+await page.getByLabel('Race date').fill(inDays(12));
+await page.getByRole('button', { name: 'Next: choose pacing' }).click();
+await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
+check((await page.locator('section.strip').count()) === 1, 'Part 1 has the strip straight after step 1, with our taper guide and no extra action');
+await page.goto(base + '/index.html#/pacing/3');
+await page.reload();
+await page.getByRole('heading', { name: 'A number is missing' }).waitFor();
+check((await page.locator('section.strip').count()) === 1 && /Lake Run 70\.3/.test(await page.locator('section.strip').innerText()), 'Part 3 in its "A number is missing" state has the strip');
 await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -781,6 +952,17 @@ await page.getByRole('button', { name: 'Save to a race plan' }).click();
 await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
 const bs = await store();
 check(bs.fitness.ftp === 240 && bs.race.course === 'hilly' && !('start' in bs.race) && !('transitionOpens' in bs.race), 'Guide carries FTP and course into step 1, with no race-time keys');
+await page.goto(base + '/index.html#/fuel');
+await page.reload();
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+check((await page.locator('section.strip').count()) === 0 && (await page.locator('nav.rail').count()) === 1, 'After a guide save the race has no date, so step 3 has no race strip');
+await page.context().close();
+
+// Criterion 29: step 3 with no race at all has no strip. Isolation: fresh context, no race.
+await fresh('step 3, no race');
+await page.goto(base + '/index.html#/fuel');
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+check((await page.locator('section.strip').count()) === 0 && (await page.locator('nav.rail').count()) === 0, 'Step 3 with no race has no race strip and no rail');
 await page.context().close();
 
 await guide('nutrition guide', '/guides/race-fuel.html');
