@@ -17,6 +17,10 @@
   var errors = {}; // field -> message, shown after they press Next
   var currentPrint = null; // what the print button and Ctrl+P print
   var cardEdit = null; // which part of the race card header is open for editing: 'race', 'taper' or null
+  // The email block on the race card (RD-039). The typed address and the last result live here, in memory, so a redraw
+  // of the card keeps them. Nothing here is saved: a reload, or a new visit to the card, starts blank.
+  var mail = blankMail();
+  var mailEls = null; // the live elements of the email block, so a reply can update it where it stands
   var view = document.getElementById('view');
 
   function commit() { store.save(S); }
@@ -289,6 +293,7 @@
     if (!render.quiet) {
       aboutShown = false;
       cardEdit = null; // a new visit to the race card opens with its header closed
+      if (!mail.busy) mail = blankMail(); // and with an empty email field: the address is not kept
       // The "targets saved" line shows on the first arrival at step 3 only, and stays while that screen redraws.
       if (savedNote === 'shown') savedNote = false;
       else if (savedNote === 'pending') savedNote = parts[0] === 'fuel' ? 'shown' : false;
@@ -776,9 +781,122 @@
       topBar(wordmark(), myPlan()),
       rail('card'),
       cardBody(r),
+      emailBlock(r),
       nextAction,
       printButton(!nextAction),
       note('Typical ranges, not medical advice.'));
+  }
+
+  // ---------- email the race card (RD-039) ----------
+
+  // The wording is the spec's (criterion 29). "Delivered" is never claimed: the mail service has taken it, no more.
+  var MAIL_TEXT = {
+    hint: 'We use this address once, to send this card. We don\'t keep it.',
+    bad: 'Type one email address, such as sam@example.test.',
+    stale: 'Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first.',
+    sent: 'Sent. It should arrive in a few minutes. Check your junk folder if not.',
+    refused: 'That address didn\'t work. Check it and try again.',
+    later: 'Email isn\'t working right now. Your plan is saved on this phone, and you can still print it.'
+  };
+  var MAIL_TIMEOUT_MS = 15000;
+  function blankMail() { return { value: '', busy: false, error: '', result: '', kind: '', refocus: false }; }
+
+  // Only when pace and nutrition are both saved and the nutrition plan worked. Not printed. Print stays the one yellow button.
+  function emailBlock(r) {
+    if (!r.pace || !r.fuel || r.fuel.ok === false) return null;
+    var input = h('input', {
+      id: 'f-mail', name: 'email', type: 'email', inputmode: 'email', autocomplete: 'email', autocapitalize: 'off', spellcheck: 'false',
+      value: mail.value, 'aria-describedby': 'mail-hint',
+      oninput: function (e) {
+        mail.value = e.target.value;
+        if (mail.error) { mail.error = ''; paintMail(); }
+      }
+    });
+    var err = h('p', { class: 'error', id: 'mail-err', role: 'alert' });
+    var btn = h('button', { type: 'button', class: 'btn ghost', onclick: sendCard }, 'Email my race card');
+    var status = h('p', { class: 'mailnote', role: 'status' });
+    mailEls = { input: input, err: err, btn: btn, status: status };
+    paintMailInto(mailEls);
+    return h('section', { class: 'card mail noprint' },
+      h('div', { class: 'row-wrap' }, h('label', { class: 'field', for: 'f-mail' }, 'Email me this race card', input), err),
+      h('p', { class: 'help', id: 'mail-hint' }, MAIL_TEXT.hint),
+      fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, MAIL_TEXT.stale) : null,
+      btn,
+      status);
+  }
+
+  // Shows the state in `mail` on the live elements, if the card is still on screen. Text goes in as text.
+  function paintMail() {
+    if (mailEls && mailEls.input.isConnected) paintMailInto(mailEls);
+  }
+  function paintMailInto(m) {
+    // Each is set only when it changed: a live region announces every write, even one that says the same thing.
+    m.err.hidden = !mail.error;
+    if (m.err.textContent !== mail.error) m.err.textContent = mail.error;
+    if (mail.error) { m.input.setAttribute('aria-invalid', 'true'); m.input.setAttribute('aria-describedby', 'mail-err mail-hint'); }
+    else { m.input.removeAttribute('aria-invalid'); m.input.setAttribute('aria-describedby', 'mail-hint'); }
+    m.btn.disabled = mail.busy;
+    var label = mail.busy ? 'Sending...' : 'Email my race card';
+    if (m.btn.textContent !== label) m.btn.textContent = label;
+    if (m.status.textContent !== mail.result) m.status.textContent = mail.result;
+    m.status.className = 'mailnote' + (mail.kind ? ' ' + mail.kind : '');
+  }
+
+  // kind: 'sent', 'refused' or 'later'. Every way out of a send comes here, so every one leaves a message.
+  function mailDone(kind) {
+    mail.busy = false;
+    mail.kind = kind === 'sent' ? 'ok' : 'bad';
+    mail.result = MAIL_TEXT[kind];
+    paintMail();
+    if (mail.refocus && mailEls && mailEls.btn.isConnected) mailEls.btn.focus(); // a disabled button drops focus
+    mail.refocus = false;
+  }
+
+  function sendCard() {
+    if (mail.busy) return; // a double tap sends once
+    var to = RD.card.normaliseEmail(mail.value);
+    if (!to) {
+      mail.error = MAIL_TEXT.bad;
+      mail.result = '';
+      mail.kind = '';
+      paintMail();
+      if (mailEls) mailEls.input.focus();
+      return;
+    }
+    mail.busy = true; // before anything else, so a second tap in the same moment is ignored
+    mail.error = '';
+    mail.result = '';
+    mail.kind = '';
+    mail.refocus = !!mailEls && document.activeElement === mailEls.btn;
+    paintMail();
+    // The PDF is made now, from the plan as saved now, never from what was on screen when the card opened.
+    var r = S.race;
+    var pdf;
+    try {
+      if (!r || !r.pace || !r.fuel || r.fuel.ok === false) throw new Error('no finished plan');
+      var rows = RD.card.rows({ race: r, pace: r.pace, fuel: r.fuel, fuelStale: fuelStale(r) });
+      pdf = RD.card.toBase64(RD.card.drawPdf(root.jspdf.jsPDF, rows));
+    } catch (err) {
+      console.warn('TRI Momentum: could not make the PDF.', err && err.message);
+      return mailDone('later');
+    }
+    if (root.navigator && root.navigator.onLine === false) return mailDone('later');
+    var ctl = new AbortController();
+    var timer = setTimeout(function () { ctl.abort(); }, MAIL_TIMEOUT_MS);
+    fetch('/api/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: to, pdf: pdf }),
+      signal: ctl.signal, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer'
+    }).then(function (res) {
+      // Only a JSON reply with the function's own words counts. A static host's 404 page, or any other reply, is "later".
+      return res.json().then(function (j) { return { status: res.status, result: j && j.result }; }, function () { return { status: res.status, result: null }; });
+    }).then(function (o) {
+      clearTimeout(timer);
+      mailDone(o.status === 200 && o.result === 'sent' ? 'sent' : o.status === 400 && o.result === 'refused' ? 'refused' : 'later');
+    }, function (err) {
+      clearTimeout(timer);
+      console.warn('TRI Momentum: the email request failed.', err && err.name);
+      mailDone('later');
+    });
   }
 
   function cardBody(r) {

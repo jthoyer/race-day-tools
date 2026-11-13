@@ -1072,7 +1072,8 @@ details.test p {
   border-radius: var(--r);
   line-height: 1.4;
 }
-.sec p.notice.warn {
+.sec p.notice.warn,
+.mail p.notice.warn {
   background: var(--warn-bg);
   color: var(--warn);
   font-size: 14px;
@@ -1083,6 +1084,23 @@ details.test p {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+}
+/* Email the race card (RD-039): a card under the race card, above Print. The result line is always in the page, empty
+   until there is something to say, so a screen reader announces it when it fills. */
+.mail p.notice.warn {
+  margin: 0;
+}
+.mailnote {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.mailnote.ok {
+  color: var(--go);
+}
+.mailnote.bad {
+  color: var(--warn);
 }
 p.notice.go {
   margin: 0;

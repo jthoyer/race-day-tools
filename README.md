@@ -54,7 +54,7 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 Set up outside the repo, so a rebuild would lose it: in the repo's **Settings → Pages**, *Source* is **GitHub Actions**.
 
-GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'none'` means the page can make no network request. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
+GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'self'` means the page can call only its own address, for the one send function, and no other host. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
 
 The longer-term host and domain are still open (D4).
 

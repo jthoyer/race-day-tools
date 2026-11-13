@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <!-- The privacy promise, enforced by the browser: the page can make no network request. GitHub Pages ignores public/_headers, so the policy lives here too. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'self'; form-action 'none'" />
+    <!-- The privacy promise, enforced by the browser: the page can request nothing from another host. connect-src 'self' lets it call its own address only, for the one send function behind "Email me this race card". GitHub Pages ignores public/_headers, so the policy lives here too. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'" />
     <title>TRI Momentum</title>
     <meta name="description" content="Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card. Free, no account, saved on your phone." />
-    <link rel="stylesheet" href="css/app.css?v=17" />
+    <link rel="stylesheet" href="css/app.css?v=18" />
   </head>
   <body>
     <main id="view"></main>
     <div id="print-root" aria-hidden="true"></div>
-    <noscript><p style="padding: 16px">TRI Momentum needs JavaScript. It runs on your phone and sends nothing anywhere.</p></noscript>
+    <noscript><p style="padding: 16px">TRI Momentum needs JavaScript. It runs on your phone and sends nothing unless you ask it to email your card.</p></noscript>
     <script src="js/time.js?v=7"></script>
     <script src="js/pace.js?v=9"></script>
     <script src="js/fuel.js?v=13"></script>
@@ -20,6 +20,6 @@
     <script src="js/ui.js?v=3"></script>
     <script src="js/vendor/jspdf.umd.min.js?v=1"></script>
     <script src="js/card.js?v=1"></script>
-    <script src="js/app.js?v=19"></script>
+    <script src="js/app.js?v=20"></script>
   </body>
 </html>

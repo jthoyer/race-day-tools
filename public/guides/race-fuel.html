@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <!-- The privacy promise, enforced by the browser: the page can make no network request. GitHub Pages ignores public/_headers, so the policy lives here too. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'self'; form-action 'none'" />
+    <!-- The privacy promise, enforced by the browser: the page can request nothing from another host. connect-src 'self' lets it call its own address only; a guide page makes no request at all. GitHub Pages ignores public/_headers, so the policy lives here too. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'" />
     <title>How many gels for a 70.3? · TRI Momentum</title>
     <meta name="description" content="Work out how many gels you need for a 70.3, timed to your bike and run splits and capped at what your gut has trained." />
-    <link rel="stylesheet" href="../css/app.css?v=17" />
+    <link rel="stylesheet" href="../css/app.css?v=18" />
   </head>
   <body>
     <main class="app">
