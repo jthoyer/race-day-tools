@@ -803,6 +803,7 @@
 
   // Only when pace and nutrition are both saved and the nutrition plan worked. Not printed. Print stays the one yellow button.
   function emailBlock(r) {
+    if (!RD.card.canEmailHere(root.location && root.location.hostname)) return null; // no function here, and the address would go to GitHub
     if (!r.pace || !r.fuel || r.fuel.ok === false) return null;
     var input = h('input', {
       id: 'f-mail', name: 'email', type: 'email', inputmode: 'email', autocomplete: 'email', autocapitalize: 'off', spellcheck: 'false',
@@ -885,7 +886,7 @@
     var timer = setTimeout(function () { ctl.abort(); }, MAIL_TIMEOUT_MS);
     fetch('/api/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: to, pdf: pdf }),
-      signal: ctl.signal, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer'
+      signal: ctl.signal, cache: 'no-store', credentials: 'omit'
     }).then(function (res) {
       // Only a JSON reply with the function's own words counts. A static host's 404 page, or any other reply, is "later".
       return res.json().then(function (j) { return { status: res.status, result: j && j.result }; }, function () { return { status: res.status, result: null }; });

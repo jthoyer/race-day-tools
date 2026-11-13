@@ -24,6 +24,8 @@
   var DIST_LABEL = { standard: 'Olympic', '70.3': '70.3' };
   var TITLE = 'TRI Momentum race card';
   var FILE_NAME = 'race-card.pdf';
+  // A fixed creation date, so the PDF carries no date or time of today. jsPDF would write the moment it was drawn.
+  var CREATION_DATE = 'D:20260101000000+00\'00\'';
   var STALE = 'Nutrition plan out of date. Update it before race day.';
 
   // A real, finite number. null >= 0 is true in JavaScript, so a plain comparison is not enough.
@@ -119,6 +121,7 @@
   function drawPdf(JsPDF, list) {
     var doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: false, putOnlyUsedFonts: true });
     doc.setProperties({ title: TITLE });
+    doc.setCreationDate(CREATION_DATE);
     var width = PAGE.w - 2 * PAGE.margin;
     var room = PAGE.h - 2 * PAGE.margin;
 
@@ -183,7 +186,16 @@
     return s;
   }
 
-  var api = { rows: rows, drawPdf: drawPdf, toBase64: toBase64, normaliseEmail: normaliseEmail, TITLE: TITLE, FILE_NAME: FILE_NAME, STALE: STALE };
+  // Where the send function exists. On GitHub Pages it does not, and the address would be posted to GitHub, so the email
+  // block is not shown there. An unknown host (empty or missing) is treated the same way: no block, nothing posted.
+  function canEmailHere(hostname) {
+    if (typeof hostname !== 'string') return false;
+    var h = hostname.trim().toLowerCase().replace(/\.$/, '');
+    if (!h) return false;
+    return h !== 'github.io' && !/\.github\.io$/.test(h);
+  }
+
+  var api = { canEmailHere: canEmailHere, CREATION_DATE: CREATION_DATE, rows: rows, drawPdf: drawPdf, toBase64: toBase64, normaliseEmail: normaliseEmail, TITLE: TITLE, FILE_NAME: FILE_NAME, STALE: STALE };
   if (isNode) module.exports = api;
   else { root.RD = root.RD || {}; root.RD.card = api; }
 })(this);

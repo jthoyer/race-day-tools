@@ -269,8 +269,19 @@ test('A15: 429 later at the limit, and 503 later when the service is missing, or
   assert.equal(rejected.res.status, 503);
 });
 
-test('A15: a provider 4xx other than 429 is refused (400), because the address or PDF was not accepted', async () => {
-  for (const reply of [400, 401, 403, 404, 422]) {
+test('A15: our key or sender refused (provider 401, 403) is 503 later to the athlete and 502 in the log', async () => {
+  for (const reply of [401, 403]) {
+    const before = logged.length;
+    const r = await send(good(), { d: deps({ fetch: provider(reply) }) });
+    assert.equal(r.res.status, 503, 'provider ' + reply);
+    assert.equal(r.json.result, 'later');
+    assert.equal(logged[before][0], 502, 'the log says 502, a status code and nothing else');
+    assert.equal(logged[before].length, 2);
+  }
+});
+
+test('A15: a provider 4xx other than 429, 401 and 403 is refused (400), because the address or PDF was not accepted', async () => {
+  for (const reply of [400, 404, 422]) {
     const r = await send(good(), { d: deps({ fetch: provider(reply) }) });
     assert.equal(r.res.status, 400, 'provider ' + reply);
     assert.equal(r.json.result, 'refused');
@@ -325,6 +336,61 @@ test('A17: a name spelled with a #xx hex escape is refused', async () => {
   }
   // A "#" in page text, outside a name, is not a name and is fine.
   assert.equal((await send(good({ pdf: pdfWith('(Rank #12 /km #1)') }))).res.status, 200);
+});
+
+test('A17: names and shapes the real card never holds are refused, one at a time (links, images, files, encryption)', async () => {
+  for (const extra of ['/Annots [1 0 R]', '/XObject << /I1 5 0 R >>', '/Subtype /Image', '/GoToR (x)', '/GoToE (x)', '/Encrypt 9 0 R', '/Names << >>', '/Rendition (x)', '/Sound (x)', '/Movie (x)', '/Named /NextPage', '/URI (https://x.example.test)']) {
+    const r = await send(good({ pdf: pdfWith(extra) }));
+    assert.equal(r.res.status, 400, extra);
+    assert.equal(r.d.fetch.calls.length, 0, extra + ' reached the mail service');
+  }
+  const inline = await send(good({ pdf: pdfWith('q\nBI /W 1 /H 1 /CS /G /BPC 8 ID \x00 EI\nQ') }));
+  assert.equal(inline.res.status, 400, 'an inline image');
+  // jsPDF's own empty XObject and ProcSet lines are fine on their own; a real XObject next to them is not.
+  assert.equal((await send(good({ pdf: pdfWith('/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]\n/XObject <<\n>>') }))).res.status, 200);
+  assert.equal((await send(good({ pdf: pdfWith('/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]\n/XObject <<\n/I1 5 0 R\n>>') }))).res.status, 400);
+});
+
+test('A17: /OpenAction only as jsPDF writes it, and /BaseFont only Helvetica or Helvetica-Bold', async () => {
+  assert.equal((await send(good({ pdf: pdfWith('/OpenAction [3 0 R /FitH null]') }))).res.status, 200);
+  for (const extra of ['/OpenAction << /S /GoTo /D [3 0 R /Fit] >>', '/OpenAction 7 0 R', '/OpenAction [3 0 R /FitH null] /OpenAction 7 0 R', '/OpenAction [3 0 R /FitH 10]', '/OpenAction << /FS 4 0 R >>']) {
+    const r = await send(good({ pdf: pdfWith(extra) }));
+    assert.equal(r.res.status, 400, extra);
+  }
+  assert.equal((await send(good({ pdf: pdfWith('/BaseFont /Helvetica\n/BaseFont /Helvetica-Bold') }))).res.status, 200);
+  for (const font of ['Courier', 'Helvetica-Oblique', 'Times-Roman', 'ABCDEF+Arial', 'HelveticaX', '']) {
+    const r = await send(good({ pdf: pdfWith('/BaseFont /' + font) }));
+    assert.equal(r.res.status, 400, 'font ' + font);
+  }
+});
+
+test('A17: control: fresh jsPDF output and the committed fixture pass the widened list', async () => {
+  const C = require('../public/js/card.js');
+  const P = require('../public/js/pace.js');
+  const F = require('../public/js/fuel.js');
+  const { jsPDF } = require('../public/js/vendor/jspdf.umd.min.js');
+  const pace = P.planPace({ distance: '70.3', mode: 'power', css: 105, ftp: 240, ftpRecent: true, runThreshold: 290, weight: 72, course: 'rolling', heat: 'warm' });
+  const [G, D] = F.DEFAULT_PRODUCTS;
+  const fuel = F.planFuel({ distance: '70.3', bikeMin: 110, runMin: 45, heat: 'warm', gut: 70, sweat: null, gel: G, drink: D });
+  const fresh = C.toBase64(C.drawPdf(jsPDF, C.rows({ race: { distance: '70.3' }, pace, fuel, fuelStale: true })));
+  for (const pdf of [fresh, PDF]) assert.equal((await send(good({ pdf }))).res.status, 200);
+  assert.match(Buffer.from(fresh, 'base64').toString('latin1'), /\/OpenAction \[\d+ 0 R \/FitH null\]/, 'the control really contains the OpenAction form it must allow');
+});
+
+test('A20: IPv6 visitors are one visitor per /64, IPv4 per address', async () => {
+  const k = mod.visitorKey;
+  assert.equal(k('2001:db8:1:2:3:4:5:6'), k('2001:DB8:1:2:ffff:ffff:ffff:ffff'));
+  assert.equal(k('2001:db8:1:2::9'), k('2001:db8:1:2:aaaa::1'));
+  assert.notEqual(k('2001:db8:1:2::1'), k('2001:db8:1:3::1'));
+  assert.notEqual(k('203.0.113.5'), k('203.0.113.6'));
+  assert.equal(k('203.0.113.5'), '203.0.113.5');
+  assert.equal(k(null), 'unknown');
+  // Through the handler: the 4th send from one /64 is 429 even though every address inside it differs.
+  const d = deps({ now: () => T0 + 50 * DAY });
+  const prefix = '2001:db8:' + (++n).toString(16) + ':1';
+  for (let i = 1; i <= 3; i++) assert.equal((await send(good(), { ip: prefix + '::' + i, d })).res.status, 200);
+  assert.equal((await send(good(), { ip: prefix + ':9:8:7:6', d })).res.status, 429);
+  assert.equal((await send(good(), { ip: '2001:db8:' + (++n).toString(16) + ':2::1', d })).res.status, 200, 'another /64 is another visitor');
 });
 
 test('A17: the committed fixture, drawn by the vendored library from made-up data, is accepted, with room to spare', async () => {
@@ -445,7 +511,7 @@ test('A20: entries expire, so a quiet isolate holds nothing', () => {
 test('A20: the limiter holds only hashes, never the address or the visitor', async () => {
   const src = fs.readFileSync(SEND, 'utf8');
   assert.match(src, /limiter\.take\(visitor, await digest\(to\.toLowerCase\(\)\)/);
-  assert.match(src, /digest\(request\.headers\.get\('CF-Connecting-IP'\)/);
+  assert.match(src, /digest\(visitorKey\(request\.headers\.get\('CF-Connecting-IP'\)\)\)/);
 });
 
 test('A21: a missing key or sender is 503 later and calls no fetch', async () => {

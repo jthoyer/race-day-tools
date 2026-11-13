@@ -203,3 +203,26 @@ test('a card with many gels and every note still fits on one page', () => {
   const s = Buffer.from(C.drawPdf(jsPDF, C.rows(input({ fuel: f, fuelStale: true })))).toString('latin1');
   assert.equal((s.match(/\/Type \/Page\b(?!s)/g) || []).length, 1);
 });
+
+test('the PDF carries a fixed creation date and nothing from today (RD-039 A11, spec 29)', () => {
+  const { jsPDF } = require(path.join(VENDOR, 'jspdf.umd.min.js'));
+  assert.equal(C.CREATION_DATE, "D:20260101000000+00'00'");
+  const rowsNow = C.rows(input());
+  for (const tz of [undefined]) {
+    const s = Buffer.from(C.drawPdf(jsPDF, rowsNow)).toString('latin1');
+    assert.equal(/\/CreationDate \(([^)]*)\)/.exec(s)[1], C.CREATION_DATE);
+    const d = new Date();
+    const today = String(d.getFullYear()) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+    assert.ok(!s.includes('D:' + today) && !s.includes('D:' + String(d.getUTCFullYear()) + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0')), 'no date from today');
+    assert.doesNotMatch(s, /\/(Creation|Mod)Date \(D:\d{8}(?!000000\+)/, 'no time of day');
+  }
+  const fixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'race-card.pdf'), 'latin1');
+  assert.match(fixture, /\/CreationDate \(D:20260101000000\+00'00'\)/, 'the committed fixture was drawn with the fixed date');
+});
+
+test('the email block shows only where the send function can be (canEmailHere)', () => {
+  for (const ok of ['localhost', '127.0.0.1', 'tools.example.test', 'racecard.example.com.au', 'github.io.example.test', 'notgithub.io', 'LOCALHOST']) assert.equal(C.canEmailHere(ok), true, ok);
+  for (const no of ['github.io', 'jthoyer.github.io', 'JThoyer.GitHub.io', 'a.b.github.io', 'jthoyer.github.io.']) assert.equal(C.canEmailHere(no), false, no);
+  // Unknown is the safe side: nothing is posted when the host cannot be told.
+  for (const unknown of ['', '  ', undefined, null, 42, {}]) assert.equal(C.canEmailHere(unknown), false, String(unknown));
+});

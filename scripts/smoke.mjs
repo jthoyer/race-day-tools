@@ -1049,6 +1049,7 @@ async function typeAndSend(address) {
   const req = seen[0];
   const body = req.postDataJSON();
   check(req.method() === 'POST' && new URL(req.url()).pathname === '/api/send' && (await req.headerValue('content-type')) === 'application/json', 'The request is a POST of JSON to /api/send');
+  check((await req.headerValue('origin')) === base, `The request's Origin header is the page's own origin, never "null" (${await req.headerValue('origin')})`);
   check(Object.keys(body).sort().join(',') === 'email,pdf' && body.email === ADDRESS, 'The body holds only email and pdf, and the address is trimmed');
   const pdfBytes = Buffer.from(body.pdf, 'base64');
   const pdf = pdfBytes.toString('latin1');

@@ -27,11 +27,25 @@ const MAX_BODY_BYTES = 140000; // the whole request body
 const MAX_PDF_BYTES = 100000; // the PDF once decoded. The real card is about 2 KB.
 const PROVIDER_TIMEOUT_MS = 10000;
 
-// A PDF holding any of these could run script, open a link, post a form, carry a file, or hide its text from the
-// checks below. Our own PDF holds none of them (tests/send.test.js runs the real file through this list).
-const DENIED = ['/JavaScript', '/JS', '/Launch', '/EmbeddedFile', '/RichMedia', '/XFA', '/AA', '/URI', '/SubmitForm', '/ImportData', '/Filter', '/ObjStm'];
+// What this checks cuts down what can be sent from our sender address; it does NOT stop phishing. Anyone can type
+// text and a web address into a PDF, and plain text passes every check below. Only a PDF built on the server from the
+// plan would close that, and the owner declined it. So the PDF is held to what our own card holds: no script, link,
+// form, file, image, encryption or compressed stream, one catalog entry in jsPDF's own form, and Helvetica only.
+const DENIED = ['/JavaScript', '/JS', '/Launch', '/EmbeddedFile', '/RichMedia', '/XFA', '/AA', '/URI', '/SubmitForm', '/ImportData', '/Filter', '/ObjStm',
+  '/Annots', '/XObject', '/Image', '/GoToR', '/GoToE', '/Encrypt', '/Names', '/Rendition', '/Sound', '/Movie', '/Named'];
+// jsPDF writes these two on every page. Each is removed (exact text only) before the list above is applied: the first
+// names image types the page does not use, the second is an empty dictionary. Anything else with those names is refused.
+const JSPDF_OWN = [/\/ProcSet \[\/PDF \/Text \/ImageB \/ImageC \/ImageI\]/g, /\/XObject <<\s*>>/g];
 // A "#xx" hex escape inside a name can spell any of the above without the plain text matching.
 const NAME_WITH_HEX_ESCAPE = /\/[^\s/[\]<>(){}%]*#[0-9A-Fa-f]{2}/;
+const INLINE_IMAGE = /(?:^|\s)BI\s*\/[A-Za-z]/;
+// Names and actions a PDF may carry only in the form jsPDF writes: an open-at-page entry, and the two Helvetica faces.
+function oddCatalogOrFont(bin) {
+  const opens = (bin.match(/\/OpenAction/g) || []).length;
+  const own = (bin.match(/\/OpenAction \[\d+ 0 R \/FitH null\]/g) || []).length;
+  if (opens !== own) return true;
+  return [...bin.matchAll(/\/BaseFont\s*\/([^\s/[\]<>()]*)/g)].some((m) => m[1] !== 'Helvetica' && m[1] !== 'Helvetica-Bold');
+}
 
 const LATER = { status: 503, result: 'later' };
 const REFUSED = (status) => ({ status, result: 'refused' });
@@ -102,6 +116,18 @@ export function createLimiter({ perVisitor = 3, visitorWindowMs = 10 * 60 * 1000
 
 const limiter = createLimiter();
 
+// One visitor per IPv4 address, and per /64 for IPv6: a person on IPv6 holds a whole /64 and can rotate within it.
+export function visitorKey(ip) {
+  if (!ip || !ip.includes(':')) return ip || 'unknown';
+  let [head, tail = ''] = ip.toLowerCase().split('%')[0].split('::').length === 2 ? ip.toLowerCase().split('%')[0].split('::') : [ip.toLowerCase().split('%')[0]];
+  const v4 = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(tail || head);
+  if (v4) return ip; // an IPv4-mapped address: keep it whole
+  const first = head ? head.split(':') : [];
+  const last = tail ? tail.split(':') : [];
+  const groups = ip.includes('::') ? [...first, ...Array(Math.max(0, 8 - first.length - last.length)).fill('0'), ...last] : first;
+  return groups.slice(0, 4).map((g) => g.padStart(4, '0')).join(':') + '::/64';
+}
+
 // The limiter holds only these hashes, never the address or the IP themselves.
 async function digest(text) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -128,6 +154,9 @@ async function sendMail({ to, pdfBase64 }, env, deps) {
     });
     if (res.status >= 200 && res.status < 300) return { ok: true, retry: false };
     if (res.status === 429 || res.status >= 500) return { ok: false, retry: true };
+    // Our key or sender was refused: the athlete did nothing wrong, and the owner needs to see it. "Later" to the
+    // athlete; a distinct status (502) in the log. Only the status code is logged.
+    if (res.status === 401 || res.status === 403) return { ok: false, retry: true, auth: true };
     return { ok: false, retry: false };
   } catch (err) {
     // A timeout or a network failure: the athlete can try again. The error is dropped on purpose, because its
@@ -171,7 +200,8 @@ function checkPdf(pdf) {
   if (size > MAX_PDF_BYTES) return { reply: REFUSED(413) };
   const bin = atob(pdf);
   if (!bin.startsWith('%PDF-')) return { reply: REFUSED(400) };
-  if (DENIED.some((word) => bin.includes(word)) || NAME_WITH_HEX_ESCAPE.test(bin)) return { reply: REFUSED(400) };
+  const scan = JSPDF_OWN.reduce((t, re) => t.replace(re, ''), bin);
+  if (DENIED.some((word) => scan.includes(word)) || NAME_WITH_HEX_ESCAPE.test(scan) || INLINE_IMAGE.test(scan) || oddCatalogOrFont(scan)) return { reply: REFUSED(400) };
   return { bin };
 }
 
@@ -179,8 +209,8 @@ function checkPdf(pdf) {
 // can stub each. deps.timeoutMs is optional (tests only). log is called once a reply, with a status code and the
 // count of sends so far: numbers only.
 export async function handler(request, env, deps) {
-  function reply({ status, result }, extra) {
-    deps.log(status, sendCount);
+  function reply({ status, result }, extra, logAs) {
+    deps.log(logAs || status, sendCount);
     return new Response(JSON.stringify({ result }), {
       status,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra }
@@ -217,7 +247,7 @@ export async function handler(request, env, deps) {
 
     if (!env || !env.RESEND_API_KEY || !env.MAIL_FROM) return reply(LATER);
 
-    const visitor = await digest(request.headers.get('CF-Connecting-IP') || 'unknown');
+    const visitor = await digest(visitorKey(request.headers.get('CF-Connecting-IP')));
     if (!limiter.take(visitor, await digest(to.toLowerCase()), deps.now())) return reply({ status: 429, result: 'later' });
 
     const sent = await sendMail({ to, pdfBase64: body.pdf }, env, deps);
@@ -225,6 +255,7 @@ export async function handler(request, env, deps) {
       sendCount += 1;
       return reply({ status: 200, result: 'sent' });
     }
+    if (sent.auth) return reply(LATER, undefined, 502);
     return reply(sent.retry ? LATER : REFUSED(400));
   } catch (err) {
     // Anything unexpected is "try again later". The error is not logged: its message could hold the address.
