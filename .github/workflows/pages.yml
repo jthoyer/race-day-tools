@@ -1,6 +1,7 @@
 name: pages
 # Publishes public/ to GitHub Pages on every push to main, after the unit tests pass.
 # One-time setup outside the repo: Settings -> Pages -> Source: GitHub Actions.
+# Keep this file until the Cloudflare cut-over is checked (docs/host-move.md, step 11). Then delete it.
 on:
   push:
     branches: [main]
