@@ -1,6 +1,6 @@
 # Host move: GitHub Pages to Cloudflare Pages
 
-**Status: not started.** This is step 5 of the RD-039 plan. Nothing here has been done. GitHub Pages is still the live host.
+**Status: done on 16 November 2026, once the cut-over pull request merges.** This is step 5 of the RD-039 plan. The app runs on Cloudflare Pages at https://race.trimomentum.com. Steps 1 to 6 and the extra step are done. Steps 7 and 8, and the failure and bad-address checks in step 10, are not. The old GitHub Pages address is a frozen fallback. This page stays as the record of the plan and its checks.
 
 An agent can edit this repo. Only you can touch Cloudflare, DNS, the mail account and GitHub settings (see AGENTS.md and CONTRIBUTING.md). Each step below is a row in the Notion product backlog, "Host move 1 of 11" to "11 of 11", under RD-039.
 
@@ -38,7 +38,7 @@ So the Worker is not part of the plan. Disconnect its Git link or delete it, by 
 | 8 | Agent | Check the Resend request shape in `functions/api/send.js` against Resend's docs. |
 | 9 | Agent | This branch: the docs, ready for the cut-over. |
 | 10 | You, then agent | Check the preview (below). |
-| 11 | You | Move DNS. Keep GitHub Pages live until the new address is checked. Then retire `pages.yml`. |
+| 11 | You, then agent | Move DNS. Keep GitHub Pages live until the new address is checked. Then retire `pages.yml`. DNS is done. The retiring is in the cut-over pull request. |
 | extra | You | Require the `unit` check on `main` in GitHub, with a branch protection rule or a ruleset. On 16 November 2026 `main` had neither. Do it before step 11. |
 
 Notes on step 5. In the dashboard: Settings, Variables and Secrets, Add, then Encrypt. Or `npx wrangler pages secret put <KEY> --project-name <project>`. **(docs)** Set them before the deployment that uses them, and redeploy after. **(docs)** Preview and production are separate.
@@ -58,19 +58,19 @@ Use made-up data. Send only to an address you own.
 - [ ] A bad address is refused with no request.
 - [ ] `send.js` uses `redirect: 'manual'` on the call to Resend. Workers does not support `redirect: 'error'`. It throws before any request goes out, and the catch turns that into the "Email isn't working right now" reply. Do not change it back. A real send is the only test that shows this.
 
-## What changes in the repo at cut-over (step 11)
+## What changed in the repo at cut-over (step 11)
 
-One small pull request, after step 10 passes:
+One small pull request:
 
 - README, Hosting section: the new address, and what you set up by hand.
-- CONTRIBUTING, "Branches and pull requests": the line "Merging to `main` deploys to https://jthoyer.github.io/race-day-tools/ ... once `npm test` passes". Write what is true for the deploy path you chose.
-- Delete `.github/workflows/pages.yml`.
+- CONTRIBUTING, "Branches and pull requests": the line about merging to `main` now names the Cloudflare address and the required `unit` check.
+- `.github/workflows/pages.yml` is deleted. GitHub Pages no longer updates.
 - No change to `canEmailHere`. GitHub Pages stays a host without the function.
 - No change to the content policy. It stays `connect-src 'self'`.
 
 ## Roll back
 
-Keep GitHub Pages live until the new address is checked. To go back, point DNS at GitHub Pages again. The email block hides itself there.
+The old address `https://jthoyer.github.io/race-day-tools/` should keep serving its last build, frozen. It has no email block. To go back to it, point people at that address. It will not have anything merged after the move. To bring it up to date, restore `pages.yml` from Git history. A custom domain moved to Cloudflare stays on Cloudflare unless you change its DNS.
 
 ## Still blocks launch
 
