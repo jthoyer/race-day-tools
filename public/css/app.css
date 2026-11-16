@@ -102,11 +102,10 @@ a:hover {
 .app {
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 0 max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left));
+  padding: 0 max(16px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 .top {
@@ -503,7 +502,6 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: auto;
 }
 .actions .back {
   justify-content: center;
