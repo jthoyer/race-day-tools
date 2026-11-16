@@ -16,11 +16,19 @@ To keep the test gate, turn on branch protection for `main` in GitHub and requir
 
 Pick one before step 1.
 
+## Before step 1: the stray `race-day` Worker
+
+A read-only check of the Cloudflare account on 16 November 2026 found no Pages project. It found one **Worker** named `race-day`, linked to this repo on `main`. It builds with `npx wrangler deploy` from the root directory `/race-day`, which is not a folder in this repo. Its latest Git build failed. It has no routes, no domain and no secrets.
+
+The decision on 16 November 2026 is **Pages**, not a Worker. The send function is a Pages Function (`functions/api/send.js`), and the Worker route would need it rewritten.
+
+So the Worker is not part of the plan. Disconnect its Git link or delete it, by hand, so it stops building on every push to `main`. I have not checked whether its failed build shows as a check on pull requests. The Pages project is a new one: in the dashboard, Workers & Pages, Create application, the Pages tab, import the Git repository. **(docs)** Leave the root directory empty.
+
 ## The order
 
 | # | Who | Step |
 | --- | --- | --- |
-| 1 | You | Create the Pages project. Connect the repo. Output folder `public`, no build command. Deploy a preview. |
+| 1 | You | Create the Pages project (not a Worker). Connect the repo. Output folder `public`, no build command. Deploy a preview. |
 | 2 | You | Open the Resend account. Create a send-only key. Check its data retention against "We don't keep it". |
 | 3 | You | Choose the sending domain. Use a subdomain. |
 | 4 | You | Add SPF, DKIM and DMARC records. Wait for Resend to show the domain verified. |
@@ -31,6 +39,7 @@ Pick one before step 1.
 | 9 | Agent | This branch: the docs, ready for the cut-over. |
 | 10 | You, then agent | Check the preview (below). |
 | 11 | You | Move DNS. Keep GitHub Pages live until the new address is checked. Then retire `pages.yml`. |
+| extra | You | Require the `unit` check on `main` in GitHub, with a branch protection rule or a ruleset. On 16 November 2026 `main` had neither. Do it before step 11. |
 
 Notes on step 5. In the dashboard: Settings, Variables and Secrets, Add, then Encrypt. Or `npx wrangler pages secret put <KEY> --project-name <project>`. **(docs)** Set them before the deployment that uses them, and redeploy after. **(docs)** Preview and production are separate.
 
