@@ -26,7 +26,7 @@ test('the fixture is what the tests say it is', () => {
   assert.deepEqual(pace.bike.watts, [175, 185]);
 });
 
-test('rows: the pace targets and finish equal what the print card shows (A10a)', () => {
+test('rows: the pace targets and finish (A10a)', () => {
   const rows = C.rows(input());
   assert.deepEqual(rows.slice(0, 7), [
     { kind: 'title', text: 'TRI Momentum race card · 70.3' },
@@ -66,7 +66,7 @@ test('rows: the km come from kmAt, gel time over leg time times the leg distance
   assert.equal(t[12], 'at ' + km('run', 20));
 });
 
-test('rows: the notes, in the print card\'s words (A10c)', () => {
+test('rows: the notes (A10c)', () => {
   const t = texts(C.rows(input()));
   assert.equal(t[t.length - 1], 'Times are from the start of each leg. ' + P.KM_NOTE + ' Typical ranges, not medical advice.');
   assert.equal(C.rows(input()).at(-1).kind, 'fine');
@@ -81,7 +81,7 @@ test('rows: the out-of-date line shows when, and only when, the plan is out of d
   assert.ok(!texts(C.rows(input({ fuelStale: 'yes' }))).includes(STALE), 'only a real true counts');
   const rows = C.rows(input({ fuelStale: true }));
   assert.equal(texts(rows).filter((x) => x === STALE).length, 1);
-  assert.equal(texts(rows).indexOf(STALE), texts(rows).indexOf('Bike nutrition · 63 g/hr') - 1, 'it sits just above the nutrition, as on the print card');
+  assert.equal(texts(rows).indexOf(STALE), texts(rows).indexOf('Bike nutrition · 63 g/hr') - 1, 'it sits just above the nutrition');
   // No nutrition shown, so nothing to call out of date.
   assert.ok(!texts(C.rows(input({ fuelStale: true, fuel: null }))).includes(STALE));
 });

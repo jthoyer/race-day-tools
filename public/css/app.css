@@ -528,34 +528,6 @@ h2 {
   padding-left: 18px;
 }
 
-.countdown {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: var(--r);
-  background: var(--ink);
-  color: #fff;
-  padding: 16px 18px;
-}
-.countdown .k {
-  margin: 0;
-  color: var(--accent-hover);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-}
-.countdown .v {
-  margin: 2px 0 0;
-  font: 700 22px var(--display);
-}
-.countdown .n {
-  margin: 0;
-  max-width: 170px;
-  color: #edf0f7;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
 /* Pace targets (F5) */
 .targets {
   border-radius: var(--r);
@@ -1298,55 +1270,6 @@ p.notice.go {
   color: var(--muted);
   font-size: 13px;
   text-align: center;
-}
-
-/* Print: only the top-tube card (RD-07-A2). About 7 cm wide, big type, high contrast. */
-#print-root {
-  display: none;
-}
-@media print {
-  @page {
-    size: A4 portrait;
-    margin: 12mm;
-  }
-  body {
-    background: #fff;
-  }
-  .app,
-  .noprint {
-    display: none !important;
-  }
-  #print-root {
-    display: block;
-  }
-  .tt {
-    width: 70mm;
-    border: 1.5px dashed #000;
-    padding: 4mm;
-    color: #000;
-    font: 10.5pt/1.3 var(--body);
-  }
-  .tt h2 {
-    font: 700 13pt var(--display);
-    margin: 0 0 1mm;
-  }
-  .tt h3 {
-    font: 700 10pt var(--body);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    margin: 3mm 0 1mm;
-    border-bottom: 1px solid #000;
-  }
-  .tt p {
-    margin: 0 0 1mm;
-  }
-  .tt .big {
-    font: 700 14pt var(--display);
-  }
-  .tt .fine {
-    font-size: 7.5pt;
-    margin-top: 3mm;
-  }
 }
 
 /* The rule between the product choice and the carry list inside the "Your nutrition" card. */

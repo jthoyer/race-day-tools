@@ -93,19 +93,17 @@ const plainName = (t) => t.replace(/,\s*done/, '').replace(/^\d\s*/, '').trim();
 const isoLocal = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
 const inDays = (d) => isoLocal(new Date(Date.now() + d * 86400000));
 const CLOCK = /\d{1,2}:\d\d ?(am|pm)/i;
+const taperStore = async () => (await store()).race.taperDays;
 
-// RD-039 A12. The emailed PDF and the print card cannot drift: the print card's lines, without its race title and date,
-// equal the PDF's rows, in order and word for word. Needs the print card built (a beforeprint event) first.
-async function printMatchesPdfRows(where, fuelStale) {
-  const printed = await page.locator('.tt').evaluate((e) => [...e.children].map((c) => c.textContent));
-  const rows = await page.evaluate(([k, stale]) => {
-    const race = JSON.parse(localStorage.getItem(k)).race;
-    return window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
-  }, [KEY, fuelStale]);
-  const dated = await page.evaluate((k) => !!JSON.parse(localStorage.getItem(k)).race.date, KEY);
-  const lines = printed.slice(dated ? 2 : 1);
-  check(rows.length > 4 && JSON.stringify(lines) === JSON.stringify(rows.slice(1).map((r) => r.text)), `${where} text equals the PDF rows, line for line (${lines.length} lines)`);
-  check(/^TRI Momentum race card · (Olympic|70\.3)$/.test(rows[0].text) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the PDF title row has the distance and no race name, and no row has a time of day`);
+// RD-039 A12. The PDF rows: the words the emailed card holds. fuelStale is what the app passes when the plan is out of date.
+const pdfRows = (fuelStale) => page.evaluate(([k, stale]) => {
+  const race = JSON.parse(localStorage.getItem(k)).race;
+  return window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
+}, [KEY, fuelStale]);
+const pdfText = async (fuelStale) => (await pdfRows(fuelStale)).map((r) => r.text).join('\n');
+async function pdfRowsOk(where, fuelStale) {
+  const rows = await pdfRows(fuelStale);
+  check(rows.length > 4 && /^TRI Momentum race card · (Olympic|70\.3)$/.test(rows[0].text) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the PDF title row has the distance and no race name, and no row has a time of day, a start time or a transition`);
 }
 
 // 28 and 29: no whole word "fuel" and no "Standard" in what a person reads.
@@ -224,30 +222,15 @@ const s1text = await appText();
 check(/Every step works back from race day\./.test(s1text) && !/Start time|Transition opens|Clear start|Clear transition/.test(s1text) && (await page.locator('input[type=time]').count()) === 0, 'Step 1 has its subtitle and no start time, no Transition opens, no Clear buttons');
 check(!(await page.getByRole('button', { name: 'Save and back to race card' }).count()), 'A first pass through the steps has no "back to race card" yet');
 await page.getByLabel('Race name').fill('Spring 70.3');
-// Olympic stores "standard", shows its legs, and marks 10 days as our guide.
+// Olympic stores "standard" and shows its legs. (Its 10-day taper guide is checked in the strip, scenario 24b.)
 await page.getByLabel('Race date').fill(inDays(20));
 await page.getByRole('button', { name: 'Olympic' }).click();
-check((await store()).race.distance === 'standard' && (await page.getByText('Swim 1.5 km · Bike 40 km · Run 10 km').isVisible()) && /10 days \(our guide\)/.test(await page.getByRole('button', { name: /10 days/ }).innerText()), 'Choosing Olympic stores "standard", shows 1.5 / 40 / 10 km and marks 10 days (our guide)');
+check((await store()).race.distance === 'standard' && (await page.getByText('Swim 1.5 km · Bike 40 km · Run 10 km').isVisible()), 'Choosing Olympic stores "standard" and shows 1.5 / 40 / 10 km');
 check(!/\bstandard\b/i.test(await appText()), 'Step 1 never shows "Standard"');
 await page.getByRole('button', { name: '70.3', exact: true }).click();
 check(await page.getByText('Swim 1.9 km · Bike 90 km · Run 21.1 km').isVisible() && (await store()).race.distance === '70.3', 'Choosing 70.3 shows the 70.3 leg distances');
-check(await page.getByText(/days to go/).first().isVisible(), 'Step 1 shows days to go');
-// RD-011, RD-031. Taper length: our guide (14 days for a 70.3) is marked, one tap changes it, and a picked day works.
-const taperStore = async () => (await store()).race.taperDays;
-check((await page.getByRole('button', { name: /14 days/ }).getAttribute('aria-pressed')) === 'true' && /14 days \(our guide\)/.test(await page.getByRole('button', { name: /14 days/ }).innerText()), 'Step 1 marks our 14-day taper guide for a 70.3');
-const taperBefore = await page.locator('.countdown .n').innerText();
-await page.getByRole('button', { name: /21 days/ }).click();
-check((await taperStore()) === 21 && (await page.locator('.countdown .n').innerText()) !== taperBefore, 'Picking a 21-day taper saves it and moves the start');
-check(/You are in your taper/.test(await page.locator('.countdown .n').innerText()), 'A taper longer than the days to go says you are in it');
-const raceDay = new Date(Date.now() + 20 * 86400000);
-const sevenBefore = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() - 7);
-await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(sevenBefore));
-check((await taperStore()) === 7, 'Picking the day the taper starts saves a 7-day taper');
-const after = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() + 3);
-await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(after));
-check(await page.getByText(/Pick a day 1 to 42 days before race day/).isVisible() && (await taperStore()) === 7 && (await page.getByLabel('Or pick the day your taper starts').inputValue()) === isoLocal(after), 'A taper day after the race is refused, not saved, and stays on screen with its message');
-await page.getByRole('button', { name: /14 days/ }).click();
-check((await taperStore()) == null && !(await page.getByText(/Pick a day 1 to 42/).isVisible()), 'Going back to 14 days uses our guide again');
+// The countdown and the taper choices left step 1 (decided 16 Nov 2026). They start at step 2, in the strip (scenario 24).
+check((await page.locator('.countdown').count()) === 0 && !/days to go|COUNTDOWN|Taper length|Or pick the day your taper starts|our guide/.test(await appText()) && (await page.getByRole('button', { name: /10 days|14 days|21 days/ }).count()) === 0, 'Step 1 has no countdown and no taper choices');
 await wordsClean('Step 1');
 for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('Step 1', w); }
 await page.setViewportSize({ width: 390, height: 844 });
@@ -582,7 +565,7 @@ check((await editTaper.getAttribute('aria-expanded')) === 'true' && (await hero.
 const taperLine = await hero.locator('.taper .bt').innerText();
 await hero.getByRole('button', { name: /21 days/ }).click();
 check((await taperStore()) === 21 && (await hero.locator('.taper .bt').innerText()) !== taperLine, 'Picking a 21-day taper on the card saves it and moves the taper line');
-await hero.getByLabel('Or pick the day your taper starts').fill(isoLocal(after));
+await hero.getByLabel('Or pick the day your taper starts').fill(inDays(23)); // race day is inDays(20), so this is 3 days after it
 check(/Pick a day 1 to 42 days before race day/.test(await hero.innerText()) && (await taperStore()) === 21, 'A taper day after the race is refused on the card, and not saved');
 await shot('card-edit-taper');
 for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('The race card with Edit taper open', w); }
@@ -598,6 +581,8 @@ check(await page.getByRole('link', { name: 'Change gel times' }).evaluate((e) =>
 check(/^Sports drink( and water)?: about \d+ ml every 15 min$/.test((await page.locator('.racecard .tl .tlline').first().innerText()).trim()), 'The card names the drink in the first line of the bike leg card');
 check(!/typical/i.test(card) && !/Countdown|Debrief|Coming later/.test(card) && /not medical advice/i.test(await appText()), 'The card has no "(typical)", no Countdown or Debrief, and says not medical advice');
 check((await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.locator('.btn:not(.ghost)').innerText()).includes('Email my race card') && (await page.getByRole('button', { name: 'Print top-tube card' }).count()) === 0, 'With pacing and nutrition saved, the email button is the one yellow action, and there is no Print button');
+// RD-037, spec criterion 14: no print root and no print stylesheet. The browser prints the screen as it is.
+check(await page.evaluate(() => !document.getElementById('print-root') && ![...document.styleSheets].some((sh) => [...sh.cssRules].some((r) => r.constructor.name === 'CSSMediaRule' && /print/.test(r.media.mediaText)))), 'There is no #print-root and no print stylesheet');
 await wordsClean('The race card');
 for (const w of [390, 360, 320]) {
   await page.setViewportSize({ width: w, height: 844 });
@@ -610,26 +595,18 @@ for (const w of [390, 360, 320]) {
 await page.setViewportSize({ width: 390, height: 844 });
 await shot('card');
 
-// Print view
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-const tt = await page.locator('.tt').textContent();
-check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test(tt) && /175–185 W/.test(tt), 'Print card has pace and nutrition, with Nutrition headings');
-check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'Print card has your gel times, their km, the KM_NOTE and not medical advice');
-check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'Print card has no start time, no transition and no time of day');
-check(!(await page.locator('.app').isVisible()), 'Print hides the app');
-check((await page.locator('.tt .strip, #print-root .strip').count()) === 0, 'The print card holds no race strip');
-await printMatchesPdfRows('Print card', false);
+// The PDF rows: what the emailed card holds
+const tt = await pdfText(false);
+check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test(tt) && /175–185 W/.test(tt), 'The PDF has pace and nutrition, with Nutrition headings');
+check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'The PDF has your gel times, their km, the KM_NOTE and not medical advice');
+check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'The PDF has no start time, no transition and no time of day');
+await pdfRowsOk('The PDF', false);
 const drawn = await page.evaluate((k) => {
   const race = JSON.parse(localStorage.getItem(k)).race;
   const bytes = window.RD.card.drawPdf(window.jspdf.jsPDF, window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: false }));
   return { head: String.fromCharCode(...bytes.subarray(0, 5)), size: bytes.length };
 }, KEY);
 check(drawn.head === '%PDF-' && drawn.size > 500 && drawn.size < 33000, `The vendored library draws the card in the browser under the content policy (${drawn.size} bytes)`);
-const ttw = await page.locator('.tt').evaluate((e) => e.getBoundingClientRect().width);
-check(ttw > 230 && ttw < 300, `Print card is about 70 mm wide (${Math.round(ttw)} CSS px)`);
-await shot('print');
-await page.emulateMedia({ media: 'screen' });
 
 // Survives a reload: everything was saved on the device
 await page.reload();
@@ -677,7 +654,7 @@ await page.goto(base + '/index.html#/');
 await page.reload();
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
 const s5b = await appText();
-check(/All four steps done\./.test(s5b) && (await page.getByRole('link', { name: 'Open my race card' }).isVisible()) && /Bike \d+ g\/hr · run \d+ g\/hr/.test(s5b) && /Ready to print/.test(s5b), 'S5 after nutrition says "All four steps done." with "Open my race card"');
+check(/All four steps done\./.test(s5b) && (await page.getByRole('link', { name: 'Open my race card' }).isVisible()) && /Bike \d+ g\/hr · run \d+ g\/hr/.test(s5b) && /Ready to email/.test(s5b), 'S5 after nutrition says "All four steps done." with "Open my race card"');
 check((await page.locator('li.step.goal').count()) === 0 && (await page.getByRole('link', { name: 'Edit' }).count()) === 3 && (await page.getByRole('link', { name: 'Open', exact: true }).count()) === 1, 'S5 shows step 4 done (no light blue) with Edit on steps 1 to 3 and Open on step 4');
 await shot('s5-all-done');
 
@@ -722,11 +699,8 @@ await settle();
 await page.goto(base + '/index.html#/card');
 await page.reload();
 check(/changed since this plan/.test(await page.locator('.racecard').innerText()), 'Card flags nutrition as out of date after a details change');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(/Nutrition plan out of date\. Update it before race day\./.test(await page.locator('.tt').textContent()), 'The print card says "Nutrition plan out of date. Update it before race day."');
-await printMatchesPdfRows('Out-of-date print card', true);
-await page.emulateMedia({ media: 'screen' });
+check((await pdfRows(true)).some((r) => r.text === 'Nutrition plan out of date. Update it before race day.'), 'The PDF says "Nutrition plan out of date. Update it before race day." when the plan is out of date');
+await pdfRowsOk('Out-of-date PDF', true);
 await page.goto(base + '/index.html#/fuel');
 await page.getByRole('button', { name: 'Update my race card' }).click();
 await page.locator('.racecard').waitFor();
@@ -821,11 +795,8 @@ check(!CLOCK.test(ot) && !/Transition/i.test(ot) && !/Out of date/i.test(ot), 'O
 await page.goto(base + '/index.html#/card');
 ot = await appText();
 check(!CLOCK.test(ot) && !/Transition/i.test(ot) && !/changed since/i.test(ot) && /g\/hr/.test(ot) && /Finish \d:\d\d–\d:\d\d/.test(ot) && (await page.locator('.racecard .tl').count()) === 2, 'Old save: the card shows its pacing and nutrition with no time of day, no transition and no out-of-date notice');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-const oldTT = await page.locator('.tt').textContent();
-check(!CLOCK.test(oldTT) && !/Transition/i.test(oldTT) && !/out of date/i.test(oldTT) && /nutrition/i.test(oldTT), 'Old save: the print card has no time of day, no transition and no out-of-date line');
-await page.emulateMedia({ media: 'screen' });
+const oldTT = await pdfText(false);
+check(!CLOCK.test(oldTT) && !/Transition/i.test(oldTT) && !/out of date/i.test(oldTT) && /nutrition/i.test(oldTT), 'Old save: the PDF has no time of day, no transition and no out-of-date line');
 for (const hash of ['#/setup/1', '#/pacing/3', '#/fuel']) {
   await page.goto(base + '/index.html' + hash);
   await page.reload();
@@ -898,10 +869,6 @@ check(bt.includes(SWEAT_NEEDED) && !/Out of date|changed since/i.test(bt), 'Blan
 await page.goto(base + '/index.html#/card');
 bt = await appText();
 check(bt.includes(SWEAT_NEEDED) && !/changed since|out of date/i.test(bt) && (await page.locator('.racecard .notice a', { hasText: 'step 3' }).getAttribute('href')) === '#/fuel', 'Blank own sweat: the card says it, links to step 3, and shows no out-of-date text');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(!/out of date/i.test(await page.locator('.tt').textContent()), 'Blank own sweat: the print card has no out-of-date line');
-await page.emulateMedia({ media: 'screen' });
 await page.goto(base + '/index.html#/fuel');
 await page.reload();
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
@@ -919,10 +886,6 @@ await page.goto(base + '/index.html#/card');
 await page.reload();
 await both('the card', await appText());
 check((await page.locator('.racecard .notice.warn').allInnerTexts()).map((t) => t.trim()).join('|') === 'Your splits, details or products changed since this plan. Open Nutrition to update it.|Add your sweat rate on step 3, or use a typical value.', 'The card shows the two notices as separate sentences')
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(/out of date/i.test(await page.locator('.tt').textContent()), 'Blank own sweat and a changed gut figure: print says out of date');
-await page.emulateMedia({ media: 'screen' });
 await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -978,14 +941,10 @@ async function mailPage(label, save, handler, { errorsExpected = false } = {}) {
   await page.locator('.racecard').waitFor();
   return seen;
 }
-// What a person should be left with after any result: the card, the saved plan, and the print card, all as they were.
+// What a person should be left with after any result: the card and the saved plan, both as they were.
 async function stillWorks(where, before) {
   check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === before, `${where}: the saved plan is exactly as it was`);
-  await page.emulateMedia({ media: 'print' });
-  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-  const printed = await page.locator('.tt').textContent();
-  await page.emulateMedia({ media: 'screen' });
-  check(/Bike nutrition/.test(printed) && (await page.locator('.racecard').isVisible()), `${where}: the card and the print card still work`);
+  check(await page.locator('.racecard').isVisible(), `${where}: the card is still there`);
   check((await sendBtn().isEnabled()) && (await sendBtn().innerText()) === 'Email my race card', `${where}: the button is back to "Email my race card"`);
 }
 const storeText = () => page.evaluate((k) => localStorage.getItem(k), KEY);
@@ -1006,7 +965,7 @@ async function typeAndSend(address) {
 {
   const seen = await mailPage('email block', mailSave(), (route) => route.fulfill(json(200, 'sent')));
   const m = page.locator('section.mail');
-  check((await m.count()) === 1 && (await m.getAttribute('class')).split(' ').includes('noprint'), 'The email block is on the race card and is marked noprint');
+  check((await m.count()) === 1, 'The email block is on the race card');
   check((await page.getByLabel('Email me this race card', { exact: true }).count()) === 1, 'The email field is labelled "Email me this race card"');
   const f = page.locator('#f-mail');
   check((await f.getAttribute('type')) === 'email' && (await f.getAttribute('inputmode')) === 'email' && (await f.getAttribute('autocomplete')) === 'email' && (await f.inputValue()) === '', 'The field is type email, inputmode email, autocomplete email, and starts empty');
@@ -1029,9 +988,6 @@ async function typeAndSend(address) {
   await noHorizontalScroll('The race card with the email block', 1200);
   await shot('email-block-1200');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.emulateMedia({ media: 'print' });
-  check((await m.evaluate((e) => getComputedStyle(e).display)) === 'none', 'The email block is not in the print view');
-  await page.emulateMedia({ media: 'screen' });
   // The card redraws when its header opens for editing; what was typed in the email field stays.
   await page.locator('#f-mail').fill(ADDRESS);
   await page.locator('.racecard .band').getByRole('button', { name: 'Edit race' }).click();
@@ -1267,13 +1223,6 @@ for (const [hash, what] of [['#/', 'Home (S5)'], ['#/setup/1', 'Step 1'], ['#/ca
   await stripIs(what, false);
   await page.context().close();
 }
-// Print: the strip is on screen only. Isolation: fresh context.
-await stripPage('strip print', stripSeed(), '#/fuel');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(!(await strip().isVisible()) && (await page.locator('.tt').count()) === 1 && !/Edit race|Your race/.test(await page.locator('.tt').textContent()), 'In print the strip is hidden and the print card does not hold it');
-await page.context().close();
-
 // 21. What it says (A4, A5, A6). Isolation: a fresh context per row.
 const STRIP_DATE = /^Spring 70\.3\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun),? \d{1,2} [A-Z][a-z]{2}/;
 const STRIP_LINE2 = /Taper starts (Mon|Tue|Wed|Thu|Fri|Sat|Sun),? \d{1,2} [A-Z][a-z]{2}/;
@@ -1352,7 +1301,7 @@ for (const hash of ['#/fuel', '#/pacing/2']) {
   const panel = strip().locator('#strip-panel');
   const pill = (re) => panel.getByRole('button', { name: re });
   check((await expandedOf('taper')) === 'true' && (await activeId()) === 'strip-panel' && (await panel.getAttribute('aria-label')) === 'Edit taper', `${hash}: Edit taper opens the panel and focus moves to it`);
-  check((await panel.locator('.pills button').allInnerTexts()).join('|') === '10 days|14 days (our guide)|21 days' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true' && (await panel.getByLabel('Or pick the day your taper starts').count()) === 1, `${hash}: the taper controls are step 1's, with our guide (14 days for a 70.3) marked pressed`);
+  check((await panel.locator('.pills button').allInnerTexts()).join('|') === '10 days|14 days (our guide)|21 days' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true' && (await panel.getByLabel('Or pick the day your taper starts').count()) === 1, `${hash}: the taper controls are the same as the card header's, with our guide (14 days for a 70.3) marked pressed`);
   const line = await strip().locator('.taper .bt').innerText();
   await pill(/21 days/).click();
   check((await store()).race.taperDays === 21 && (await strip().locator('.taper .bt').innerText()) !== line && (await strip().locator('#strip-panel').count()) === 1, `${hash}: picking 21 saves 21 and moves the taper line`);
@@ -1369,6 +1318,15 @@ for (const hash of ['#/fuel', '#/pacing/2']) {
   check(typeof (await store()).race.taperDays !== 'number' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true', `${hash}: picking our guide saves blank, never a number`);
   await page.context().close();
 }
+
+// 24b. An Olympic race marks 10 days, not 14, as our guide (spec criterion 20). Isolation: fresh context.
+await stripPage('strip taper olympic', stripSeed({ distance: 'standard' }), '#/fuel');
+await stripBtn('taper').click();
+{
+  const pills = strip().locator('#strip-panel .pills button');
+  check((await pills.allInnerTexts()).join('|') === '10 days (our guide)|14 days|21 days' && (await pills.first().getAttribute('aria-pressed')) === 'true', 'For an Olympic race the strip marks 10 days as our guide, and it is pressed');
+}
+await page.context().close();
 
 // 25. Done and tapping a button again (A13). Isolation: fresh context.
 await stripPage('strip done', stripSeed(), '#/fuel');
