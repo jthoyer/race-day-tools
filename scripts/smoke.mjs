@@ -94,18 +94,15 @@ const isoLocal = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padS
 const inDays = (d) => isoLocal(new Date(Date.now() + d * 86400000));
 const CLOCK = /\d{1,2}:\d\d ?(am|pm)/i;
 
-// RD-039 A12. The emailed PDF and the print card cannot drift: the print card's lines, without its race title and date,
-// equal the PDF's rows, in order and word for word. Needs the print card built (a beforeprint event) first.
-async function printMatchesPdfRows(where, fuelStale) {
-  const printed = await page.locator('.tt').evaluate((e) => [...e.children].map((c) => c.textContent));
-  const rows = await page.evaluate(([k, stale]) => {
-    const race = JSON.parse(localStorage.getItem(k)).race;
-    return window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
-  }, [KEY, fuelStale]);
-  const dated = await page.evaluate((k) => !!JSON.parse(localStorage.getItem(k)).race.date, KEY);
-  const lines = printed.slice(dated ? 2 : 1);
-  check(rows.length > 4 && JSON.stringify(lines) === JSON.stringify(rows.slice(1).map((r) => r.text)), `${where} text equals the PDF rows, line for line (${lines.length} lines)`);
-  check(/^TRI Momentum race card · (Olympic|70\.3)$/.test(rows[0].text) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the PDF title row has the distance and no race name, and no row has a time of day`);
+// RD-039 A12. The PDF rows: the words the emailed card holds. fuelStale is what the app passes when the plan is out of date.
+const pdfRows = (fuelStale) => page.evaluate(([k, stale]) => {
+  const race = JSON.parse(localStorage.getItem(k)).race;
+  return window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
+}, [KEY, fuelStale]);
+const pdfText = async (fuelStale) => (await pdfRows(fuelStale)).map((r) => r.text).join('\n');
+async function pdfRowsOk(where, fuelStale) {
+  const rows = await pdfRows(fuelStale);
+  check(rows.length > 4 && /^TRI Momentum race card · (Olympic|70\.3)$/.test(rows[0].text) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the PDF title row has the distance and no race name, and no row has a time of day, a start time or a transition`);
 }
 
 // 28 and 29: no whole word "fuel" and no "Standard" in what a person reads.
@@ -610,26 +607,18 @@ for (const w of [390, 360, 320]) {
 await page.setViewportSize({ width: 390, height: 844 });
 await shot('card');
 
-// Print view
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-const tt = await page.locator('.tt').textContent();
-check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test(tt) && /175–185 W/.test(tt), 'Print card has pace and nutrition, with Nutrition headings');
-check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'Print card has your gel times, their km, the KM_NOTE and not medical advice');
-check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'Print card has no start time, no transition and no time of day');
-check(!(await page.locator('.app').isVisible()), 'Print hides the app');
-check((await page.locator('.tt .strip, #print-root .strip').count()) === 0, 'The print card holds no race strip');
-await printMatchesPdfRows('Print card', false);
+// The PDF rows: what the emailed card holds
+const tt = await pdfText(false);
+check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test(tt) && /175–185 W/.test(tt), 'The PDF has pace and nutrition, with Nutrition headings');
+check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'The PDF has your gel times, their km, the KM_NOTE and not medical advice');
+check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'The PDF has no start time, no transition and no time of day');
+await pdfRowsOk('The PDF', false);
 const drawn = await page.evaluate((k) => {
   const race = JSON.parse(localStorage.getItem(k)).race;
   const bytes = window.RD.card.drawPdf(window.jspdf.jsPDF, window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: false }));
   return { head: String.fromCharCode(...bytes.subarray(0, 5)), size: bytes.length };
 }, KEY);
 check(drawn.head === '%PDF-' && drawn.size > 500 && drawn.size < 33000, `The vendored library draws the card in the browser under the content policy (${drawn.size} bytes)`);
-const ttw = await page.locator('.tt').evaluate((e) => e.getBoundingClientRect().width);
-check(ttw > 230 && ttw < 300, `Print card is about 70 mm wide (${Math.round(ttw)} CSS px)`);
-await shot('print');
-await page.emulateMedia({ media: 'screen' });
 
 // Survives a reload: everything was saved on the device
 await page.reload();
@@ -722,11 +711,8 @@ await settle();
 await page.goto(base + '/index.html#/card');
 await page.reload();
 check(/changed since this plan/.test(await page.locator('.racecard').innerText()), 'Card flags nutrition as out of date after a details change');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(/Nutrition plan out of date\. Update it before race day\./.test(await page.locator('.tt').textContent()), 'The print card says "Nutrition plan out of date. Update it before race day."');
-await printMatchesPdfRows('Out-of-date print card', true);
-await page.emulateMedia({ media: 'screen' });
+check((await pdfRows(true)).some((r) => r.text === 'Nutrition plan out of date. Update it before race day.'), 'The PDF says "Nutrition plan out of date. Update it before race day." when the plan is out of date');
+await pdfRowsOk('Out-of-date PDF', true);
 await page.goto(base + '/index.html#/fuel');
 await page.getByRole('button', { name: 'Update my race card' }).click();
 await page.locator('.racecard').waitFor();
@@ -821,11 +807,8 @@ check(!CLOCK.test(ot) && !/Transition/i.test(ot) && !/Out of date/i.test(ot), 'O
 await page.goto(base + '/index.html#/card');
 ot = await appText();
 check(!CLOCK.test(ot) && !/Transition/i.test(ot) && !/changed since/i.test(ot) && /g\/hr/.test(ot) && /Finish \d:\d\d–\d:\d\d/.test(ot) && (await page.locator('.racecard .tl').count()) === 2, 'Old save: the card shows its pacing and nutrition with no time of day, no transition and no out-of-date notice');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-const oldTT = await page.locator('.tt').textContent();
-check(!CLOCK.test(oldTT) && !/Transition/i.test(oldTT) && !/out of date/i.test(oldTT) && /nutrition/i.test(oldTT), 'Old save: the print card has no time of day, no transition and no out-of-date line');
-await page.emulateMedia({ media: 'screen' });
+const oldTT = await pdfText(false);
+check(!CLOCK.test(oldTT) && !/Transition/i.test(oldTT) && !/out of date/i.test(oldTT) && /nutrition/i.test(oldTT), 'Old save: the PDF has no time of day, no transition and no out-of-date line');
 for (const hash of ['#/setup/1', '#/pacing/3', '#/fuel']) {
   await page.goto(base + '/index.html' + hash);
   await page.reload();
@@ -898,10 +881,6 @@ check(bt.includes(SWEAT_NEEDED) && !/Out of date|changed since/i.test(bt), 'Blan
 await page.goto(base + '/index.html#/card');
 bt = await appText();
 check(bt.includes(SWEAT_NEEDED) && !/changed since|out of date/i.test(bt) && (await page.locator('.racecard .notice a', { hasText: 'step 3' }).getAttribute('href')) === '#/fuel', 'Blank own sweat: the card says it, links to step 3, and shows no out-of-date text');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(!/out of date/i.test(await page.locator('.tt').textContent()), 'Blank own sweat: the print card has no out-of-date line');
-await page.emulateMedia({ media: 'screen' });
 await page.goto(base + '/index.html#/fuel');
 await page.reload();
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
@@ -919,10 +898,6 @@ await page.goto(base + '/index.html#/card');
 await page.reload();
 await both('the card', await appText());
 check((await page.locator('.racecard .notice.warn').allInnerTexts()).map((t) => t.trim()).join('|') === 'Your splits, details or products changed since this plan. Open Nutrition to update it.|Add your sweat rate on step 3, or use a typical value.', 'The card shows the two notices as separate sentences')
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(/out of date/i.test(await page.locator('.tt').textContent()), 'Blank own sweat and a changed gut figure: print says out of date');
-await page.emulateMedia({ media: 'screen' });
 await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -978,14 +953,10 @@ async function mailPage(label, save, handler, { errorsExpected = false } = {}) {
   await page.locator('.racecard').waitFor();
   return seen;
 }
-// What a person should be left with after any result: the card, the saved plan, and the print card, all as they were.
+// What a person should be left with after any result: the card and the saved plan, both as they were.
 async function stillWorks(where, before) {
   check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === before, `${where}: the saved plan is exactly as it was`);
-  await page.emulateMedia({ media: 'print' });
-  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-  const printed = await page.locator('.tt').textContent();
-  await page.emulateMedia({ media: 'screen' });
-  check(/Bike nutrition/.test(printed) && (await page.locator('.racecard').isVisible()), `${where}: the card and the print card still work`);
+  check(await page.locator('.racecard').isVisible(), `${where}: the card is still there`);
   check((await sendBtn().isEnabled()) && (await sendBtn().innerText()) === 'Email my race card', `${where}: the button is back to "Email my race card"`);
 }
 const storeText = () => page.evaluate((k) => localStorage.getItem(k), KEY);
@@ -1006,7 +977,7 @@ async function typeAndSend(address) {
 {
   const seen = await mailPage('email block', mailSave(), (route) => route.fulfill(json(200, 'sent')));
   const m = page.locator('section.mail');
-  check((await m.count()) === 1 && (await m.getAttribute('class')).split(' ').includes('noprint'), 'The email block is on the race card and is marked noprint');
+  check((await m.count()) === 1, 'The email block is on the race card');
   check((await page.getByLabel('Email me this race card', { exact: true }).count()) === 1, 'The email field is labelled "Email me this race card"');
   const f = page.locator('#f-mail');
   check((await f.getAttribute('type')) === 'email' && (await f.getAttribute('inputmode')) === 'email' && (await f.getAttribute('autocomplete')) === 'email' && (await f.inputValue()) === '', 'The field is type email, inputmode email, autocomplete email, and starts empty');
@@ -1029,9 +1000,6 @@ async function typeAndSend(address) {
   await noHorizontalScroll('The race card with the email block', 1200);
   await shot('email-block-1200');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.emulateMedia({ media: 'print' });
-  check((await m.evaluate((e) => getComputedStyle(e).display)) === 'none', 'The email block is not in the print view');
-  await page.emulateMedia({ media: 'screen' });
   // The card redraws when its header opens for editing; what was typed in the email field stays.
   await page.locator('#f-mail').fill(ADDRESS);
   await page.locator('.racecard .band').getByRole('button', { name: 'Edit race' }).click();
@@ -1267,13 +1235,6 @@ for (const [hash, what] of [['#/', 'Home (S5)'], ['#/setup/1', 'Step 1'], ['#/ca
   await stripIs(what, false);
   await page.context().close();
 }
-// Print: the strip is on screen only. Isolation: fresh context.
-await stripPage('strip print', stripSeed(), '#/fuel');
-await page.emulateMedia({ media: 'print' });
-await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
-check(!(await strip().isVisible()) && (await page.locator('.tt').count()) === 1 && !/Edit race|Your race/.test(await page.locator('.tt').textContent()), 'In print the strip is hidden and the print card does not hold it');
-await page.context().close();
-
 // 21. What it says (A4, A5, A6). Isolation: a fresh context per row.
 const STRIP_DATE = /^Spring 70\.3\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun),? \d{1,2} [A-Z][a-z]{2}/;
 const STRIP_LINE2 = /Taper starts (Mon|Tue|Wed|Thu|Fri|Sat|Sun),? \d{1,2} [A-Z][a-z]{2}/;

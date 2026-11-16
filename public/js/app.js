@@ -15,7 +15,6 @@
   var S = store.load();
   var raw = {}; // what the person is typing, before it parses
   var errors = {}; // field -> message, shown after they press Next
-  var currentPrint = null; // what Ctrl+P prints (there is no Print button since 16 Nov 2026)
   // Which part of the race header is open for editing: 'race', 'taper' or null. The race card band and the race strip
   // (RD-041) share it. They are never on the same screen, and render() resets it on every new visit.
   var cardEdit = null;
@@ -77,8 +76,6 @@
   // RD-025. A gel time with about how far into the leg it is: "0:40 (~22 km)". The time comes first and is the rule;
   // the km is a guide from an even pace. A leg time that cannot be read gives the time alone.
   function kmOf(p, leg, t) { var k = RD.pace.kmAt(p.distance, leg, t, p[leg].minutes); return k == null ? '' : '~' + k + ' km'; }
-  // The km alone, in the same order as the times, for the 70 mm print card: "~22 km · ~64 km".
-  function kmList(p, leg) { return p[leg].gelTimes.map(function (t) { return kmOf(p, leg, t) || '?'; }).join(' · '); }
   function showsKm(p, leg) { return p[leg].gels > 0 && p[leg].gelTimes.some(function (t) { return !!kmOf(p, leg, t); }); }
   // ---------- taper (RD-011, RD-031) ----------
 
@@ -252,7 +249,7 @@
       { id: 'nutrition', label: 'Nutrition', href: '#/fuel', done: done.nutrition },
       { id: 'card', label: 'Race card', href: '#/card', done: false, goal: true }
     ];
-    return h('nav', { class: 'rail noprint', 'aria-label': 'Your four steps' }, steps.map(function (st, i) {
+    return h('nav', { class: 'rail', 'aria-label': 'Your four steps' }, steps.map(function (st, i) {
       var cls = ['r', st.done ? 'done' : '', st.goal ? 'goal' : '', st.id === current ? 'now' : ''].filter(Boolean).join(' ');
       return h('a', { href: st.href, class: cls, 'aria-current': st.id === current ? 'step' : null },
         h('span', { class: 'c', 'aria-hidden': 'true' }, st.done ? svg(TICK, 14) : String(i + 1)),
@@ -293,7 +290,6 @@
     var hash = (location.hash || '').replace(/^#\/?/, '');
     var parts = hash.split('/');
     var fn = routes[parts[0]] || home;
-    currentPrint = null;
     if (!render.quiet) {
       aboutShown = false;
       cardEdit = null; // a new visit opens with the race card header, or the race strip, closed
@@ -745,7 +741,6 @@
         h('div', { class: 'info warn', role: 'alert' }, h('ul', null, p.errors.map(function (e) { return h('li', null, e.message); }))),
         h('div', { class: 'actions' }, h('a', { class: 'btn', href: '#/pacing/1' }, 'Fix my numbers'), quietLink('#/pacing/2', 'Back: course and heat')));
     }
-    currentPrint = { race: r, pace: p, fuel: r.fuel };
     // The changeover fields show their message as soon as an entry can't be used. The plan above uses our guide
     // for that changeover until it can, and Save waits for it.
     ['race.t1', 'race.t2'].forEach(function (path) { var m = changeoverError(path); if (m) errors[path] = m; else delete errors[path]; });
@@ -788,7 +783,6 @@
   function raceCard() {
     var r = S.race;
     if (!r) return home();
-    currentPrint = { race: r, pace: r.pace, fuel: r.fuel };
     // The yellow action is the next step until pace and nutrition are both saved. Then it is the email button (one yellow a screen).
     var nextAction = !r.pace ? h('a', { class: 'btn', href: '#/pacing/1' }, 'Choose pacing')
       : !r.fuel ? h('a', { class: 'btn', href: '#/fuel' }, 'Review nutrition') : null;
@@ -832,7 +826,7 @@
     var status = h('p', { class: 'mailnote', role: 'status' });
     mailEls = { input: input, err: err, btn: btn, status: status };
     paintMailInto(mailEls);
-    return h('section', { class: 'card mail noprint' },
+    return h('section', { class: 'card mail' },
       h('div', { class: 'row-wrap' }, h('label', { class: 'field', for: 'f-mail' }, 'Email me this race card', input), err),
       h('p', { class: 'help', id: 'mail-hint' }, MAIL_TEXT.hint),
       fuelStale(r) ? h('p', { class: 'notice warn', role: 'status' }, MAIL_TEXT.stale) : null,
@@ -1047,7 +1041,7 @@
     var d = T.addDays(r.date, 0);
     var hasDate = isNum(ed.days) && !!d; // a blank or unreadable date has no countdown, and is never read as 0
     var tp = ed.tp;
-    return h('div', { class: 'band strip noprint', role: 'group', 'aria-label': 'Your race' },
+    return h('div', { class: 'band strip', role: 'group', 'aria-label': 'Your race' },
       h('div', { class: 'toprow' },
         h('p', { class: 'rn' }, h('span', { class: 'rname' }, raceTitle(r)), ' ', h('span', { class: 'bt' }, hasDate ? shortDate(d) : 'No date yet')),
         ed.button('race', 'Edit race')),
@@ -1342,7 +1336,6 @@
         h('p', null, 'To see your plan:'),
         h('ul', null, plan.errors.map(function (e) { return h('li', null, e.message); })));
     } else {
-      currentPrint = { race: r || { name: 'Nutrition plan', distance: ctx.distance }, pace: r && r.pace, fuel: plan };
       out = nutritionPlan(plan, gel);
     }
 
@@ -1377,7 +1370,7 @@
       out,
       plan.ok ? timingBox(plan) : null,
       plan.ok ? capNote(plan) : null,
-      h('div', { class: 'actions noprint' },
+      h('div', { class: 'actions' },
         saveBtn,
         solo ? h('p', { class: 'small center' }, 'No account. Saved on this phone.') : null));
   }
@@ -1541,41 +1534,6 @@
     return h('div', { class: 'row-wrap' }, h('label', { class: 'field', for: id }, label, input), err);
   }
 
-  // ---------- print: the top-tube card ----------
-
-  function buildPrint() {
-    var pr = document.getElementById('print-root');
-    RD.ui.clear(pr);
-    var c = currentPrint;
-    if (!c) return;
-    var r = c.race || {};
-    var p = c.pace;
-    var f = c.fuel;
-    var kids = [h('h2', null, raceTitle(r)),
-      r.date ? h('p', null, longDate(r.date)) : null];
-    if (p) {
-      kids.push(h('h3', null, 'Pace'),
-        h('p', null, 'Swim ', h('span', { class: 'big' }, pace(p.swim.pace)), ' /100m'),
-        h('p', null, 'Bike ', h('span', { class: 'big' }, p.bike.watts ? range(p.bike.watts[0], p.bike.watts[1]) + ' W' : p.bike.hr ? range(p.bike.hr[0], p.bike.hr[1]) + ' bpm' : p.bike.effort.split(':')[0])),
-        h('p', null, 'Run ', h('span', { class: 'big' }, pace(p.run.pace)), ' /km'),
-        h('p', null, 'Finish ' + hm(p.finish)));
-    }
-    if (f && f.ok !== false) {
-      if (c.race && c.race.fuel === f && fuelStale(c.race)) kids.push(h('p', null, h('b', null, 'Nutrition plan out of date. Update it before race day.')));
-      kids.push(h('h3', null, 'Bike nutrition · ' + f.bike.carbsPerHour + ' g/hr'),
-        h('p', null, 'Sip ~' + f.bike.sipMl + ' ml every 15 min'),
-        f.bike.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.bike.gelTimes))) : null,
-        showsKm(f, 'bike') ? h('p', { class: 'fine' }, 'at ' + kmList(f, 'bike')) : null,
-        h('h3', null, 'Run nutrition · ' + f.run.carbsPerHour + ' g/hr'),
-        f.run.gels ? h('p', null, 'Gel ', h('span', { class: 'big' }, minutesList(f.run.gelTimes))) : null,
-        showsKm(f, 'run') ? h('p', { class: 'fine' }, 'at ' + kmList(f, 'run')) : null,
-        h('p', null, 'Water at each aid station'));
-    }
-    kids.push(h('p', { class: 'fine' }, 'Times are from the start of each leg. ' + (f && f.ok !== false && (showsKm(f, 'bike') || showsKm(f, 'run')) ? RD.pace.KM_NOTE + ' ' : '') + 'Typical ranges, not medical advice.'));
-    pr.appendChild(h('div', { class: 'tt' }, kids));
-  }
-
-  root.addEventListener('beforeprint', buildPrint);
   root.addEventListener('hashchange', function () { errors = {}; render(); });
   render();
 })(this);

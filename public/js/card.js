@@ -1,18 +1,18 @@
 /*
  * The race card as a PDF (RD-039). No DOM here, so Node can load it and the tests can run it.
  *
- *   rows(input)      the card as an ordered list of { kind, text } rows. Same words, same order as the print card
- *                    (buildPrint in app.js), without its race title and date lines.
+ *   rows(input)      the card as an ordered list of { kind, text } rows: pace targets, nutrition per leg, gel times with
+ *                    their km, the go-by-the-clock note and "not medical advice". No race title and no date.
  *   drawPdf(JsPDF)   one A4 page of built-in Helvetica from those rows. The jsPDF constructor is passed in, so this
  *                    file does not care whether it came from the browser or from Node.
  *   normaliseEmail   the address rules. functions/api/send.js holds the same rules; tests/email-cases.js drives both.
  *
- * It reads the saved plan and does no new maths: every number in a row is one the print card shows. A blank,
+ * It reads the saved plan and does no new maths: every number in a row is one the race card shows. A blank,
  * unreadable or zero value gives no row, or the time alone, never "NaN" or "0". Product names and the race name
  * are never put in a row, so nothing a person typed reaches the PDF.
  *
- * The small formatters below (range, hm, pace, kmOf) copy the ones in app.js on purpose: the print card was not
- * refactored for this change. The smoke test compares the print card's text with these rows, so a drift fails there.
+ * The small formatters below (range, hm, pace, kmOf) copy the ones in app.js on purpose, so Node can load this file
+ * with no DOM. tests/card.test.js holds what they return.
  */
 (function (root) {
   'use strict';
