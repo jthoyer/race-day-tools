@@ -15,7 +15,7 @@
   var S = store.load();
   var raw = {}; // what the person is typing, before it parses
   var errors = {}; // field -> message, shown after they press Next
-  var currentPrint = null; // what the print button and Ctrl+P print
+  var currentPrint = null; // what Ctrl+P prints (there is no Print button since 16 Nov 2026)
   // Which part of the race header is open for editing: 'race', 'taper' or null. The race card band and the race strip
   // (RD-041) share it. They are never on the same screen, and render() resets it on every new visit.
   var cardEdit = null;
@@ -789,7 +789,7 @@
     var r = S.race;
     if (!r) return home();
     currentPrint = { race: r, pace: r.pace, fuel: r.fuel };
-    // The yellow action is the next step until pace and nutrition are both saved. Then it is Print (one yellow a screen).
+    // The yellow action is the next step until pace and nutrition are both saved. Then it is the email button (one yellow a screen).
     var nextAction = !r.pace ? h('a', { class: 'btn', href: '#/pacing/1' }, 'Choose pacing')
       : !r.fuel ? h('a', { class: 'btn', href: '#/fuel' }, 'Review nutrition') : null;
     return h('div', { class: 'app' },
@@ -798,7 +798,6 @@
       cardBody(r),
       emailBlock(r),
       nextAction,
-      printButton(!nextAction),
       note('Typical ranges, not medical advice.'));
   }
 
@@ -811,12 +810,12 @@
     stale: 'Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first.',
     sent: 'Sent. It should arrive in a few minutes. Check your junk folder if not.',
     refused: 'That address didn\'t work. Check it and try again.',
-    later: 'Email isn\'t working right now. Your plan is saved on this phone, and you can still print it.'
+    later: 'Email isn\'t working right now. Your plan is saved on this phone.'
   };
   var MAIL_TIMEOUT_MS = 15000;
   function blankMail() { return { value: '', busy: false, error: '', result: '', kind: '', refocus: false }; }
 
-  // Only when pace and nutrition are both saved and the nutrition plan worked. Not printed. Print stays the one yellow button.
+  // Only when pace and nutrition are both saved and the nutrition plan worked. Not printed. Its button is the one yellow action.
   function emailBlock(r) {
     if (!RD.card.canEmailHere(root.location && root.location.hostname)) return null; // no function here, and the address would go to GitHub
     if (!r.pace || !r.fuel || r.fuel.ok === false) return null;
@@ -829,7 +828,7 @@
       }
     });
     var err = h('p', { class: 'error', id: 'mail-err', role: 'alert' });
-    var btn = h('button', { type: 'button', class: 'btn ghost', onclick: sendCard }, 'Email my race card');
+    var btn = h('button', { type: 'button', class: 'btn', onclick: sendCard }, 'Email my race card');
     var status = h('p', { class: 'mailnote', role: 'status' });
     mailEls = { input: input, err: err, btn: btn, status: status };
     paintMailInto(mailEls);
@@ -1132,11 +1131,6 @@
     var cut = n.indexOf('. ') + 1;
     return h('p', { class: 'notice go' }, cut > 0 ? [h('b', null, n.slice(0, cut)), n.slice(cut)] : n);
   }
-  // Print is outlined, and yellow only when it is the one action left on the screen.
-  function printButton(primary) {
-    return h('button', { type: 'button', class: 'btn' + (primary ? '' : ' ghost'), onclick: function () { root.print(); } },
-      svg('M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v7H7z'), 'Print top-tube card');
-  }
 
   // ---------- nutrition data ----------
 
@@ -1385,7 +1379,6 @@
       plan.ok ? capNote(plan) : null,
       h('div', { class: 'actions noprint' },
         saveBtn,
-        plan.ok ? printButton(false) : null,
         solo ? h('p', { class: 'small center' }, 'No account. Saved on this phone.') : null));
   }
 
