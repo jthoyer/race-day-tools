@@ -243,7 +243,7 @@ async function sendMail({ to, pdfBase64 }, env, deps) {
       headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: env.MAIL_FROM, to, subject: SUBJECT, text: BODY_TEXT, attachments: [{ filename: ATTACHMENT_NAME, content: pdfBase64 }] }),
       signal: ctl.signal,
-      redirect: 'error'
+      redirect: 'manual'
     });
     if (res.status >= 200 && res.status < 300) return { ok: true, retry: false };
     if (res.status === 429 || res.status >= 500) return { ok: false, retry: true };
