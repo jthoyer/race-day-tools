@@ -88,15 +88,10 @@
     var len = RD.pace.taperDays(r.distance, r.taperDays);
     var start = T.addDays(r.date, -len);
     if (days == null || !start) return null;
-    var longDay = start.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
     var shortDay = shortDate(start);
     var tDays = T.daysUntil(isoOf(start));
     return {
-      days: days, len: len, own: len === r.taperDays, iso: isoOf(start),
-      line: days < 0 ? 'This date has passed. Pick your next race.'
-        : tDays > 0 ? 'Your taper starts ' + longDay + '.'
-          : tDays === 0 ? 'Your taper starts today, ' + longDay + '.'
-            : 'You are in your taper. It started ' + longDay + '.',
+      len: len, own: len === r.taperDays, iso: isoOf(start),
       // The short form for the race card band and the home screen. Nothing after race day.
       short: days < 0 ? '' : tDays > 0 ? 'Taper starts ' + shortDay : 'In your taper'
     };
@@ -803,7 +798,7 @@
   var MAIL_TIMEOUT_MS = 15000;
   function blankMail() { return { value: '', busy: false, error: '', result: '', kind: '', refocus: false }; }
 
-  // Only when pace and nutrition are both saved and the nutrition plan worked. Not printed. Its button is the one yellow action.
+  // Only when pace and nutrition are both saved and the nutrition plan worked. Its button is the one yellow action.
   function emailBlock(r) {
     if (!RD.card.canEmailHere(root.location && root.location.hostname)) return null; // no function here, and the address would go to GitHub
     if (!r.pace || !r.fuel || r.fuel.ok === false) return null;

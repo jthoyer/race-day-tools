@@ -222,7 +222,7 @@ const s1text = await appText();
 check(/Every step works back from race day\./.test(s1text) && !/Start time|Transition opens|Clear start|Clear transition/.test(s1text) && (await page.locator('input[type=time]').count()) === 0, 'Step 1 has its subtitle and no start time, no Transition opens, no Clear buttons');
 check(!(await page.getByRole('button', { name: 'Save and back to race card' }).count()), 'A first pass through the steps has no "back to race card" yet');
 await page.getByLabel('Race name').fill('Spring 70.3');
-// Olympic stores "standard", shows its legs, and marks 10 days as our guide.
+// Olympic stores "standard" and shows its legs. (Its 10-day taper guide is checked in the strip, scenario 24b.)
 await page.getByLabel('Race date').fill(inDays(20));
 await page.getByRole('button', { name: 'Olympic' }).click();
 check((await store()).race.distance === 'standard' && (await page.getByText('Swim 1.5 km · Bike 40 km · Run 10 km').isVisible()), 'Choosing Olympic stores "standard" and shows 1.5 / 40 / 10 km');
@@ -581,6 +581,8 @@ check(await page.getByRole('link', { name: 'Change gel times' }).evaluate((e) =>
 check(/^Sports drink( and water)?: about \d+ ml every 15 min$/.test((await page.locator('.racecard .tl .tlline').first().innerText()).trim()), 'The card names the drink in the first line of the bike leg card');
 check(!/typical/i.test(card) && !/Countdown|Debrief|Coming later/.test(card) && /not medical advice/i.test(await appText()), 'The card has no "(typical)", no Countdown or Debrief, and says not medical advice');
 check((await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.locator('.btn:not(.ghost)').innerText()).includes('Email my race card') && (await page.getByRole('button', { name: 'Print top-tube card' }).count()) === 0, 'With pacing and nutrition saved, the email button is the one yellow action, and there is no Print button');
+// RD-037, spec criterion 14: no print root and no print stylesheet. The browser prints the screen as it is.
+check(await page.evaluate(() => !document.getElementById('print-root') && ![...document.styleSheets].some((sh) => [...sh.cssRules].some((r) => r.constructor.name === 'CSSMediaRule' && /print/.test(r.media.mediaText)))), 'There is no #print-root and no print stylesheet');
 await wordsClean('The race card');
 for (const w of [390, 360, 320]) {
   await page.setViewportSize({ width: w, height: 844 });
@@ -1299,7 +1301,7 @@ for (const hash of ['#/fuel', '#/pacing/2']) {
   const panel = strip().locator('#strip-panel');
   const pill = (re) => panel.getByRole('button', { name: re });
   check((await expandedOf('taper')) === 'true' && (await activeId()) === 'strip-panel' && (await panel.getAttribute('aria-label')) === 'Edit taper', `${hash}: Edit taper opens the panel and focus moves to it`);
-  check((await panel.locator('.pills button').allInnerTexts()).join('|') === '10 days|14 days (our guide)|21 days' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true' && (await panel.getByLabel('Or pick the day your taper starts').count()) === 1, `${hash}: the taper controls are step 1's, with our guide (14 days for a 70.3) marked pressed`);
+  check((await panel.locator('.pills button').allInnerTexts()).join('|') === '10 days|14 days (our guide)|21 days' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true' && (await panel.getByLabel('Or pick the day your taper starts').count()) === 1, `${hash}: the taper controls are the same as the card header's, with our guide (14 days for a 70.3) marked pressed`);
   const line = await strip().locator('.taper .bt').innerText();
   await pill(/21 days/).click();
   check((await store()).race.taperDays === 21 && (await strip().locator('.taper .bt').innerText()) !== line && (await strip().locator('#strip-panel').count()) === 1, `${hash}: picking 21 saves 21 and moves the taper line`);
@@ -1316,6 +1318,15 @@ for (const hash of ['#/fuel', '#/pacing/2']) {
   check(typeof (await store()).race.taperDays !== 'number' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true', `${hash}: picking our guide saves blank, never a number`);
   await page.context().close();
 }
+
+// 24b. An Olympic race marks 10 days, not 14, as our guide (spec criterion 20). Isolation: fresh context.
+await stripPage('strip taper olympic', stripSeed({ distance: 'standard' }), '#/fuel');
+await stripBtn('taper').click();
+{
+  const pills = strip().locator('#strip-panel .pills button');
+  check((await pills.allInnerTexts()).join('|') === '10 days (our guide)|14 days|21 days' && (await pills.first().getAttribute('aria-pressed')) === 'true', 'For an Olympic race the strip marks 10 days as our guide, and it is pressed');
+}
+await page.context().close();
 
 // 25. Done and tapping a button again (A13). Isolation: fresh context.
 await stripPage('strip done', stripSeed(), '#/fuel');
