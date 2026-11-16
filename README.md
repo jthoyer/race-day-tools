@@ -41,7 +41,7 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 - DM Sans for body and controls, Outfit for headings and the wordmark. Both are open fonts (SIL Open Font License). They ship in `public/fonts/`, so no page asks another host for anything. The licence text is in `public/fonts/LICENSE.txt`.
 - A 9 px corner radius on buttons, inputs and cards.
-- The race strip: an ink band under the rail on pacing and step 3 (the race, its countdown, Edit race and Edit taper). It scrolls with the page while the rail stays put. It is the race card header's band, closed, and uses `--accent-hover` for its buttons.
+- The race strip: an ink band under the rail on pacing and step 3 (the race, its countdown, Edit race and Edit taper). It scrolls with the page, like the rail. It is the race card header's band, closed, and uses `--accent-hover` for its buttons.
 - The rail: four numbered steps on every step and the race card. Done is a green circle with a tick, the current step is ink, and step 4 stays on the light blue with a blue ring until it is current.
 - The wordmark: three ink boxes holding white T, R and I, then "Momentum" in Outfit.
 - Controls at least 44 px high and wide.

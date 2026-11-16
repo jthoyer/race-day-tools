@@ -516,10 +516,10 @@ for (const w of [390, 360, 320]) {
   check(legsFit, `The leg cards have no sideways scroll at ${w}px`);
 }
 await page.setViewportSize({ width: 390, height: 844 });
-// The rail stays in view: after scrolling to the bottom, its top edge is inside the viewport.
+// The rail does not float: it is not sticky or fixed, has no drop shadow, and scrolls away with the page.
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-const railTop = await page.locator('nav.rail').evaluate((e) => e.getBoundingClientRect().top);
-check(railTop >= 0 && railTop < 844, `The rail stays in view after scrolling to the bottom (top ${Math.round(railTop)}px)`);
+const railLook = await page.locator('nav.rail').evaluate((e) => ({ pos: getComputedStyle(e).position, shadow: getComputedStyle(e).boxShadow, top: e.getBoundingClientRect().top }));
+check(railLook.pos !== 'sticky' && railLook.pos !== 'fixed' && railLook.shadow === 'none' && railLook.top < 0, `The rail is not sticky, fixed or shadowed, and scrolls away (position ${railLook.pos}, shadow ${railLook.shadow}, top ${Math.round(railLook.top)}px)`);
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('step3');
 
@@ -1618,18 +1618,20 @@ for (const [what, save, hash, act] of [
   await page.context().close();
 }
 
-// 34. The rail stays put and the strip scrolls (A24). Isolation: fresh context.
+// 34. The rail and the strip both scroll with the page (A24). Isolation: fresh context.
 await stripPage('strip scroll', stripSeed(), '#/pacing/1');
 {
   const pos = await strip().evaluate((e) => getComputedStyle(e).position);
+  const railPos = await page.locator('nav.rail').evaluate((e) => getComputedStyle(e).position);
   await page.evaluate(() => window.scrollTo(0, 600));
-  const g = await page.evaluate(() => {
-    const rail = document.querySelector('nav.rail').getBoundingClientRect();
-    const hit = document.elementFromPoint(rail.left + rail.width / 2, rail.top + rail.height / 2);
-    return { y: window.scrollY, railTop: rail.top, hitInRail: !!hit && !!hit.closest('nav.rail'), stripBottom: document.querySelector('.strip').getBoundingClientRect().bottom };
-  });
+  const g = await page.evaluate(() => ({
+    y: window.scrollY,
+    railBottom: document.querySelector('nav.rail').getBoundingClientRect().bottom,
+    stripBottom: document.querySelector('.strip').getBoundingClientRect().bottom,
+  }));
   check(pos !== 'sticky' && pos !== 'fixed', `The strip is not sticky or fixed (position ${pos})`);
-  check(g.y >= 590 && g.railTop >= 0 && g.railTop <= 16 && g.hitInRail && g.stripBottom < g.railTop, `After scrolling 600 px the rail is at the top (${Math.round(g.railTop)} px), nothing paints over it, and the strip has scrolled away (bottom ${Math.round(g.stripBottom)})`);
+  check(railPos !== 'sticky' && railPos !== 'fixed', `The rail is not sticky or fixed (position ${railPos})`);
+  check(g.y >= 590 && g.railBottom < 0 && g.stripBottom < 0, `After scrolling 600 px the rail (bottom ${Math.round(g.railBottom)}) and the strip (bottom ${Math.round(g.stripBottom)}) have both scrolled away`);
 }
 await page.context().close();
 
