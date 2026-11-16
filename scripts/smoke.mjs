@@ -131,6 +131,20 @@ async function railIs(current, where) {
   check((await page.locator('nav.stepbar').count()) === 0, `${where} has no old step bar`);
 }
 
+// RD-041. The race strip: present exactly where the rail is on a pacing part and on step 3 with a race, and absent elsewhere.
+// Present means one strip, the next element after the rail, with no heading in it, and before the part bar or the step title.
+async function stripIs(where, present) {
+  const n = await page.locator('div.strip').count();
+  check(n === (present ? 1 : 0), `${where} ${present ? 'has' : 'has no'} the race strip`);
+  if (!present || n !== 1) return;
+  const g = await page.evaluate(() => {
+    const st = document.querySelector('div.strip');
+    const next = st.nextElementSibling;
+    return { afterRail: document.querySelector('nav.rail').nextElementSibling === st, before: !!next && (next.matches('.progress') || !!next.querySelector('h1')), headings: st.querySelectorAll('h1,h2,h3,h4,h5,h6').length, named: !!st.getAttribute('aria-label') };
+  });
+  check(g.afterRail && g.before && g.headings === 0 && g.named, `${where}: the strip follows the rail, comes before the part bar or title, is named, and holds no heading`);
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Scenario 1: front page. Isolation: fresh context, empty storage.
 await fresh('front page');
@@ -161,6 +175,7 @@ check(await gl.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().h
 check((await guides.locator('.btn, button').count()) === 0, 'S0 guide links are plain links, not buttons or cards');
 check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(guides)) && (await guides.evaluate((e) => e.getBoundingClientRect().bottom)) >= (await page.locator('body').evaluate((b) => b.getBoundingClientRect().bottom)) - 40, 'S0 puts the guides below the note, at the very bottom');
 await wordsClean('S0');
+await stripIs('S0', false);
 // The probe is expected to be refused; its console errors are dropped at the end by its unique address. It asks for another
 // host, which no network request can reach, so it is the policy that refuses it, and the violation event proves that.
 const probe = await page.evaluate(() => new Promise((done) => {
@@ -196,6 +211,7 @@ await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
 // 2. Leaving step 1 empty returns to S0.
 await headerIs('Step 1');
 await railIs('Race', 'Step 1');
+await stripIs('Step 1', false);
 await page.locator('header.top').getByRole('link', { name: 'My plan' }).click();
 await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
 check((await page.getByRole('link', { name: 'Get started' }).isVisible()) && (await page.locator('nav.rail').count()) === 0, 'My plan on an empty step 1 goes back to the front page');
@@ -242,6 +258,7 @@ await page.getByRole('button', { name: 'Next: choose pacing' }).click();
 await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
 await headerIs('Pacing part 1');
 await railIs('Pacing', 'Pacing part 1');
+await stripIs('Pacing part 1', true);
 const bar = (await page.locator('.progress').innerText()).replace(/\s+/g, ' ');
 check(/Pacing · part 1 of 3/i.test(bar) && (await page.locator('.progress .seg').count()) === 3 && /Your fitness · Course and heat · Your targets/.test(bar) && (await page.locator('.progress .parts b').innerText()) === 'Your fitness', 'Part 1 shows "Pacing · part 1 of 3", three segments and the part line with Your fitness in bold');
 check(await page.getByText('How will you pace the bike and the run?').isVisible() && (await page.getByText('Power needs your FTP. The swim always uses your CSS.').isVisible()), 'Part 1 has its subtitle and says what Power needs');
@@ -299,6 +316,7 @@ await page.getByRole('button', { name: 'Next: course and heat' }).click();
 await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
 check(/Pacing · part 2 of 3/i.test(await page.locator('.progress').innerText()) && (await page.locator('.progress .parts b').innerText()) === 'Course and heat', 'Part 2 shows part 2 of 3 with Course and heat in bold');
 await railIs('Pacing', 'Pacing part 2');
+await stripIs('Pacing part 2', true);
 await page.getByRole('button', { name: /Rolling/ }).click();
 await page.getByRole('button', { name: /Warm/ }).click();
 await wordsClean('Pacing part 2');
@@ -309,6 +327,7 @@ await page.getByRole('button', { name: 'Next: your targets' }).click();
 // Part 3.
 await page.getByRole('heading', { name: 'Your pace targets' }).waitFor();
 await railIs('Pacing', 'Pacing part 3');
+await stripIs('Pacing part 3', true);
 const targets = await page.locator('.targets').innerText();
 check(/175–185 W/.test(targets), 'Part 3 bike target is 175–185 W');
 check(/5:15–5:30 \/km/.test(targets), 'Part 3 run target is 5:15–5:30 /km');
@@ -353,6 +372,7 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
 check(page.url().endsWith('#/fuel') && (await page.getByRole('status').filter({ hasText: 'Pace targets saved to your race card' }).isVisible()), 'The first save opens step 3 with "Pace targets saved to your race card"');
 await railIs('Nutrition', 'Step 3');
+await stripIs('Step 3', true);
 check((await page.locator('nav.rail a.done').allInnerTexts()).map(plainName).join(',') === 'Race,Pacing', 'The rail marks Race and Pacing done, and never Race card');
 
 // S5, after pacing is saved. Isolation: same session, a reload (full page load) to home.
@@ -369,6 +389,7 @@ check(!/n of 2 done|Your details|Open race card/.test(s5a) && (await page.getByR
 check((await page.locator('section.guides').count()) === 0 && !/Guides/.test(s5a), 'S5 has no guide links (they are on S0 only)');
 check(/Ready once nutrition is done/.test(s5a) && (await page.locator('li.step.goal').count()) === 1, 'S5 keeps step 4 on the light blue until it is done');
 await headerIs('S5', { myPlan: false });
+await stripIs('S5', false);
 await wordsClean('S5');
 await shot('s5-after-pacing');
 await noHorizontalScroll('S5');
@@ -529,6 +550,7 @@ await nextBtn.click();
 await page.locator('.racecard').waitFor();
 await headerIs('The race card');
 await railIs('Race card', 'The race card');
+await stripIs('The race card', false);
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pacing and nutrition');
 const cardFlat = card.replace(/\s+/g, ' ');
@@ -596,6 +618,7 @@ check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test
 check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'Print card has your gel times, their km, the KM_NOTE and not medical advice');
 check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'Print card has no start time, no transition and no time of day');
 check(!(await page.locator('.app').isVisible()), 'Print hides the app');
+check((await page.locator('.tt .strip, #print-root .strip').count()) === 0, 'The print card holds no race strip');
 await printMatchesPdfRows('Print card', false);
 const drawn = await page.evaluate((k) => {
   const race = JSON.parse(localStorage.getItem(k)).race;
@@ -716,15 +739,18 @@ for (const [hash, want] of [['#/setup/2', 'Choose pacing'], ['#/setup/3', 'Choos
   await page.goto(base + '/index.html' + hash);
   await page.reload();
   check(await page.getByRole('heading', { name: want }).isVisible(), `Old address ${hash} opens "${want}"`);
+  await stripIs(`Old address ${hash}`, true);
 }
 await page.goto(base + '/index.html#/saved');
 await page.reload();
 check(await page.locator('.racecard').isVisible(), 'Old address #/saved opens the race card');
+await stripIs('Old address #/saved', false);
 
 // Products: add one, it appears in step 3.
 await page.goto(base + '/index.html#/products');
 await page.getByRole('button', { name: 'Add a product' }).click();
 await headerIs('My products', { myPlan: false });
+await stripIs('My products', false);
 check(await page.getByRole('link', { name: 'Nutrition' }).first().isVisible() && (await page.locator('nav.rail').count()) === 0, 'My products keeps a back link named Nutrition and has no rail');
 await wordsClean('My products');
 const names = page.getByLabel('Name');
@@ -763,6 +789,7 @@ await fresh('solo nutrition');
 await page.goto(base + '/index.html#/fuel');
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
 check((await page.locator('nav.rail').count()) === 0 && (await page.getByRole('link', { name: 'My plan' }).isVisible()), 'Step 3 with no race has no rail, and has My plan');
+await stripIs('Step 3 with no race (solo)', false);
 check(/Add your bike and run times/.test(await appText()), 'Step 3 with no pacing asks for the bike and run times');
 await page.getByLabel('Bike time').fill('245');
 await page.getByLabel('Run time').fill('155');
@@ -819,6 +846,7 @@ async function guide(label, path) {
   return g;
 }
 await guide('bike guide', '/guides/bike-pacing.html');
+await stripIs('The bike guide', false);
 check((await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).isVisible()) && /· TRI Momentum$/.test(await page.title()) && (await page.locator('nav.rail').count()) === 0, 'The bike guide has the wordmark, a TRI Momentum title and no rail');
 await page.getByLabel('Your FTP').fill('240');
 check(/175–185 W/.test(await page.locator('.result').innerText()), 'Guide gives 175–185 W for FTP 240, rolling');
@@ -833,6 +861,7 @@ check(bs.fitness.ftp === 240 && bs.race.course === 'hilly' && !('start' in bs.ra
 await page.context().close();
 
 await guide('nutrition guide', '/guides/race-fuel.html');
+await stripIs('The nutrition guide', false);
 check(/Your 70\.3 nutrition/.test(await page.locator('.tool').innerText()) && /g\/hr/.test(await page.locator('.tool').innerText()), 'Nutrition guide shows "Your 70.3 nutrition" and a plan from its defaults');
 const guideTool = await page.locator('.tool').innerText();
 check(/at \d+:\d\d \(~\d+ km\)/.test(guideTool) && guideTool.includes(kmNote) && !/NaN/.test(guideTool), 'Nutrition guide shows km beside the run gel times, with KM_NOTE');
@@ -1193,6 +1222,430 @@ for (const [what, edit] of [['no nutrition plan', (v) => { v.race.fuel = null; }
   await page.context().close();
 }
 sendErrorsExpected = false;
+
+// ---------------------------------------------------------------------------------------------------------------
+// Scenarios 20 to 35: the race strip (RD-041, criterion 30). Each one is a fresh browser context (empty storage, no shared
+// module state) seeded from the made-up save of scenario 4 (Sam Lee), with the race name, distance and date set as each says.
+// Inside one scenario the steps share the session on purpose where a later step reads what an earlier one did; the scenario
+// says so. Nothing here sends a request, and the outside-host and /api/ guards of fresh() stay on throughout.
+const stripSeed = (over = {}, fit = {}) => {
+  const v = JSON.parse(JSON.stringify(fixture));
+  Object.assign(v.race, { name: 'Spring 70.3', distance: '70.3', date: inDays(20) }, over);
+  Object.assign(v.fitness, fit);
+  return v;
+};
+const strip = () => page.locator('div.strip');
+const stripBtn = (which) => page.locator('#strip-edit-' + which);
+const expandedOf = (which) => stripBtn(which).getAttribute('aria-expanded');
+const activeId = () => page.evaluate(() => document.activeElement && document.activeElement.id);
+const flatText = (loc) => loc.evaluate((e) => e.innerText.replace(/\s+/g, ' ').trim()); // as shown, so separate blocks read as separate words
+const dayBefore = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return isoLocal(new Date(y, m - 1, d - n)); };
+const TAPER_REFUSED = 'Pick a day 1 to 42 days before race day.';
+async function stripPage(label, save, hash, { width = 390 } = {}) {
+  await fresh(label, { width, init: seedWith(save) });
+  await page.goto(base + '/index.html' + hash);
+  await page.locator('#view h1').first().waitFor();
+}
+// Counts every time the page's own h1 takes focus from here on: a strip tap must never do that.
+const watchH1 = () => page.evaluate(() => { window.__h1 = 0; document.addEventListener('focusin', (e) => { if (e.target.tagName === 'H1') window.__h1++; }); });
+const h1Focused = () => page.evaluate(() => window.__h1);
+
+// 20. Where it shows (A1, A2, A3). Isolation: a fresh context per address, so no earlier visit can leave a strip behind.
+for (const [hash, h1] of [['#/pacing/1', 'Choose pacing'], ['#/pacing/2', 'Course and heat'], ['#/pacing/3', 'Your pace targets'], ['#/fuel', 'Review nutrition'], ['#/setup/2', 'Choose pacing'], ['#/setup/3', 'Choose pacing'], ['#/setup/4', 'Course and heat'], ['#/setup/5', 'Your pace targets']]) {
+  await stripPage(`strip shows ${hash}`, stripSeed(), hash);
+  await stripIs(hash, true);
+  const active = await page.evaluate(() => [document.activeElement.tagName, document.activeElement.textContent]);
+  check(active[0] === 'H1' && active[1] === h1, `${hash}: on arrival focus is on the page's own h1, "${h1}" (${active})`);
+  await page.context().close();
+}
+await stripPage('strip shows, a number is missing', stripSeed({}, { ftp: null }), '#/pacing/3');
+await stripIs('Pacing part 3, "A number is missing"', true);
+check(await page.getByRole('heading', { name: 'A number is missing' }).isVisible(), 'That view of part 3 is the "A number is missing" one');
+await page.context().close();
+for (const [hash, what] of [['#/', 'Home (S5)'], ['#/setup/1', 'Step 1'], ['#/card', 'The race card'], ['#/saved', 'The old #/saved address'], ['#/products', 'My products']]) {
+  await stripPage(`strip absent ${hash}`, stripSeed(), hash);
+  check((await page.locator('#view').innerText()).length > 20, `${what} drew a screen`);
+  await stripIs(what, false);
+  await page.context().close();
+}
+// Print: the strip is on screen only. Isolation: fresh context.
+await stripPage('strip print', stripSeed(), '#/fuel');
+await page.emulateMedia({ media: 'print' });
+await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+check(!(await strip().isVisible()) && (await page.locator('.tt').count()) === 1 && !/Edit race|Your race/.test(await page.locator('.tt').textContent()), 'In print the strip is hidden and the print card does not hold it');
+await page.context().close();
+
+// 21. What it says (A4, A5, A6). Isolation: a fresh context per row.
+const STRIP_DATE = /^Spring 70\.3\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun),? \d{1,2} [A-Z][a-z]{2}/;
+const STRIP_LINE2 = /Taper starts (Mon|Tue|Wed|Thu|Fri|Sat|Sun),? \d{1,2} [A-Z][a-z]{2}/;
+const STRIP_NO_LINE2 = /days to go|Tomorrow|Race day|Race done|Taper|NaN|null|undefined|\b0\b/;
+for (const [what, date, want] of [['20 days out, our guide taper', inDays(20), (t) => /\b20 days to go\b/.test(t) && STRIP_LINE2.test(t)],
+  ['1 day out', inDays(1), (t) => /Tomorrow/.test(t) && /In your taper/.test(t)],
+  ['race day', inDays(0), (t) => /Race day/.test(t) && /In your taper/.test(t)]]) {
+  await stripPage(`strip row ${what}`, stripSeed({ date }), '#/pacing/1');
+  const t = await flatText(strip());
+  check(want(t) && (await stripBtn('taper').count()) === 1 && (await strip().locator('.count').count()) === 1, `Strip, ${what}: line 2 says it, with Edit taper (${t})`);
+  check(STRIP_DATE.test(await strip().innerText()) && (await strip().getByRole('button', { name: 'Edit race', exact: true }).count()) === 1, `Strip, ${what}: line 1 is the title, the short date and "Edit race"`);
+  await page.context().close();
+}
+await stripPage('strip row race done', stripSeed({ date: inDays(-3) }), '#/pacing/1');
+{
+  const t = await flatText(strip());
+  check(/Race done/.test(t) && !/Taper/.test(t) && (await stripBtn('taper').count()) === 0 && (await strip().getByRole('button', { name: /taper/i }).count()) === 0, `Strip, 3 days ago: "Race done", no taper text and no Edit taper (${t})`);
+  await page.context().close();
+}
+for (const [what, edit] of [['an empty string', (r) => { r.date = ''; }], ['null', (r) => { r.date = null; }], ['a key that is missing', (r) => { delete r.date; }], ['"not-a-date"', (r) => { r.date = 'not-a-date'; }]]) {
+  const save = stripSeed();
+  edit(save.race);
+  await stripPage(`strip row no date ${what}`, save, '#/pacing/1');
+  const t = await flatText(strip());
+  check(/No date yet/.test(t) && (await strip().locator('.count, .rule').count()) === 0 && (await stripBtn('taper').count()) === 0 && (await stripBtn('race').count()) === 1, `Strip, date is ${what}: "No date yet", no line 2, no Edit taper (${t})`);
+  check(!STRIP_NO_LINE2.test(t), `Strip, date is ${what}: none of "days to go", Tomorrow, Race day, Race done, Taper, NaN, null, undefined or a bare 0 (${t})`);
+  if (what === 'an empty string') {
+    await stripBtn('race').click();
+    check(await strip().getByText('Tap the date to choose it.', { exact: true }).isVisible(), 'Edit race with no date says "Tap the date to choose it."');
+  }
+  await page.context().close();
+}
+await stripPage('strip blank name', stripSeed({ name: '' }), '#/pacing/1');
+check(/^My race\b/.test(await flatText(strip())), 'Strip, blank name: line 1 says "My race"');
+await page.context().close();
+
+// 22. The buttons and the Edit race panel (A8, A9, A12). Isolation: fresh context; the steps share the session on purpose.
+await stripPage('strip buttons', stripSeed(), '#/fuel');
+await watchH1();
+for (const w of [390, 320]) {
+  await page.setViewportSize({ width: w, height: 844 });
+  const bs = await strip().locator('button').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent.trim(), e.type, e.getAttribute('aria-expanded'), r.width, r.height]; }));
+  check(bs.map((b) => b[0]).join('|') === 'Edit race|Edit taper' && bs.every((b) => b[1] === 'button' && b[2] === 'false' && b[3] >= 44 && b[4] >= 44), `Strip buttons are type=button, closed, and at least 44 x 44 at ${w}px (${bs.map((b) => Math.round(b[3]) + 'x' + Math.round(b[4]))})`);
+}
+await page.setViewportSize({ width: 390, height: 844 });
+check((await strip().getByRole('button', { name: 'Edit race', exact: true }).count()) === 1 && (await strip().getByRole('button', { name: 'Edit taper', exact: true }).count()) === 1 && (await strip().locator('button svg[aria-hidden="true"]').count()) === 2, 'The buttons are named exactly "Edit race" and "Edit taper"; the chevron is aria-hidden');
+check((await stripBtn('race').locator('svg path').getAttribute('d')) === 'M6 9l6 6 6-6', 'A closed button shows the chevron pointing down');
+await stripBtn('race').click();
+check((await expandedOf('race')) === 'true' && (await activeId()) === 'f-race-name' && (await stripBtn('race').locator('svg path').getAttribute('d')) === 'M6 15l6-6 6 6', 'Edit race opens its panel, aria-expanded is true, the chevron flips up, and focus is in the race name');
+const racePanel = strip().locator('#strip-panel');
+check((await racePanel.getAttribute('aria-label')) === 'Edit race' && (await strip().getByLabel('Race name').getAttribute('type')) === 'text' && (await strip().getByLabel('Race name').getAttribute('name')) === 'race-name' && (await strip().getByLabel('Race date').getAttribute('type')) === 'date' && (await strip().getByLabel('Race date').getAttribute('name')) === 'race-date', 'The Edit race panel has the race name (text) and the race date (date), with the same names as step 1');
+check((await racePanel.getByRole('button').allInnerTexts()).join('|') === 'Done' && (await strip().getByRole('button', { name: /save|cancel/i }).count()) === 0 && (await strip().getByRole('link', { name: /save|cancel/i }).count()) === 0, 'The panel has one button, Done, and the strip has no Save or Cancel');
+await stripBtn('taper').click();
+check((await expandedOf('race')) === 'false' && (await expandedOf('taper')) === 'true' && (await strip().locator('.panel').count()) === 1 && (await strip().locator('.panel').getAttribute('aria-label')) === 'Edit taper', 'Opening Edit taper closes Edit race: one panel, the other button aria-expanded false');
+await stripBtn('race').click();
+check((await expandedOf('taper')) === 'false' && (await expandedOf('race')) === 'true' && (await strip().locator('.panel').count()) === 1 && (await strip().locator('.panel').getAttribute('aria-label')) === 'Edit race', 'Opening Edit race closes Edit taper');
+check((await h1Focused()) === 0, 'No strip tap moved focus to the page h1');
+await page.context().close();
+
+// 23. Changes save as they are typed (A10). Isolation: fresh context.
+await stripPage('strip typing', stripSeed(), '#/fuel');
+await stripBtn('race').click();
+await strip().getByLabel('Race date').fill(inDays(25));
+check((await store()).race.date === inDays(25) && /\b25 days to go\b/.test(await flatText(strip())) && (await strip().locator('#strip-panel').count()) === 1 && (await activeId()) === 'f-race-date', 'Filling the date stores it, and the strip says "25 days to go" with the panel still open and focus in the field');
+await strip().getByLabel('Race name').fill('');
+await strip().getByLabel('Race name').pressSequentially('Lake Run');
+const caret = await page.evaluate(() => { const e = document.activeElement; return [e.id, e.value, e.selectionStart, e.selectionEnd]; });
+check((await store()).race.name === 'Lake Run' && /^Lake Run · 70\.3/.test(await flatText(strip())) && caret.join() === 'f-race-name,Lake Run,8,8', `Typing the name one key at a time saves it, line 1 follows, and focus and caret stay in the field (${caret})`);
+await page.context().close();
+
+// 24. Edit taper (A11), on step 3 and on one pacing part. Isolation: fresh context per address.
+for (const hash of ['#/fuel', '#/pacing/2']) {
+  const date = inDays(20);
+  await stripPage(`strip taper ${hash}`, stripSeed({ date }), hash);
+  await stripBtn('taper').click();
+  const panel = strip().locator('#strip-panel');
+  const pill = (re) => panel.getByRole('button', { name: re });
+  check((await expandedOf('taper')) === 'true' && (await activeId()) === 'strip-panel' && (await panel.getAttribute('aria-label')) === 'Edit taper', `${hash}: Edit taper opens the panel and focus moves to it`);
+  check((await panel.locator('.pills button').allInnerTexts()).join('|') === '10 days|14 days (our guide)|21 days' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true' && (await panel.getByLabel('Or pick the day your taper starts').count()) === 1, `${hash}: the taper controls are step 1's, with our guide (14 days for a 70.3) marked pressed`);
+  const line = await strip().locator('.taper .bt').innerText();
+  await pill(/21 days/).click();
+  check((await store()).race.taperDays === 21 && (await strip().locator('.taper .bt').innerText()) !== line && (await strip().locator('#strip-panel').count()) === 1, `${hash}: picking 21 saves 21 and moves the taper line`);
+  const day = strip().locator('#strip-panel').getByLabel('Or pick the day your taper starts');
+  for (const [what, iso] of [['43 days before race day', dayBefore(date, 43)], ['race day itself', dayBefore(date, 0)], ['3 days after race day', dayBefore(date, -3)]]) {
+    await day.fill(iso);
+    check(await strip().getByText(TAPER_REFUSED, { exact: true }).isVisible() && (await store()).race.taperDays === 21 && (await day.inputValue()) === iso, `${hash}: ${what} is refused with its message, not saved, and the refused day stays`);
+  }
+  for (const [what, n] of [['42 days before race day', 42], ['1 day before race day', 1]]) {
+    await day.fill(dayBefore(date, n));
+    check((await store()).race.taperDays === n && (await strip().getByText(TAPER_REFUSED).count()) === 0, `${hash}: ${what} is accepted and saved as ${n}`);
+  }
+  await pill(/14 days/).click();
+  check(typeof (await store()).race.taperDays !== 'number' && (await pill(/14 days/).getAttribute('aria-pressed')) === 'true', `${hash}: picking our guide saves blank, never a number`);
+  await page.context().close();
+}
+
+// 25. Done and tapping a button again (A13). Isolation: fresh context.
+await stripPage('strip done', stripSeed(), '#/fuel');
+await stripBtn('race').click();
+await strip().getByLabel('Race name').fill('');
+await strip().getByRole('button', { name: 'Done' }).click();
+check((await store()).race.name === 'My race' && (await strip().locator('.panel').count()) === 0 && (await expandedOf('race')) === 'false' && (await activeId()) === 'strip-edit-race', 'Done after a cleared name stores "My race", closes the panel, and puts focus back on Edit race');
+await stripBtn('taper').click();
+await strip().locator('#strip-panel').getByLabel('Or pick the day your taper starts').fill(dayBefore((await store()).race.date, -3));
+check(await strip().getByText(TAPER_REFUSED, { exact: true }).isVisible(), 'A refused taper day shows its message');
+await strip().getByRole('button', { name: 'Done' }).click();
+check((await strip().locator('.panel').count()) === 0 && (await strip().getByText(TAPER_REFUSED).count()) === 0 && (await activeId()) === 'strip-edit-taper', 'Done after a refused taper day closes the panel, clears the message, and puts focus back on Edit taper');
+await stripBtn('taper').click();
+check((await strip().getByText(TAPER_REFUSED).count()) === 0 && (await strip().locator('#strip-panel').getByLabel('Or pick the day your taper starts').inputValue()) === (await page.evaluate(() => document.querySelector('#strip-panel input[type=date]').value)) && (await strip().locator('#strip-panel [aria-invalid="true"]').count()) === 0, 'Reopening Edit taper shows no refused day and no message');
+await stripBtn('taper').click();
+check((await expandedOf('taper')) === 'false' && (await strip().locator('.panel').count()) === 0, 'Tapping the open panel\'s own button again closes it (Edit taper)');
+await stripBtn('race').click();
+await stripBtn('race').click();
+check((await expandedOf('race')) === 'false' && (await strip().locator('.panel').count()) === 0, 'Tapping the open panel\'s own button again closes it (Edit race)');
+await page.context().close();
+
+// 26. Edit taper follows the date (A14). Isolation: fresh context.
+await stripPage('strip date follows', stripSeed(), '#/fuel');
+await stripBtn('race').click();
+await strip().getByLabel('Race date').fill(inDays(-3));
+check(/Race done/.test(await flatText(strip())) && (await stripBtn('taper').count()) === 0 && !/Taper/.test(await flatText(strip())), 'Changing the date to a past day makes line 2 "Race done" and removes Edit taper');
+await strip().getByLabel('Race date').fill('');
+check((await strip().locator('.count, .rule').count()) === 0 && !/Race done|days to go/.test(await flatText(strip())) && (await stripBtn('taper').count()) === 0 && /No date yet/.test(await flatText(strip())), 'Clearing the date removes line 2');
+await strip().getByLabel('Race date').fill(inDays(10));
+check((await stripBtn('taper').count()) === 1 && /\b10 days to go\b/.test(await flatText(strip())), 'A date in the future brings line 2 and Edit taper back');
+await page.context().close();
+
+// 27. The countdown stays in view (A15). Isolation: fresh context per screen.
+for (const hash of ['#/fuel', '#/pacing/1']) {
+  await stripPage(`strip in view ${hash}`, stripSeed(), hash);
+  for (const which of ['race', 'taper']) {
+    await stripBtn(which).click();
+    const g = await page.evaluate(() => { const q = (s) => document.querySelector(s).getBoundingClientRect(); return { l1: q('.strip .toprow'), l2: q('.strip .count'), p: q('#strip-panel'), vh: window.innerHeight }; });
+    check(g.l1.top >= 0 && g.l1.bottom <= g.vh && g.l2.top >= 0 && g.l2.bottom <= g.vh && g.l2.top < g.p.top && g.p.top < g.vh, `${hash}: with Edit ${which} open, lines 1 and 2 sit above the panel, all in view at 390 x 844 (line 2 top ${Math.round(g.l2.top)}, panel top ${Math.round(g.p.top)})`);
+  }
+  await page.context().close();
+}
+
+// 28. Panels open closed on every visit (A16). Isolation: fresh context per case.
+const stripClosed = async () => (await expandedOf('race')) === 'false' && (await expandedOf('taper')) === 'false' && (await strip().locator('.panel').count()) === 0;
+await stripPage('strip closed after Next', stripSeed(), '#/pacing/1');
+await stripBtn('taper').click();
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
+check(await stripClosed(), 'Open Edit taper on part 1, press Next: part 2\'s strip is closed');
+await stripBtn('race').click();
+await page.getByRole('link', { name: 'Back: your fitness' }).click();
+await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
+check(await stripClosed(), 'Open Edit race on part 2, press Back: part 1\'s strip is closed');
+await page.context().close();
+await stripPage('strip closed after the rail', stripSeed(), '#/fuel');
+await stripBtn('race').click();
+await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+await page.locator('.racecard').waitFor();
+await page.locator('nav.rail').getByRole('link', { name: /Nutrition/ }).click();
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+check(await stripClosed(), 'Open Edit race on step 3, tap the rail to the race card and back: the strip is closed');
+await page.context().close();
+await stripPage('strip closed after a typed address', stripSeed(), '#/pacing/1');
+await stripBtn('taper').click();
+await page.goto(base + '/index.html#/pacing/2');
+await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
+check(await stripClosed(), 'Open Edit taper, then type another address: the strip is closed');
+await page.context().close();
+await stripPage('strip closed after a reload', stripSeed(), '#/pacing/1');
+await stripBtn('taper').click();
+await page.reload();
+await page.locator('nav.rail').waitFor();
+check(await stripClosed(), 'Open Edit taper, then reload: the strip is closed');
+await page.context().close();
+
+// 29. One edit state, shared with the card (A17). Isolation: fresh context per direction.
+await stripPage('strip then card', stripSeed(), '#/fuel');
+await stripBtn('race').click();
+await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+await page.locator('.racecard').waitFor();
+const band = page.locator('.racecard .band');
+check((await band.locator('#card-edit-race').getAttribute('aria-expanded')) === 'false' && (await band.locator('#card-edit-taper').getAttribute('aria-expanded')) === 'false' && (await band.locator('.panel').count()) === 0 && (await strip().count()) === 0, 'Open Edit race on step 3, tap Race card in the rail: the card band has both buttons aria-expanded false, no panel, and no strip');
+await page.context().close();
+await stripPage('card then strip', stripSeed(), '#/card');
+await page.locator('#card-edit-taper').click();
+check((await page.locator('#card-edit-taper').getAttribute('aria-expanded')) === 'true', 'The card band opens its taper panel');
+await page.locator('nav.rail').getByRole('link', { name: /Nutrition/ }).click();
+await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+check(await stripClosed(), 'Open the card\'s Edit taper, tap Nutrition in the rail: step 3\'s strip is closed');
+await page.context().close();
+
+// 30. No lost typing, no harmful redraw (A19). Isolation: fresh context per property.
+// (a) Part 1: a readable FTP and an unreadable CSS survive the strip's redraws.
+await stripPage('strip no lost typing a', stripSeed(), '#/pacing/1');
+await watchH1();
+await page.getByLabel('FTP', { exact: true }).fill('260');
+await page.getByLabel('CSS, your critical swim speed').fill('45');
+await stripBtn('race').click();
+await strip().getByLabel('Race name').fill('Lake Run');
+await strip().getByRole('button', { name: 'Done' }).click();
+await stripBtn('taper').click();
+await stripBtn('taper').click();
+{
+  const s = await store();
+  check((await page.getByLabel('FTP', { exact: true }).inputValue()) === '260' && (await page.getByLabel('CSS, your critical swim speed').inputValue()) === '45' && s.fitness.ftp === 260 && s.race.name === 'Lake Run' && (await h1Focused()) === 0, 'Part 1: a typed FTP (260) and an unreadable CSS ("45") both still show after Edit race, Done and Edit taper, and the FTP is stored');
+}
+await page.context().close();
+// (b) Step 3: the gut and sweat questions stay open, with what was typed.
+await stripPage('strip no lost typing b', stripSeed(), '#/fuel');
+await page.getByRole('link', { name: 'Change', exact: true }).click();
+await page.getByLabel('Carbs your gut handles').fill('65');
+await watchH1();
+await stripBtn('race').click();
+await strip().getByLabel('Race name').fill('Lake Run');
+await settle();
+check((await page.getByLabel('Carbs your gut handles').isVisible()) && (await page.getByLabel('Carbs your gut handles').inputValue()) === '65' && (await h1Focused()) === 0, 'Step 3: with the gut and sweat questions open and 65 typed, Edit race and a new name leave them open and the gut field at 65');
+await page.context().close();
+// (c) The first arrival at step 3: the "targets saved" line stays through strip taps.
+{
+  const save = stripSeed();
+  save.race.pace = null; save.race.fuel = null; save.race.splits = null; save.race.splitsByHand = null;
+  await stripPage('strip no lost typing c', save, '#/pacing/3');
+  await page.getByRole('button', { name: 'Save to my race card' }).click();
+  await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+  const saved = page.getByRole('status').filter({ hasText: 'Pace targets saved to your race card' });
+  check((await saved.count()) === 1, 'The first save opens step 3 with "Pace targets saved to your race card"');
+  await watchH1();
+  await stripBtn('race').click();
+  await strip().getByRole('button', { name: 'Done' }).click();
+  await stripBtn('taper').click();
+  await stripBtn('taper').click();
+  check((await saved.count()) === 1 && (await saved.isVisible()) && (await h1Focused()) === 0, 'The "targets saved" line is still shown once after opening and closing both strip panels');
+  await page.context().close();
+}
+// (d) The page does not jump.
+await stripPage('strip no lost typing d', stripSeed(), '#/pacing/1');
+await page.evaluate(() => window.scrollTo(0, 60));
+{
+  const ys = [await page.evaluate(() => window.scrollY)];
+  await stripBtn('race').click(); ys.push(await page.evaluate(() => window.scrollY));
+  await strip().getByRole('button', { name: 'Done' }).click(); ys.push(await page.evaluate(() => window.scrollY));
+  await stripBtn('taper').click(); ys.push(await page.evaluate(() => window.scrollY));
+  await stripBtn('taper').click(); ys.push(await page.evaluate(() => window.scrollY));
+  check(ys[0] >= 58 && ys.every((y) => Math.abs(y - ys[0]) <= 2), `The window's scrollY does not change by more than 2 px across the strip's open, Done and close (${ys})`);
+}
+await page.context().close();
+
+// 31. A failing Next with the taper panel open (A20). Isolation: fresh context. The steps share the session on purpose.
+await stripPage('strip failing next', stripSeed(), '#/pacing/1');
+{
+  const date = (await store()).race.date;
+  const refused = dayBefore(date, -3);
+  await stripBtn('taper').click();
+  await strip().locator('#strip-panel').getByLabel('Or pick the day your taper starts').fill(refused);
+  await page.getByLabel('FTP', { exact: true }).fill('');
+  await page.getByLabel('CSS, your critical swim speed').fill('');
+  await page.getByRole('button', { name: 'Next: course and heat' }).click();
+  const after = await page.evaluate(() => {
+    const first = [...document.querySelectorAll('[aria-invalid="true"]')].find((e) => !e.closest('.strip'));
+    return { active: document.activeElement.id, first: first && first.id, taper: document.querySelector('#f-race-taperDate') && document.querySelector('#f-race-taperDate').value };
+  });
+  check((await page.getByRole('heading', { name: 'Choose pacing' }).isVisible()) && (await strip().getByText(TAPER_REFUSED, { exact: true }).isVisible()) && after.taper === refused, 'A failing Next keeps the strip\'s refused day and its message on screen');
+  check(after.active === 'f-fitness-css' && after.first === 'f-fitness-css', `Focus goes to the first invalid field of the step, never the taper input (${after.active})`);
+  await page.getByLabel('FTP', { exact: true }).fill('240');
+  await page.getByLabel('CSS, your critical swim speed').fill('1:45');
+  await page.getByRole('button', { name: 'Next: course and heat' }).click();
+  await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
+  check(await stripClosed(), 'A passing Next, with the refused day showing, moves on and the next strip is closed');
+}
+await page.context().close();
+
+// 31b. The mode pill keeps a refused taper day (A11, A20). Isolation: fresh context.
+await stripPage('strip mode pill', stripSeed(), '#/pacing/1');
+{
+  const date = (await store()).race.date;
+  const refused = dayBefore(date, -3);
+  await stripBtn('taper').click();
+  await strip().locator('#strip-panel').getByLabel('Or pick the day your taper starts').fill(refused);
+  await page.getByRole('button', { name: 'Heart rate', exact: true }).click();
+  const after = await page.evaluate(() => { const i = document.querySelector('#f-race-taperDate'); return i && i.value; });
+  check((await strip().getByText(TAPER_REFUSED, { exact: true }).isVisible()) && after === refused, 'Changing the pacing mode keeps the strip\'s refused taper day and its message');
+}
+await page.context().close();
+
+// 32. Strip edits never make a plan out of date (A21). Isolation: fresh context, the unchanged save of scenario 4.
+{
+  await fresh('strip stale', { init: seedWith(mailSave()) });
+  await page.goto(base + '/index.html#/card');
+  await page.locator('.racecard').waitFor();
+  const stale = async () => /changed since/i.test(await page.locator('.racecard').innerText());
+  const keys0 = await page.evaluate((k) => { const r = JSON.parse(localStorage.getItem(k)).race; return [r.pace.inputKey, r.fuel.inputKey]; }, KEY);
+  check(!(await stale()), 'Before any strip edit the card shows neither out-of-date notice');
+  await page.goto(base + '/index.html#/fuel');
+  await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
+  await stripBtn('race').click();
+  await strip().getByLabel('Race name').fill('Renamed Cup');
+  await strip().getByLabel('Race date').fill(inDays(35));
+  await strip().getByRole('button', { name: 'Done' }).click();
+  await stripBtn('taper').click();
+  await strip().getByRole('button', { name: /21 days/ }).click();
+  await strip().getByRole('button', { name: 'Done' }).click();
+  await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+  await page.locator('.racecard').waitFor();
+  const s = await store();
+  const keys1 = [s.race.pace.inputKey, s.race.fuel.inputKey];
+  check(s.race.name === 'Renamed Cup' && s.race.date === inDays(35) && s.race.taperDays === 21, 'The name, date and taper were changed through the strip');
+  check(!(await stale()) && keys1.join('|') === keys0.join('|'), 'After name, date and taper edits on the strip the card shows neither notice, and the saved input keys are unchanged');
+  await page.goto(base + '/index.html#/');
+  await page.reload();
+  check(!/Out of date/.test(await appText()), 'Home does not call pacing or nutrition out of date after strip edits');
+  // The detector is live in this session: a real change to a number the plan reads does show the notice.
+  await page.goto(base + '/index.html#/pacing/1');
+  await page.getByLabel('FTP', { exact: true }).fill('260');
+  await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+  await page.locator('.racecard').waitFor();
+  check(/Your numbers changed since these targets/.test(await page.locator('.racecard').innerText()), 'Control: changing FTP does flag the targets as out of date in the same session');
+  await page.context().close();
+}
+
+// 33. No sideways scroll, and a long name (A23). Isolation: a fresh context per state; each is checked at three widths by resizing.
+const STRIP_LONG = 'Lakeside Autumn Classic Half Distance Triathlon';
+for (const [what, save, hash, act] of [
+  ['closed', stripSeed(), '#/pacing/1', async () => {}],
+  ['Edit race open', stripSeed(), '#/pacing/1', async () => { await stripBtn('race').click(); }],
+  ['Edit taper open with the refusal', stripSeed(), '#/fuel', async () => { await stripBtn('taper').click(); await strip().locator('#strip-panel').getByLabel('Or pick the day your taper starts').fill(dayBefore(inDays(20), -3)); }],
+  ['a long name and a date', stripSeed({ name: STRIP_LONG }), '#/pacing/1', async () => {}],
+  ['a long name with Edit race open', stripSeed({ name: STRIP_LONG }), '#/fuel', async () => { await stripBtn('race').click(); }]]) {
+  await stripPage(`strip width ${what}`, save, hash);
+  await act();
+  for (const w of [390, 360, 320]) {
+    await page.setViewportSize({ width: w, height: 844 });
+    await noHorizontalScroll(`The strip, ${what},`, w);
+    const m = await page.evaluate(() => {
+      const ctx = document.createElement('canvas').getContext('2d');
+      const name = document.querySelector('.strip .rname');
+      const cs = getComputedStyle(name);
+      ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const longest = Math.max(...name.textContent.split(/\s+/).filter(Boolean).map((x) => ctx.measureText(x).width));
+      const b = document.getElementById('strip-edit-race').getBoundingClientRect();
+      return { fit: longest <= name.parentElement.clientWidth + 0.5, uncut: name.parentElement.scrollWidth <= name.parentElement.clientWidth + 1, lines: name.getClientRects().length, left: b.left, right: b.right, w: b.width, h: b.height, vw: window.innerWidth };
+    });
+    check(m.fit && m.uncut && m.left >= 0 && m.right <= m.vw && m.w >= 44 && m.h >= 44, `The strip, ${what}, at ${w}px: the name is not cut off or broken mid-word, and Edit race is inside the screen at ${Math.round(m.w)} x ${Math.round(m.h)}`);
+    if (what.startsWith('a long name') && w === 320) check(m.lines >= 2, `The long name wraps onto ${m.lines} lines at 320px`);
+  }
+  if (what === 'a long name and a date') await shot('strip-long-name');
+  await page.context().close();
+}
+
+// 34. The rail stays put and the strip scrolls (A24). Isolation: fresh context.
+await stripPage('strip scroll', stripSeed(), '#/pacing/1');
+{
+  const pos = await strip().evaluate((e) => getComputedStyle(e).position);
+  await page.evaluate(() => window.scrollTo(0, 600));
+  const g = await page.evaluate(() => {
+    const rail = document.querySelector('nav.rail').getBoundingClientRect();
+    const hit = document.elementFromPoint(rail.left + rail.width / 2, rail.top + rail.height / 2);
+    return { y: window.scrollY, railTop: rail.top, hitInRail: !!hit && !!hit.closest('nav.rail'), stripBottom: document.querySelector('.strip').getBoundingClientRect().bottom };
+  });
+  check(pos !== 'sticky' && pos !== 'fixed', `The strip is not sticky or fixed (position ${pos})`);
+  check(g.y >= 590 && g.railTop >= 0 && g.railTop <= 16 && g.hitInRail && g.stripBottom < g.railTop, `After scrolling 600 px the rail is at the top (${Math.round(g.railTop)} px), nothing paints over it, and the strip has scrolled away (bottom ${Math.round(g.stripBottom)})`);
+}
+await page.context().close();
+
+// 35. Typed text stays text (A27). Isolation: fresh context per screen.
+const HOSTILE = '<img src=x onerror="window.__x=1">Lake';
+for (const hash of ['#/pacing/1', '#/fuel']) {
+  await stripPage(`strip hostile name ${hash}`, stripSeed({ name: HOSTILE }), hash);
+  const probe = async () => page.evaluate(() => ({ img: document.querySelectorAll('#view img').length, onerror: document.querySelectorAll('[onerror]').length, x: typeof window.__x }));
+  let p = await probe();
+  check(p.img === 0 && p.onerror === 0 && p.x === 'undefined' && (await strip().evaluate((e) => e.textContent)).includes(HOSTILE), `${hash}: a name holding an img tag shows as text in the strip, with no element made and nothing run`);
+  await stripBtn('race').click();
+  p = await probe();
+  check(p.img === 0 && p.onerror === 0 && p.x === 'undefined' && (await strip().getByLabel('Race name').inputValue()) === HOSTILE, `${hash}: and the same with Edit race open (the field holds the literal text)`);
+  await page.context().close();
+}
 
 await browser.close();
 server.close();
