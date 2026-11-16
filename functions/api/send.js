@@ -339,7 +339,8 @@ export async function handler(request, env, deps) {
     const checked = checkPdf(body.pdf);
     if (checked.reply) return reply(checked.reply);
 
-    if (!env || !env.RESEND_API_KEY || !env.MAIL_FROM) return reply(LATER);
+    // Logged as 591 (no key) or 592 (no sender), so the owner can tell which secret this function cannot see. The reply is still 503.
+    if (!env || !env.RESEND_API_KEY || !env.MAIL_FROM) return reply(LATER, undefined, !env || !env.RESEND_API_KEY ? 591 : 592);
 
     const visitor = await digest(visitorKey(request.headers.get('CF-Connecting-IP')));
     if (!limiter.take(visitor, await digest(to.toLowerCase()), deps.now())) return reply({ status: 429, result: 'later' });
