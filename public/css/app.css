@@ -528,34 +528,6 @@ h2 {
   padding-left: 18px;
 }
 
-.countdown {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: var(--r);
-  background: var(--ink);
-  color: #fff;
-  padding: 16px 18px;
-}
-.countdown .k {
-  margin: 0;
-  color: var(--accent-hover);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-}
-.countdown .v {
-  margin: 2px 0 0;
-  font: 700 22px var(--display);
-}
-.countdown .n {
-  margin: 0;
-  max-width: 170px;
-  color: #edf0f7;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
 /* Pace targets (F5) */
 .targets {
   border-radius: var(--r);

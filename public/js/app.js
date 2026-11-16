@@ -410,7 +410,7 @@
       stepItem(4, STEP_NAMES[3], {
         state: done.card ? 'done' : 'todo',
         goal: !done.card,
-        desc: done.card ? 'Ready to print' : 'Ready once nutrition is done',
+        desc: done.card ? 'Ready to email' : 'Ready once nutrition is done',
         link: done.card ? ['#/card', 'Open'] : null
       })
     ];
@@ -505,8 +505,6 @@
   function hasPlan(r) { return !!(r && (r.pace || r.fuel)); }
 
   function setupRace(r) {
-    var tp = taperInfo(r);
-    var days = tp ? tp.days : null;
     function checkRace() {
       if (!r.name) set('race.name', 'My race');
       return {};
@@ -525,10 +523,6 @@
         bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
         // A date field shows nothing at all on some phones while it is empty, so say what to do.
         r.date ? null : h('p', { class: 'help' }, 'Tap the date to choose it.'),
-        tp ? h('section', { class: 'countdown' },
-          h('div', { style: 'flex:1' }, h('p', { class: 'k' }, 'COUNTDOWN'), h('p', { class: 'v' }, daysText(days))),
-          h('p', { class: 'n' }, tp.line)) : null,
-        tp && days >= 0 ? taperPicker(r, tp) : null,
         h('div', { class: 'actions' },
           h('button', { type: 'button', class: 'btn', onclick: next('pacing/1', checkRace) }, 'Next: choose pacing'),
           hasPlan(r) ? backToCard(checkRace) : null,
@@ -537,8 +531,8 @@
 
   // Taper length (RD-011, RD-031): one tap for 10, 14 or 21 days, or pick the day it starts. Our guide is marked.
   // A picked day must fall 1 to 42 days before race day (pace.js, TAPER.limits); anything else is refused, not saved.
-  function taperPicker(r, tp) { return h('section', { class: 'card' }, taperControls(r, tp)); }
-  // The controls alone, so step 1 and the race card header share one set of rules.
+  // The controls alone, so the race strip and the race card header share one set of rules. The countdown and the
+  // taper choices left step 1 on 16 Nov 2026: they start at step 2, in the strip.
   function taperControls(r, tp) {
     var T_ = RD.pace.TAPER;
     var guide = RD.pace.taperDays(r.distance, null);
@@ -954,7 +948,7 @@
   function raceEditor(r, prefix, chevrons) {
     var days = T.daysUntil(r.date);
     var tp = taperInfo(r);
-    var canTaper = !!tp && isNum(days) && days >= 0; // the same rule as step 1: no taper to edit without a date, or after race day
+    var canTaper = !!tp && isNum(days) && days >= 0; // no taper to edit without a date, or after race day
     var open = cardEdit === 'taper' && !canTaper ? null : cardEdit;
     function toggle(which) {
       return function () {

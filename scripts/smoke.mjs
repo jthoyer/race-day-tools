@@ -93,6 +93,7 @@ const plainName = (t) => t.replace(/,\s*done/, '').replace(/^\d\s*/, '').trim();
 const isoLocal = (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
 const inDays = (d) => isoLocal(new Date(Date.now() + d * 86400000));
 const CLOCK = /\d{1,2}:\d\d ?(am|pm)/i;
+const taperStore = async () => (await store()).race.taperDays;
 
 // RD-039 A12. The PDF rows: the words the emailed card holds. fuelStale is what the app passes when the plan is out of date.
 const pdfRows = (fuelStale) => page.evaluate(([k, stale]) => {
@@ -224,27 +225,12 @@ await page.getByLabel('Race name').fill('Spring 70.3');
 // Olympic stores "standard", shows its legs, and marks 10 days as our guide.
 await page.getByLabel('Race date').fill(inDays(20));
 await page.getByRole('button', { name: 'Olympic' }).click();
-check((await store()).race.distance === 'standard' && (await page.getByText('Swim 1.5 km · Bike 40 km · Run 10 km').isVisible()) && /10 days \(our guide\)/.test(await page.getByRole('button', { name: /10 days/ }).innerText()), 'Choosing Olympic stores "standard", shows 1.5 / 40 / 10 km and marks 10 days (our guide)');
+check((await store()).race.distance === 'standard' && (await page.getByText('Swim 1.5 km · Bike 40 km · Run 10 km').isVisible()), 'Choosing Olympic stores "standard" and shows 1.5 / 40 / 10 km');
 check(!/\bstandard\b/i.test(await appText()), 'Step 1 never shows "Standard"');
 await page.getByRole('button', { name: '70.3', exact: true }).click();
 check(await page.getByText('Swim 1.9 km · Bike 90 km · Run 21.1 km').isVisible() && (await store()).race.distance === '70.3', 'Choosing 70.3 shows the 70.3 leg distances');
-check(await page.getByText(/days to go/).first().isVisible(), 'Step 1 shows days to go');
-// RD-011, RD-031. Taper length: our guide (14 days for a 70.3) is marked, one tap changes it, and a picked day works.
-const taperStore = async () => (await store()).race.taperDays;
-check((await page.getByRole('button', { name: /14 days/ }).getAttribute('aria-pressed')) === 'true' && /14 days \(our guide\)/.test(await page.getByRole('button', { name: /14 days/ }).innerText()), 'Step 1 marks our 14-day taper guide for a 70.3');
-const taperBefore = await page.locator('.countdown .n').innerText();
-await page.getByRole('button', { name: /21 days/ }).click();
-check((await taperStore()) === 21 && (await page.locator('.countdown .n').innerText()) !== taperBefore, 'Picking a 21-day taper saves it and moves the start');
-check(/You are in your taper/.test(await page.locator('.countdown .n').innerText()), 'A taper longer than the days to go says you are in it');
-const raceDay = new Date(Date.now() + 20 * 86400000);
-const sevenBefore = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() - 7);
-await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(sevenBefore));
-check((await taperStore()) === 7, 'Picking the day the taper starts saves a 7-day taper');
-const after = new Date(raceDay.getFullYear(), raceDay.getMonth(), raceDay.getDate() + 3);
-await page.getByLabel('Or pick the day your taper starts').fill(isoLocal(after));
-check(await page.getByText(/Pick a day 1 to 42 days before race day/).isVisible() && (await taperStore()) === 7 && (await page.getByLabel('Or pick the day your taper starts').inputValue()) === isoLocal(after), 'A taper day after the race is refused, not saved, and stays on screen with its message');
-await page.getByRole('button', { name: /14 days/ }).click();
-check((await taperStore()) == null && !(await page.getByText(/Pick a day 1 to 42/).isVisible()), 'Going back to 14 days uses our guide again');
+// The countdown and the taper choices left step 1 (decided 16 Nov 2026). They start at step 2, in the strip (scenario 24).
+check((await page.locator('.countdown').count()) === 0 && !/days to go|COUNTDOWN|Taper length|Or pick the day your taper starts|our guide/.test(await appText()) && (await page.getByRole('button', { name: /10 days|14 days|21 days/ }).count()) === 0, 'Step 1 has no countdown and no taper choices');
 await wordsClean('Step 1');
 for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('Step 1', w); }
 await page.setViewportSize({ width: 390, height: 844 });
@@ -579,7 +565,7 @@ check((await editTaper.getAttribute('aria-expanded')) === 'true' && (await hero.
 const taperLine = await hero.locator('.taper .bt').innerText();
 await hero.getByRole('button', { name: /21 days/ }).click();
 check((await taperStore()) === 21 && (await hero.locator('.taper .bt').innerText()) !== taperLine, 'Picking a 21-day taper on the card saves it and moves the taper line');
-await hero.getByLabel('Or pick the day your taper starts').fill(isoLocal(after));
+await hero.getByLabel('Or pick the day your taper starts').fill(inDays(23)); // race day is inDays(20), so this is 3 days after it
 check(/Pick a day 1 to 42 days before race day/.test(await hero.innerText()) && (await taperStore()) === 21, 'A taper day after the race is refused on the card, and not saved');
 await shot('card-edit-taper');
 for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('The race card with Edit taper open', w); }
@@ -666,7 +652,7 @@ await page.goto(base + '/index.html#/');
 await page.reload();
 await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
 const s5b = await appText();
-check(/All four steps done\./.test(s5b) && (await page.getByRole('link', { name: 'Open my race card' }).isVisible()) && /Bike \d+ g\/hr · run \d+ g\/hr/.test(s5b) && /Ready to print/.test(s5b), 'S5 after nutrition says "All four steps done." with "Open my race card"');
+check(/All four steps done\./.test(s5b) && (await page.getByRole('link', { name: 'Open my race card' }).isVisible()) && /Bike \d+ g\/hr · run \d+ g\/hr/.test(s5b) && /Ready to email/.test(s5b), 'S5 after nutrition says "All four steps done." with "Open my race card"');
 check((await page.locator('li.step.goal').count()) === 0 && (await page.getByRole('link', { name: 'Edit' }).count()) === 3 && (await page.getByRole('link', { name: 'Open', exact: true }).count()) === 1, 'S5 shows step 4 done (no light blue) with Edit on steps 1 to 3 and Open on step 4');
 await shot('s5-all-done');
 
