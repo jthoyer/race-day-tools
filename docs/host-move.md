@@ -56,6 +56,7 @@ Use made-up data. Send only to an address you own.
 - [ ] One real send arrives with the PDF, in a few minutes.
 - [ ] With the secrets removed or wrong, the app says "Email isn't working right now" and the plan stays.
 - [ ] A bad address is refused with no request.
+- [ ] `send.js` uses `redirect: 'manual'` on the call to Resend. Workers does not support `redirect: 'error'`. It throws before any request goes out, and the catch turns that into the "Email isn't working right now" reply. Do not change it back. A real send is the only test that shows this.
 
 ## What changes in the repo at cut-over (step 11)
 
