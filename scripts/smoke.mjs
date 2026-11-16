@@ -541,9 +541,9 @@ await settle();
 check(/Your times: 0:30 · 1:30 · 2:30/.test(await page.locator('#gel-timing .timing').first().innerText()), 'Going back to every 60 minutes uses your times again');
 await shot('step3-timing');
 await noHorizontalScroll('Step 3 with gel timing');
-// Save: with no saved nutrition the yellow action is "Next: get your race card"; Print is outlined.
+// Save: with no saved nutrition the yellow action is "Next: get your race card"; there is no Print button.
 const nextBtn = page.getByRole('button', { name: 'Next: get your race card' });
-check((await page.locator('.actions .btn:not(.ghost)').count()) === 1 && /ghost/.test(await page.getByRole('button', { name: 'Print top-tube card' }).getAttribute('class')), 'Step 3 has one yellow action, and Print is outlined');
+check((await page.locator('.actions .btn:not(.ghost)').count()) === 1 && (await page.getByRole('button', { name: 'Print top-tube card' }).count()) === 0, 'Step 3 has one yellow action, and no Print button');
 await nextBtn.click();
 
 // Step 4: the race card.
@@ -597,7 +597,7 @@ check((await page.locator('.racecard p.notice.go').count()) === 1 && (await page
 check(await page.getByRole('link', { name: 'Change gel times' }).evaluate((e) => e.getBoundingClientRect().height >= 44), 'The card\'s "Change gel times" link is at least 44 px high');
 check(/^Sports drink( and water)?: about \d+ ml every 15 min$/.test((await page.locator('.racecard .tl .tlline').first().innerText()).trim()), 'The card names the drink in the first line of the bike leg card');
 check(!/typical/i.test(card) && !/Countdown|Debrief|Coming later/.test(card) && /not medical advice/i.test(await appText()), 'The card has no "(typical)", no Countdown or Debrief, and says not medical advice');
-check((await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.getByRole('button', { name: 'Print top-tube card' }).evaluate((e) => !e.classList.contains('ghost'))), 'With pacing and nutrition saved, Print is the one yellow action');
+check((await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.locator('.btn:not(.ghost)').innerText()).includes('Email my race card') && (await page.getByRole('button', { name: 'Print top-tube card' }).count()) === 0, 'With pacing and nutrition saved, the email button is the one yellow action, and there is no Print button');
 await wordsClean('The race card');
 for (const w of [390, 360, 320]) {
   await page.setViewportSize({ width: w, height: 844 });
@@ -957,7 +957,7 @@ await page.context().close();
 const ADDRESS = 'sam@example.test';
 const MAIL_SENT = 'Sent. It should arrive in a few minutes. Check your junk folder if not.';
 const MAIL_REFUSED = "That address didn't work. Check it and try again.";
-const MAIL_LATER = "Email isn't working right now. Your plan is saved on this phone, and you can still print it.";
+const MAIL_LATER = "Email isn't working right now. Your plan is saved on this phone.";
 const MAIL_BAD = 'Type one email address, such as sam@example.test.';
 const MAIL_STALE = 'Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first.';
 const STALE_PDF = 'Nutrition plan out of date. Update it before race day.';
@@ -978,14 +978,14 @@ async function mailPage(label, save, handler, { errorsExpected = false } = {}) {
   await page.locator('.racecard').waitFor();
   return seen;
 }
-// What a person should be left with after any result: the card, the saved plan, and Print, all as they were.
+// What a person should be left with after any result: the card, the saved plan, and the print card, all as they were.
 async function stillWorks(where, before) {
   check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === before, `${where}: the saved plan is exactly as it was`);
   await page.emulateMedia({ media: 'print' });
   await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
   const printed = await page.locator('.tt').textContent();
   await page.emulateMedia({ media: 'screen' });
-  check(/Bike nutrition/.test(printed) && (await page.locator('.racecard').isVisible()) && (await page.getByRole('button', { name: 'Print top-tube card' }).isEnabled()), `${where}: the card and Print still work`);
+  check(/Bike nutrition/.test(printed) && (await page.locator('.racecard').isVisible()), `${where}: the card and the print card still work`);
   check((await sendBtn().isEnabled()) && (await sendBtn().innerText()) === 'Email my race card', `${where}: the button is back to "Email my race card"`);
 }
 const storeText = () => page.evaluate((k) => localStorage.getItem(k), KEY);
@@ -1014,14 +1014,13 @@ async function typeAndSend(address) {
   check((await sendBtn().count()) === 1 && (await m.locator('[role=status]').count()) === 1, 'There is one button, "Email my race card", and one result line with role=status');
   const geo = await page.evaluate(() => {
     const top = (e) => e.getBoundingClientRect().top; const bottom = (e) => e.getBoundingClientRect().bottom;
-    const print = [...document.querySelectorAll('.app button.btn')].find((b) => /Print top-tube card/.test(b.textContent));
-    return { card: bottom(document.querySelector('.racecard')), mailTop: top(document.querySelector('section.mail')), mailBottom: bottom(document.querySelector('section.mail')), print: top(print) };
+    return { card: bottom(document.querySelector('.racecard')), mailTop: top(document.querySelector('section.mail')) };
   });
-  check(geo.card <= geo.mailTop && geo.mailBottom <= geo.print, `The block sits below the card and above Print (${Math.round(geo.card)} <= ${Math.round(geo.mailTop)}, ${Math.round(geo.mailBottom)} <= ${Math.round(geo.print)})`);
+  check(geo.card <= geo.mailTop, `The block sits below the card (${Math.round(geo.card)} <= ${Math.round(geo.mailTop)})`);
   const bg = await sendBtn().evaluate((e) => getComputedStyle(e).backgroundColor);
   await sendBtn().hover();
   const bgHover = await sendBtn().evaluate((e) => getComputedStyle(e).backgroundColor);
-  check(bg !== YELLOW && bgHover !== YELLOW && /ghost/.test(await sendBtn().getAttribute('class')) && (await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.locator('.btn:not(.ghost)').innerText()).includes('Print top-tube card'), `The email button is outlined, not yellow, also on hover (${bg}, ${bgHover}); Print is the one yellow button`);
+  check(bg === YELLOW && !/ghost/.test(await sendBtn().getAttribute('class')) && (await page.locator('.btn:not(.ghost)').count()) === 1 && (await page.locator('.btn:not(.ghost)').innerText()).includes('Email my race card') && (await page.getByRole('button', { name: 'Print top-tube card' }).count()) === 0, `The email button is the one yellow button (${bg}, on hover ${bgHover}), and there is no Print button`);
   const sizes = await page.evaluate(() => ['#f-mail', 'section.mail .btn'].map((q) => { const r = document.querySelector(q).getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
   check(sizes.every(([w, hh]) => w >= 44 && hh >= 44), `The field and the button are at least 44 px (${JSON.stringify(sizes)})`);
   await shot('email-block');
