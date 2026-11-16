@@ -28,7 +28,7 @@ Work happens on **short-lived branches cut from an up-to-date `main`**, one bran
 
 - Name it `type/short-description`, lowercase with hyphens: `feat/countdown`, `fix/sip-rounding`, `docs/verify-ranges`, `refactor/split-app-js`, `test/fuel-fuzz`, `chore/headers`. Say what, not who or when.
 - Use the same type in the PR title. Never commit to `main` directly, never force-push it.
-- **Merging to `main` deploys** to https://jthoyer.github.io/race-day-tools/ within a minute or two, once `npm test` passes, so a merge is a release.
+- **Merging to `main` deploys** to https://race.trimomentum.com within a minute or two, so a merge is a release. Cloudflare does not wait for `npm test`. Branch protection on `main` requires the `unit` check, so a failing test blocks the merge. Do not tick "Merge without waiting for requirements".
 - The PR description says what changed and why, anything to do by hand outside the repo, what you ran and what you could not run, and any decision for the reviewer.
 
 ## Commits

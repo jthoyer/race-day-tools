@@ -48,26 +48,34 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 ## Hosting
 
-**GitHub Pages, for now:** https://jthoyer.github.io/race-day-tools/
+**Cloudflare Pages:** https://race.trimomentum.com
 
-`.github/workflows/pages.yml` runs `npm test` on every push to `main` and, if it passes, publishes `public/` as it is. **Merging to `main` is a release**, live within a minute or two.
+Cloudflare Pages deploys the app from `main`: output folder `public`, no build command, the send function from `/functions`. **Merging to `main` is a release**, live within a minute or two. Cloudflare does not wait for `npm test`. Branch protection on `main` requires the `unit` check from `.github/workflows/test.yml`, so a failing test blocks the merge. Every pull request gets a preview address too. The preview has no secrets, so a send from it returns the "try later" reply. That is expected.
 
-Set up outside the repo, so a rebuild would lose it: in the repo's **Settings → Pages**, *Source* is **GitHub Actions**.
+`public/_headers` sets the full header set on the pages. Cloudflare does not apply it to replies from Pages Functions, so `functions/api/send.js` sets `Cache-Control: no-store` and `X-Content-Type-Options: nosniff` on its own replies. Each page also carries its content policy in a `<meta>` tag; `connect-src 'self'` means the page can call only its own address, for the one send function, and no other host. Keep the four copies in step.
 
-GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'self'` means the page can call only its own address, for the one send function, and no other host. On GitHub Pages that function does not exist and an address would be posted to GitHub, so the email block is hidden on `github.io` (`canEmailHere` in `public/js/card.js`); it appears when the app is served from Cloudflare or localhost. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
+**The old address.** `https://jthoyer.github.io/race-day-tools/` no longer updates, because the publish workflow was retired on the move. It should keep serving its last build. That build has no email block: `/api/send` does not exist there and an address would be posted to GitHub, so the block is hidden on `github.io` (`canEmailHere` in `public/js/card.js`). Treat it as a frozen fallback. Turning it off is in the repo's **Settings → Pages**, by hand.
 
-The longer-term host and domain are still open (D4). The move to Cloudflare Pages, in order, with its checks and its roll-back, is in [docs/host-move.md](docs/host-move.md). It is not started.
+The move is in [docs/host-move.md](docs/host-move.md), with its checks.
 
-**Owner set-up for email, not done.** None of these has been done:
+**Owner set-up for email, outside the repo.** The owner reported these on 16 November 2026. Nothing here has been re-checked from the repo.
 
-- Create the Resend account and a send-only key. Not done.
-- Set `RESEND_API_KEY` and `MAIL_FROM` as secrets on the host, never in the repo. Not done.
-- A separate sending subdomain with SPF, DKIM and DMARC (the domain is not chosen). Not done.
-- A Cloudflare rate-limiting rule on POST `/api/send`; the in-code limiter is best-effort per instance and is not a real limit. Not done.
-- Resend usage alerts or a cap. Not done.
-- The host move from GitHub Pages to Cloudflare Pages (step 5; the owner decides). Not done. Steps and checks: [docs/host-move.md](docs/host-move.md). Decide first how Cloudflare deploys: it does not wait for the `npm test` check unless branch protection requires it.
-- Check Resend's data retention against the "We don't keep it" wording. Not done.
-- Check the Resend request shape (endpoint, header, body), which is UNVERIFIED against Resend's docs. Not done.
+Done:
+
+- The Pages project `race-day-tools`, with the custom domain `race.trimomentum.com`.
+- A Resend account and a send-only key. Mail goes out from `mail.trimomentum.com`, which Resend shows as verified, in region Tokyo (`apne1`).
+- DNS in the `trimomentum.com` zone for Resend: a DKIM TXT, two CNAMEs and a DMARC TXT with `p=none` (monitor only). Keep the two Resend CNAMEs DNS-only (grey cloud).
+- `RESEND_API_KEY` and `MAIL_FROM` as Production secrets, never in the repo.
+- A Cloudflare rate-limiting rule on POST `/api/send`: five requests per 10 seconds per IP, then a 10-second block. Those are the only values the free plan allows. The in-code limiter stays a best-effort extra.
+- Branch protection on `main` that requires the `unit` check.
+- A live send returned "Ok" in the Pages log stream. That shows the function replied, not that the email arrived.
+
+Not done:
+
+- Resend usage alerts or a cap.
+- Check Resend's data retention against the "We don't keep it" wording, and the Tokyo region against the privacy statement (RD-040).
+- Check the Resend request shape (endpoint, header, body) against Resend's docs. A live send works today, but the shape is not checked against the docs.
+- Launch. Do not announce email while RD-005 (ranges still `UNCHECKED`), RD-034 or RD-040 is open.
 
 ## Contributing
 
@@ -135,7 +143,7 @@ These are from the blueprint and stay open. The code leaves room for each.
 
 - **D2** Restoring a purchase with no accounts. No payments yet.
 - **D3** Counting without tracking health data. No analytics yet.
-- **D4** Hosting and an offline copy. The email path is decided (13 Nov 2026); the offline copy and the host move are open.
+- **D4** Hosting and an offline copy. The email path is decided (13 Nov 2026); the host move is done (16 Nov 2026) and the offline copy is open.
 - **D6** Where the paywall sits in pace set-up. Everything is free in this build.
 
 Decided:
