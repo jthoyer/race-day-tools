@@ -241,7 +241,7 @@
 
   // The rail (replaces the step bar, 9 Nov 2026): Race, Pacing, Nutrition and Race card, on every step and the race card.
   // Any step opens from any other, so a person can change one thing and go straight back to the card. A step that is
-  // done has a green circle with a tick, and says so to a screen reader. It stays in view as the page scrolls.
+  // done has a green circle with a tick, and says so to a screen reader. It scrolls with the page.
   function rail(current) {
     var r = S.race;
     if (!r) return null;
@@ -1038,7 +1038,7 @@
 
   // The race strip (RD-041): the same ink band, closed, under the rail on pacing parts 1 to 3 and on step 3. It shows
   // wherever the rail does (a race exists). Line 1 is the race and its date, line 2 the countdown and the taper. The
-  // panels are the race card header's own, from raceEditor. It scrolls with the page: only the rail is sticky.
+  // panels are the race card header's own, from raceEditor. It scrolls with the page, like the rail.
   // There is no heading in it: the page's own h1 keeps the focus on arrival.
   function raceStrip() {
     var r = S.race;

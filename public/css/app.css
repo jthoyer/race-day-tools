@@ -762,12 +762,11 @@ details.test p {
   font-weight: 600;
 }
 
-/* The rail (9 Nov 2026) replaces the floating step bar: Race, Pacing, Nutrition and Race card, each a numbered circle.
-   It stays in view as the page scrolls. Step 4 sits on the light blue with a link-blue ring until it is current. */
+/* The rail (9 Nov 2026) replaces the step bar: Race, Pacing, Nutrition and Race card, each a numbered circle.
+   It sits in the page and scrolls with it (not sticky, no drop shadow, 16 Nov 2026). Step 4 sits on the light blue
+   with a link-blue ring until it is current. */
 .rail {
-  position: sticky;
-  top: 8px;
-  z-index: 5;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
@@ -775,7 +774,6 @@ details.test p {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
-  box-shadow: 0 6px 20px rgba(24, 37, 66, 0.12);
 }
 .rail::before {
   content: '';
@@ -1015,8 +1013,8 @@ details.test p {
   color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
 }
-/* The race strip (RD-041): the band above, closed, under the rail on pacing and step 3. It scrolls with the page; only the
-   rail is sticky. Its Edit buttons carry a chevron. */
+/* The race strip (RD-041): the band above, closed, under the rail on pacing and step 3. It scrolls with the page, like the
+   rail. Its Edit buttons carry a chevron. */
 .band.strip {
   gap: 6px;
   padding: 8px 16px 10px;
