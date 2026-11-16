@@ -56,7 +56,7 @@ Set up outside the repo, so a rebuild would lose it: in the repo's **Settings â†
 
 GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'self'` means the page can call only its own address, for the one send function, and no other host. On GitHub Pages that function does not exist and an address would be posted to GitHub, so the email block is hidden on `github.io` (`canEmailHere` in `public/js/card.js`); it appears when the app is served from Cloudflare or localhost. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
 
-The longer-term host and domain are still open (D4).
+The longer-term host and domain are still open (D4). The move to Cloudflare Pages, in order, with its checks and its roll-back, is in [docs/host-move.md](docs/host-move.md). It is not started.
 
 **Owner set-up for email, not done.** None of these has been done:
 
@@ -65,7 +65,7 @@ The longer-term host and domain are still open (D4).
 - A separate sending subdomain with SPF, DKIM and DMARC (the domain is not chosen). Not done.
 - A Cloudflare rate-limiting rule on POST `/api/send`; the in-code limiter is best-effort per instance and is not a real limit. Not done.
 - Resend usage alerts or a cap. Not done.
-- The host move from GitHub Pages to Cloudflare Pages (step 5; the owner decides). Not done.
+- The host move from GitHub Pages to Cloudflare Pages (step 5; the owner decides). Not done. Steps and checks: [docs/host-move.md](docs/host-move.md). Decide first how Cloudflare deploys: it does not wait for the `npm test` check unless branch protection requires it.
 - Check Resend's data retention against the "We don't keep it" wording. Not done.
 - Check the Resend request shape (endpoint, header, body), which is UNVERIFIED against Resend's docs. Not done.
 
