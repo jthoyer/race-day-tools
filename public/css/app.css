@@ -162,7 +162,6 @@ a:hover {
   font-size: 23px;
   line-height: 1.2;
 }
-.toplink,
 .back {
   display: inline-flex;
   align-items: center;
@@ -613,7 +612,7 @@ details.test p {
   margin: 4px 0 0;
 }
 
-/* Home: the four steps, on the front page and on the coming-back screen. They use the same tokens as the rail. */
+/* Home: the four steps, on the front page and on the coming-back screen. They use the same tokens as the Race plan panel. */
 .home .startmark {
   padding-top: 40px;
 }
@@ -734,46 +733,60 @@ details.test p {
   font-weight: 600;
 }
 
-/* The rail (9 Nov 2026) replaces the step bar: Race, Pacing, Nutrition and Race card, each a numbered circle.
-   It sits in the page and scrolls with it (not sticky, no drop shadow, 16 Nov 2026). Step 4 sits on the light blue
-   with a link-blue ring until it is current. */
-.rail {
-  position: relative;
+/* The Race plan button, panel and status row (17 Nov 2026) replace the four-circle rail. They sit in the page and scroll
+   with it (not sticky, no drop shadow). The panel is in the flow under the header, never an overlay. Step 4 sits on
+   the light blue with a link-blue ring until it is current. */
+.planbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 15px var(--body);
+  cursor: pointer;
+}
+.planbtn svg {
+  flex: none;
+}
+.planbtn[aria-expanded='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+.planbtn[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.planpanel {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
+  gap: 2px;
   padding: 6px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
-.rail::before {
-  content: '';
-  position: absolute;
-  left: 12.5%;
-  right: 12.5%;
-  top: 25px;
-  height: 2px;
-  background: var(--line);
+.planpanel[hidden] {
+  display: none;
 }
-.rail .r {
-  position: relative;
+.planpanel .r,
+.planpanel .locked {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 58px;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 10px;
   border-radius: 10px;
-  color: var(--muted);
-  font: 600 12px/1.2 var(--body);
+  color: var(--ink);
+  font: 600 15px var(--body);
   text-decoration: none;
-  text-align: center;
 }
-.rail .c {
-  position: relative;
-  z-index: 1;
+.planpanel .c {
   display: grid;
+  flex: none;
   place-items: center;
   width: 28px;
   height: 28px;
@@ -783,32 +796,110 @@ details.test p {
   color: var(--muted);
   font: 700 13px var(--body);
 }
-.rail .done .c {
+.planpanel .st {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+.planpanel .done .c {
   border-color: var(--go);
   background: var(--go);
   color: var(--surface);
 }
-.rail .goal {
+.planpanel .goal {
   background: var(--info-bg);
 }
-.rail .goal .c {
+.planpanel .goal .c {
   border-color: var(--link);
   color: var(--link);
 }
-.rail .now {
-  color: var(--ink);
+.planpanel .now {
+  background: var(--bg);
   font-weight: 700;
 }
-.rail .now .c {
+.planpanel .now .c {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--surface);
 }
-.rail .now:not(.goal) {
-  background: var(--bg);
+.planpanel .sep {
+  margin: 4px 10px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
-.rail .now.goal {
-  box-shadow: inset 0 0 0 2px var(--link);
+.planpanel .locked {
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
+.planpanel .locked .c {
+  border-style: dashed;
+}
+/* The status row: read-only, no link or button in it. */
+.here {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.here-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+.here .now-t {
+  margin: 0;
+  font: 600 18px/1.2 var(--display);
+}
+.here .now-t .label {
+  display: block;
+  margin-bottom: 2px;
+}
+.here .next {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.fours {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.fours i {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.fours i.done {
+  background: var(--go);
+}
+.fours i.now {
+  background: var(--ink);
+}
+.fours i.goal {
+  background: var(--info-bg);
+  box-shadow: inset 0 0 0 1px var(--link);
+}
+/* After race day: one full-width green bar with words. */
+.complete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--go);
+  font-size: 13px;
+  font-weight: 600;
+}
+.complete i {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--go);
 }
 
 /* Gel timing on the nutrition step (RD-031) */
@@ -985,8 +1076,8 @@ details.test p {
   color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
 }
-/* The race strip (RD-041): the band above, closed, under the rail on pacing and step 3. It scrolls with the page, like the
-   rail. Its Edit buttons carry a chevron. */
+/* The race strip (RD-041): the band above, closed, under the status row on pacing and step 3. It scrolls with the page, like the
+   status row. Its Edit buttons carry a chevron. */
 .band.strip {
   gap: 6px;
   padding: 8px 16px 10px;

@@ -132,3 +132,34 @@ test('no file in public/ names the mail service or holds a key, and none in func
   // The check can see a key: the pattern matches the shape it is for.
   assert.match('re_' + 'a1B2c3D4e5F6g7H8', /re_[A-Za-z0-9_]{16,}/);
 });
+
+// Criterion 19 and 25. The Race plan panel and status row are built with RD.ui.h(), which makes text nodes. This reads the
+// source, so it also catches code that no scenario runs. vendor/ is a pinned library and is not ours to edit.
+test('no script in public/js builds HTML from a string (innerHTML, outerHTML, insertAdjacentHTML)', () => {
+  const jsDir = path.join(ROOT, 'js');
+  const files = fs.readdirSync(jsDir, { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.js'));
+  assert.ok(files.length >= 8, 'looked at the app scripts');
+  for (const f of files) {
+    assert.doesNotMatch(fs.readFileSync(path.join(jsDir, f.name), 'utf8'), /innerHTML|outerHTML|insertAdjacentHTML/, `${f.name} builds HTML from a string`);
+  }
+  // The check can see what it is for.
+  for (const word of ['innerHTML', 'outerHTML', 'insertAdjacentHTML']) assert.match('el.' + word + ' = x', /innerHTML|outerHTML|insertAdjacentHTML/);
+});
+
+// Criterion 19 and 26. The header link of that name is gone: nothing in the app, its scripts, tests or docs says it. The
+// pattern is built from two pieces so this file does not match its own search.
+test('the old header link name is found nowhere in public/, scripts/, tests/ or the docs', () => {
+  const repo = path.join(__dirname, '..');
+  const old = new RegExp('my' + ' plan', 'i');
+  const files = [
+    ...filesUnder(ROOT).filter((f) => !f.split(path.sep).includes('vendor') && /\.(html|js|css|md|txt|json|svg)$/.test(f)),
+    ...filesUnder(path.join(repo, 'scripts')),
+    ...filesUnder(path.join(repo, 'tests')),
+    path.join(repo, 'docs', 'spec.md'),
+    path.join(repo, 'README.md'),
+    path.join(repo, '.claude', 'skills', 'verify', 'SKILL.md')
+  ].filter((f) => fs.existsSync(f));
+  assert.ok(files.length > 15, 'looked at the files');
+  for (const f of files) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), old, `${path.relative(repo, f)} still says the old name`);
+  assert.match('My ' + 'Plan', old); // the pattern ignores case
+});

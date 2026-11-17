@@ -111,26 +111,44 @@ async function wordsClean(where) {
   const t = await appText();
   check(!/\bfuel\b/i.test(t) && !/\bstandard\b/i.test(t) && !/Race-day tools/.test(t), `${where} has no "fuel", "Standard" or "Race-day tools" in its words`);
 }
-// 5 and 6. The header and the rail.
-async function headerIs(where, { myPlan = true } = {}) {
+// 5 and 6. The header, the Race plan button, the status row and the panel (criterion 19).
+const STEPS = ['Race', 'Pacing', 'Nutrition', 'Race card'];
+const planBtn = () => page.locator('header.top').getByRole('button', { name: 'Race plan', exact: true });
+const planPanel = () => page.locator('#race-plan-panel');
+const statusRow = () => page.locator('div.here');
+async function headerIs(where, { plan = true } = {}) {
   const mark = page.locator('header.top').getByRole('link', { name: 'TRI Momentum' });
-  const plan = page.locator('header.top').getByRole('link', { name: 'My plan' });
   const tall = async (l) => (await l.count()) > 0 && (await l.evaluate((e) => e.getBoundingClientRect().height >= 44 && e.getBoundingClientRect().width >= 44));
-  check((await tall(mark)) && ((await tall(plan)) === myPlan) && /^Momentum$/.test((await mark.innerText()).replace(/\s+/g, ' ').replace(/^T\s*R\s*I\s*/, '').trim()), `${where} header has the wordmark${myPlan ? ' and My plan' : ' and no My plan'}, at least 44 px`);
+  const btn = planBtn();
+  const has = (await btn.count()) === 1;
+  const wired = has && (await btn.getAttribute('aria-controls')) === 'race-plan-panel' && ['true', 'false'].includes(await btn.getAttribute('aria-expanded'));
+  check((await tall(mark)) && /^Momentum$/.test((await mark.innerText()).replace(/\s+/g, ' ').replace(/^T\s*R\s*I\s*/, '').trim()), `${where} header has the wordmark, at least 44 px`);
+  check(plan ? has && (await tall(btn)) && wired : (await btn.count()) === 0, `${where} header ${plan ? 'has the Race plan button, at least 44 px, with aria-expanded and aria-controls' : 'has no Race plan button'}`);
 }
-async function railIs(current, where) {
-  const links = page.locator('nav.rail a');
-  const names = (await links.allInnerTexts()).map(plainName);
-  const cur = plainName(await page.locator('nav.rail a[aria-current="step"]').innerText().catch(() => ''));
-  // A step not yet done shows its number; a done one shows a tick in the same circle.
-  const numbered = (await links.evaluateAll((els) => els.map((e) => [e.classList.contains('done'), e.innerText]))).every(([done, t], i) => done || t.includes(String(i + 1)));
-  const tall = await links.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44 && e.getBoundingClientRect().width >= 44));
-  check(names.join(',') === 'Race,Pacing,Nutrition,Race card' && cur === current && tall && numbered && (await page.locator('nav.rail a[aria-current="step"]').count()) === 1, `${where} has the rail, with ${current} marked`);
-  check((await page.locator('nav.stepbar').count()) === 0, `${where} has no old step bar`);
+// The status row: "Step n of 4", the step's name, "Next: ..." (none on the race card), read-only, and no old rail.
+async function statusIs(current, where) {
+  const row = statusRow();
+  const n = STEPS.indexOf(current) + 1;
+  const found = (await row.count()) === 1;
+  const text = found ? (await row.innerText()).replace(/\s+/g, ' ').trim().toLowerCase() : '';
+  const want = (`Step ${n} of 4 ${current}` + (n < 4 ? ` Next: ${STEPS[n]}` : '')).toLowerCase();
+  const readOnly = found && (await row.evaluate((e) => !e.querySelector('a,button,input,select,textarea,[tabindex]') && !e.matches('[tabindex]')));
+  check(found && text === want && readOnly, `${where} has the status row "${want}", read-only`);
+  check((await page.locator('nav.rail').count()) === 0 && (await page.locator('nav.stepbar').count()) === 0, `${where} has no old rail or step bar`);
+}
+// The status row is absent (S0, S5, My products, the guides, and step 3 with no race), with no panel and no old rail.
+async function noStatus(where) {
+  check((await statusRow().count()) === 0 && (await planPanel().count()) === 0 && (await page.locator('nav.rail').count()) === 0, `${where} has no status row, no Race plan panel and no rail`);
+}
+// Open the Race plan panel (if it is closed) and choose a step.
+async function viaPlan(name) {
+  const btn = planBtn();
+  if ((await btn.getAttribute('aria-expanded')) !== 'true') await btn.click();
+  await planPanel().getByRole('link', { name }).click();
 }
 
-// RD-041. The race strip: present exactly where the rail is on a pacing part and on step 3 with a race, and absent elsewhere.
-// Present means one strip, the next element after the rail, with no heading in it, and before the part bar or the step title.
+// RD-041. The race strip: present exactly where the status row is on a pacing part and on step 3 with a race, and absent elsewhere.
+// Present means one strip, the next element after the status row, with no heading in it, and before the part bar or the step title.
 async function stripIs(where, present) {
   const n = await page.locator('div.strip').count();
   check(n === (present ? 1 : 0), `${where} ${present ? 'has' : 'has no'} the race strip`);
@@ -138,9 +156,10 @@ async function stripIs(where, present) {
   const g = await page.evaluate(() => {
     const st = document.querySelector('div.strip');
     const next = st.nextElementSibling;
-    return { afterRail: document.querySelector('nav.rail').nextElementSibling === st, before: !!next && (next.matches('.progress') || !!next.querySelector('h1')), headings: st.querySelectorAll('h1,h2,h3,h4,h5,h6').length, named: !!st.getAttribute('aria-label') };
+    const here = document.querySelector('div.here');
+    return { afterStatus: !!here && here.nextElementSibling === st, before: !!next && (next.matches('.progress') || !!next.querySelector('h1')), headings: st.querySelectorAll('h1,h2,h3,h4,h5,h6').length, named: !!st.getAttribute('aria-label') };
   });
-  check(g.afterRail && g.before && g.headings === 0 && g.named, `${where}: the strip follows the rail, comes before the part bar or title, is named, and holds no heading`);
+  check(g.afterStatus && g.before && g.headings === 0 && g.named, `${where}: the strip follows the status row, comes before the part bar or title, is named, and holds no heading`);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -160,7 +179,9 @@ check(goalBg === 'rgb(234, 247, 252)', `S0 step 4 is the --info-bg colour (${goa
 check(await page.getByText('Free. No account needed. Saved on this device only.', { exact: true }).isVisible(), 'S0 has the free and on-this-device note');
 check((await page.locator('.btn').count()) === 1 && (await page.getByRole('link', { name: 'Get started' }).isVisible()), 'S0 has one yellow action, "Get started"');
 const s0text = await appText();
-check(!/Just plan my|Countdown|Debrief|Coming later/.test(s0text) && (await page.getByRole('link', { name: /account/i }).count()) === 0 && (await page.locator('nav.rail').count()) === 0 && (await page.locator('.gallery,.gcard').count()) === 0, 'S0 has no "Just plan my" link, no account link, no rail, no Countdown or Debrief, no gallery');
+check(!/Just plan my|Countdown|Debrief|Coming later/.test(s0text) && (await page.getByRole('link', { name: /account/i }).count()) === 0 && (await page.locator('.gallery,.gcard').count()) === 0, 'S0 has no "Just plan my" link, no account link, no Countdown or Debrief, no gallery');
+check((await planBtn().count()) === 0 && (await page.locator('header.top').count()) === 0, 'S0 has no header bar and no Race plan button');
+await noStatus('S0');
 // The wordmark, the h1, the steps and then the button come in that order.
 const s0tops = [await topOf(page.getByRole('img', { name: 'TRI Momentum' })), await topOf(page.getByRole('heading', { name: 'Race with a plan.' })), await topOf(page.locator('ol.steps')), await topOf(page.getByRole('link', { name: 'Get started' }))];
 check(s0tops.every((v, i) => i === 0 || v > s0tops[i - 1]), 'S0 shows wordmark, heading, steps and button in order');
@@ -229,11 +250,11 @@ await page.getByRole('link', { name: 'Get started' }).click();
 await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
 // 2. Leaving step 1 empty returns to S0.
 await headerIs('Step 1');
-await railIs('Race', 'Step 1');
+await statusIs('Race', 'Step 1');
 await stripIs('Step 1', false);
-await page.locator('header.top').getByRole('link', { name: 'My plan' }).click();
+await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
 await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
-check((await page.getByRole('link', { name: 'Get started' }).isVisible()) && (await page.locator('nav.rail').count()) === 0, 'My plan on an empty step 1 goes back to the front page');
+check((await page.getByRole('link', { name: 'Get started' }).isVisible()) && (await statusRow().count()) === 0, 'The wordmark on an empty step 1 goes back to the front page');
 const keysNew = await store();
 check(!('start' in keysNew.race) && !('transitionOpens' in keysNew.race), 'A new race is made without start or transitionOpens');
 await page.getByRole('link', { name: 'Get started' }).click();
@@ -261,7 +282,7 @@ await page.getByRole('button', { name: 'Next: choose pacing' }).click();
 // Step 2, part 1: Your fitness.
 await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
 await headerIs('Pacing part 1');
-await railIs('Pacing', 'Pacing part 1');
+await statusIs('Pacing', 'Pacing part 1');
 await stripIs('Pacing part 1', true);
 const bar = (await page.locator('.progress').innerText()).replace(/\s+/g, ' ');
 check(/Pacing · part 1 of 3/i.test(bar) && (await page.locator('.progress .seg').count()) === 3 && /Your fitness · Course and heat · Your targets/.test(bar) && (await page.locator('.progress .parts b').innerText()) === 'Your fitness', 'Part 1 shows "Pacing · part 1 of 3", three segments and the part line with Your fitness in bold');
@@ -319,7 +340,7 @@ await page.getByRole('button', { name: 'Next: course and heat' }).click();
 // Part 2.
 await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
 check(/Pacing · part 2 of 3/i.test(await page.locator('.progress').innerText()) && (await page.locator('.progress .parts b').innerText()) === 'Course and heat', 'Part 2 shows part 2 of 3 with Course and heat in bold');
-await railIs('Pacing', 'Pacing part 2');
+await statusIs('Pacing', 'Pacing part 2');
 await stripIs('Pacing part 2', true);
 await page.getByRole('button', { name: /Rolling/ }).click();
 await page.getByRole('button', { name: /Warm/ }).click();
@@ -330,7 +351,7 @@ await page.getByRole('button', { name: 'Next: your targets' }).click();
 
 // Part 3.
 await page.getByRole('heading', { name: 'Your pace targets' }).waitFor();
-await railIs('Pacing', 'Pacing part 3');
+await statusIs('Pacing', 'Pacing part 3');
 await stripIs('Pacing part 3', true);
 const targets = await page.locator('.targets').innerText();
 check(/175–185 W/.test(targets), 'Part 3 bike target is 175–185 W');
@@ -375,9 +396,12 @@ await page.getByRole('button', { name: 'Save to my race card' }).click();
 // Step 3, first arrival: the first save opens step 3 with a status line.
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
 check(page.url().endsWith('#/fuel') && (await page.getByRole('status').filter({ hasText: 'Pace targets saved to your race card' }).isVisible()), 'The first save opens step 3 with "Pace targets saved to your race card"');
-await railIs('Nutrition', 'Step 3');
+await statusIs('Nutrition', 'Step 3');
+await headerIs('Step 3', { plan: true });
 await stripIs('Step 3', true);
-check((await page.locator('nav.rail a.done').allInnerTexts()).map(plainName).join(',') === 'Race,Pacing', 'The rail marks Race and Pacing done, and never Race card');
+// The bars read saved state: Race and Pacing done (green), Nutrition current (ink), Race card never green (info-bg).
+const bars3 = await page.locator('div.here .fours i').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+check(bars3.join('|') === 'rgb(17, 107, 67)|rgb(17, 107, 67)|rgb(24, 37, 66)|rgb(234, 247, 252)', `The status row bars on step 3 are green, green, ink, info-bg (${bars3.join('|')})`);
 
 // S5, after pacing is saved. Isolation: same session, a reload (full page load) to home.
 await page.goto(base + '/index.html#/');
@@ -388,12 +412,12 @@ check(!/Countdown|Debrief|Later/.test(s5a), 'S5 hides Countdown and Debrief unti
 check(/Two steps done, two to go\./.test(s5a) && /Next: check your gut figure and pick your carbs/.test(s5a), 'S5 after pacing says "Two steps done, two to go." and what step 3 is');
 check((await page.getByRole('link', { name: 'Continue: review nutrition' }).isVisible()) && (await page.locator('.btn').count()) === 1, 'S5 after pacing has one yellow action, "Continue: review nutrition"');
 check(/Bike 175–185 W · finish \d:\d\d–\d:\d\d/.test(s5a) && /days to go/i.test(s5a) && /Taper starts|In your taper/.test(s5a), 'S5 shows the days to go, the taper line and the pacing summary');
-check((await page.locator('nav.rail').count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'My plan' }).count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).count()) === 1, 'S5 has the wordmark, no My plan and no rail');
+check((await statusRow().count()) === 0 && (await planBtn().count()) === 0 && (await page.locator('nav.rail').count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).count()) === 1, 'S5 has the wordmark, no Race plan button, no status row and no rail');
 check(!/n of 2 done|Your details|Open race card/.test(s5a) && (await page.getByRole('link', { name: 'Edit' }).count()) === 2 && (await page.getByRole('link', { name: 'Edit' }).evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'S5 has two Edit links (steps 1 and 2) at least 44 px high, and none of the old home');
 check((await page.locator('section.guides').count()) === 0 && !/Guides/.test(s5a), 'S5 has no guide links (they are on S0 only)');
 check((await page.locator('#about').count()) === 0, 'S5 has no About section (it is on S0 only)');
 check(/Ready once nutrition is done/.test(s5a) && (await page.locator('li.step.goal').count()) === 1, 'S5 keeps step 4 on the light blue until it is done');
-await headerIs('S5', { myPlan: false });
+await headerIs('S5', { plan: false });
 await stripIs('S5', false);
 await wordsClean('S5');
 await shot('s5-after-pacing');
@@ -521,10 +545,11 @@ for (const w of [390, 360, 320]) {
   check(legsFit, `The leg cards have no sideways scroll at ${w}px`);
 }
 await page.setViewportSize({ width: 390, height: 844 });
-// The rail does not float: it is not sticky or fixed, has no drop shadow, and scrolls away with the page.
+// The header and the status row do not float: not sticky or fixed, no drop shadow, and they scroll away with the page.
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-const railLook = await page.locator('nav.rail').evaluate((e) => ({ pos: getComputedStyle(e).position, shadow: getComputedStyle(e).boxShadow, top: e.getBoundingClientRect().top }));
-check(railLook.pos !== 'sticky' && railLook.pos !== 'fixed' && railLook.shadow === 'none' && railLook.top < 0, `The rail is not sticky, fixed or shadowed, and scrolls away (position ${railLook.pos}, shadow ${railLook.shadow}, top ${Math.round(railLook.top)}px)`);
+const statusLook = await statusRow().evaluate((e) => ({ pos: getComputedStyle(e).position, shadow: getComputedStyle(e).boxShadow, top: e.getBoundingClientRect().top }));
+const headLook = await page.locator('header.top').evaluate((e) => ({ pos: getComputedStyle(e).position, shadow: getComputedStyle(e).boxShadow, top: e.getBoundingClientRect().top }));
+check([statusLook, headLook].every((l) => l.pos !== 'sticky' && l.pos !== 'fixed' && l.shadow === 'none' && l.top < 0), `The header and status row are not sticky, fixed or shadowed, and scroll away (status ${statusLook.pos}/${statusLook.shadow}/${Math.round(statusLook.top)}px, header ${headLook.pos}/${headLook.shadow}/${Math.round(headLook.top)}px)`);
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('step3');
 
@@ -554,7 +579,7 @@ await nextBtn.click();
 // Step 4: the race card.
 await page.locator('.racecard').waitFor();
 await headerIs('The race card');
-await railIs('Race card', 'The race card');
+await statusIs('Race card', 'The race card');
 await stripIs('The race card', false);
 const card = await page.locator('.racecard').innerText();
 check(/Spring 70\.3/.test(card) && /175–185/.test(card) && /g\/hr/.test(card), 'Race card shows pacing and nutrition');
@@ -611,8 +636,13 @@ for (const w of [390, 360, 320]) {
   const broken = await brokenText();
   check(broken.length === 0, `Card leg text is not broken mid-word at ${w}px`);
   await noHorizontalScroll('The race card', w);
-  const bar = await page.locator('nav.rail a').evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44 && e.getBoundingClientRect().width >= 44));
-  check(bar, `The rail has 44 px targets at ${w}px`);
+  const btnBox = await planBtn().boundingBox();
+  check(btnBox.height >= 44 && btnBox.width >= 44, `The Race plan button is at least 44 px at ${w}px (${Math.round(btnBox.width)} x ${Math.round(btnBox.height)})`);
+  await planBtn().click();
+  const rowBoxes = await planPanel().locator('a').evaluateAll((els) => els.map((e) => [e.getBoundingClientRect().height, e.getBoundingClientRect().width]));
+  check(rowBoxes.length === 4 && rowBoxes.every(([hh, ww]) => hh >= 44 && ww >= 44), `The four panel rows are at least 44 px at ${w}px`);
+  await noHorizontalScroll('The race card with the panel open', w);
+  await planBtn().click();
 }
 await page.setViewportSize({ width: 390, height: 844 });
 await shot('card');
@@ -680,12 +710,12 @@ check(/All four steps done\./.test(s5b) && (await page.getByRole('link', { name:
 check((await page.locator('li.step.goal').count()) === 0 && (await page.getByRole('link', { name: 'Edit' }).count()) === 3 && (await page.getByRole('link', { name: 'Open', exact: true }).count()) === 1, 'S5 shows step 4 done (no light blue) with Edit on steps 1 to 3 and Open on step 4');
 await shot('s5-all-done');
 
-// Stale targets (15 and 4). Change FTP on part 1, leave by the rail's Race card without saving.
+// Stale targets (15 and 4). Change FTP on part 1, leave by the panel's Race card without saving.
 await page.goto(base + '/index.html#/pacing/1');
 await page.getByLabel('FTP', { exact: true }).fill('260');
-await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+await viaPlan(/Race card/);
 await page.locator('.racecard').waitFor();
-check(/Your numbers changed since these targets/.test(await page.locator('.racecard').innerText()), 'Leaving part 1 by the rail after a change flags the targets as out of date');
+check(/Your numbers changed since these targets/.test(await page.locator('.racecard').innerText()), 'Leaving part 1 by the Race plan panel after a change flags the targets as out of date');
 await page.goto(base + '/index.html#/');
 await page.reload();
 const staleHome = await page.locator('li.step', { hasText: 'Choose pacing' }).innerText();
@@ -701,14 +731,14 @@ await page.getByRole('button', { name: 'Save and back to race card' }).click();
 await page.locator('.racecard').waitFor();
 check(/175–185/.test(await page.locator('.racecard').innerText()), 'Putting FTP back to 240 gives 175–185 W again');
 // Step 1 and part 2 have the same button.
-await page.locator('nav.rail').getByRole('link', { name: /^Race(?! card)/ }).click();
+await viaPlan(/^Race(?! card)/);
 await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
 check(await page.getByRole('button', { name: 'Save and back to race card' }).isVisible(), 'Step 1 has "Save and back to race card" once the card has a plan');
 await page.goto(base + '/index.html#/pacing/2');
 check(await page.getByRole('button', { name: 'Save and back to race card' }).isVisible(), 'Part 2 has "Save and back to race card" once the card has a plan');
-await page.locator('nav.rail').getByRole('link', { name: /Pacing/ }).click();
+await viaPlan(/Pacing/);
 await page.getByRole('heading', { name: 'Your pace targets' }).waitFor();
-check(true, 'Pacing in the rail opens part 3 once pace is saved');
+check(true, 'Pacing in the Race plan panel opens part 3 once pace is saved');
 await page.locator('.actions').getByRole('button', { name: 'Save to my race card' }).click();
 await page.locator('.racecard').waitFor();
 check(true, 'A second save on part 3 opens the race card, not step 3');
@@ -741,13 +771,15 @@ await page.goto(base + '/index.html#/saved');
 await page.reload();
 check(await page.locator('.racecard').isVisible(), 'Old address #/saved opens the race card');
 await stripIs('Old address #/saved', false);
+await headerIs('Old address #/saved', { plan: true });
 
 // Products: add one, it appears in step 3.
 await page.goto(base + '/index.html#/products');
 await page.getByRole('button', { name: 'Add a product' }).click();
-await headerIs('My products', { myPlan: false });
+await headerIs('My products', { plan: false });
 await stripIs('My products', false);
-check(await page.getByRole('link', { name: 'Nutrition' }).first().isVisible() && (await page.locator('nav.rail').count()) === 0, 'My products keeps a back link named Nutrition and has no rail');
+check(await page.getByRole('link', { name: 'Nutrition' }).first().isVisible(), 'My products keeps a back link named Nutrition');
+await noStatus('My products');
 await wordsClean('My products');
 const names = page.getByLabel('Name');
 await names.last().fill('Test gel 40');
@@ -780,11 +812,12 @@ await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------
 // Scenario 3: an earlier plan with no gut figure typed on step 3 (solo). Isolation: fresh context, empty storage.
-// Step 3 with no race: still works, has no rail, and "Save to a race plan" makes a race with no times.
+// Step 3 with no race: still works, has neither the Race plan button nor a status row (the wordmark goes home), and "Save to a race plan" makes a race with no times.
 await fresh('solo nutrition');
 await page.goto(base + '/index.html#/fuel');
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
-check((await page.locator('nav.rail').count()) === 0 && (await page.getByRole('link', { name: 'My plan' }).isVisible()), 'Step 3 with no race has no rail, and has My plan');
+await headerIs('Step 3 with no race (solo)', { plan: false });
+await noStatus('Step 3 with no race (solo)');
 await stripIs('Step 3 with no race (solo)', false);
 check(/Add your bike and run times/.test(await appText()), 'Step 3 with no pacing asks for the bike and run times');
 await page.getByLabel('Bike time').fill('245');
@@ -840,7 +873,9 @@ async function guide(label, path) {
 }
 await guide('bike guide', '/guides/bike-pacing.html');
 await stripIs('The bike guide', false);
-check((await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).isVisible()) && /· TRI Momentum$/.test(await page.title()) && (await page.locator('nav.rail').count()) === 0, 'The bike guide has the wordmark, a TRI Momentum title and no rail');
+check((await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).isVisible()) && /· TRI Momentum$/.test(await page.title()), 'The bike guide has the wordmark and a TRI Momentum title');
+await headerIs('The bike guide', { plan: false });
+await noStatus('The bike guide');
 await page.getByLabel('Your FTP').fill('240');
 check(/175–185 W/.test(await page.locator('.result').innerText()), 'Guide gives 175–185 W for FTP 240, rolling');
 await page.getByRole('button', { name: 'Hilly' }).click();
@@ -859,7 +894,9 @@ check(/Your 70\.3 nutrition/.test(await page.locator('.tool').innerText()) && /g
 const guideTool = await page.locator('.tool').innerText();
 check(/at \d+:\d\d \(~\d+ km\)/.test(guideTool) && guideTool.includes(kmNote) && !/NaN/.test(guideTool), 'Nutrition guide shows km beside the run gel times, with KM_NOTE');
 const nutTool = (await page.locator('.tool, .savebox').allInnerTexts()).join(' ');
-check(!/\bfuel\b/i.test(nutTool) && !/\bstandard\b/i.test(nutTool) && (await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).isVisible()) && (await page.locator('nav.rail').count()) === 0, 'The nutrition guide\'s header and tool have no "fuel" or "Standard", and it has the wordmark and no rail');
+check(!/\bfuel\b/i.test(nutTool) && !/\bstandard\b/i.test(nutTool) && (await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).isVisible()), 'The nutrition guide\'s header and tool have no "fuel" or "Standard", and it has the wordmark');
+await headerIs('The nutrition guide', { plan: false });
+await noStatus('The nutrition guide');
 if (SHOTS) await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, '0')}-guide-nutrition.png`, fullPage: true });
 await page.getByRole('button', { name: 'Save to a race plan' }).click();
 await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
@@ -1404,13 +1441,13 @@ await page.getByRole('link', { name: 'Back: your fitness' }).click();
 await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
 check(await stripClosed(), 'Open Edit race on part 2, press Back: part 1\'s strip is closed');
 await page.context().close();
-await stripPage('strip closed after the rail', stripSeed(), '#/fuel');
+await stripPage('strip closed after the Race plan panel', stripSeed(), '#/fuel');
 await stripBtn('race').click();
-await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+await viaPlan(/Race card/);
 await page.locator('.racecard').waitFor();
-await page.locator('nav.rail').getByRole('link', { name: /Nutrition/ }).click();
+await viaPlan(/Nutrition/);
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
-check(await stripClosed(), 'Open Edit race on step 3, tap the rail to the race card and back: the strip is closed');
+check(await stripClosed(), 'Open Edit race on step 3, tap the Race plan panel to the race card and back: the strip is closed');
 await page.context().close();
 await stripPage('strip closed after a typed address', stripSeed(), '#/pacing/1');
 await stripBtn('taper').click();
@@ -1421,24 +1458,24 @@ await page.context().close();
 await stripPage('strip closed after a reload', stripSeed(), '#/pacing/1');
 await stripBtn('taper').click();
 await page.reload();
-await page.locator('nav.rail').waitFor();
+await statusRow().waitFor();
 check(await stripClosed(), 'Open Edit taper, then reload: the strip is closed');
 await page.context().close();
 
 // 29. One edit state, shared with the card (A17). Isolation: fresh context per direction.
 await stripPage('strip then card', stripSeed(), '#/fuel');
 await stripBtn('race').click();
-await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+await viaPlan(/Race card/);
 await page.locator('.racecard').waitFor();
 const band = page.locator('.racecard .band');
-check((await band.locator('#card-edit-race').getAttribute('aria-expanded')) === 'false' && (await band.locator('#card-edit-taper').getAttribute('aria-expanded')) === 'false' && (await band.locator('.panel').count()) === 0 && (await strip().count()) === 0, 'Open Edit race on step 3, tap Race card in the rail: the card band has both buttons aria-expanded false, no panel, and no strip');
+check((await band.locator('#card-edit-race').getAttribute('aria-expanded')) === 'false' && (await band.locator('#card-edit-taper').getAttribute('aria-expanded')) === 'false' && (await band.locator('.panel').count()) === 0 && (await strip().count()) === 0, 'Open Edit race on step 3, tap Race card in the Race plan panel: the card band has both buttons aria-expanded false, no panel, and no strip');
 await page.context().close();
 await stripPage('card then strip', stripSeed(), '#/card');
 await page.locator('#card-edit-taper').click();
 check((await page.locator('#card-edit-taper').getAttribute('aria-expanded')) === 'true', 'The card band opens its taper panel');
-await page.locator('nav.rail').getByRole('link', { name: /Nutrition/ }).click();
+await viaPlan(/Nutrition/);
 await page.getByRole('heading', { name: 'Review nutrition' }).waitFor();
-check(await stripClosed(), 'Open the card\'s Edit taper, tap Nutrition in the rail: step 3\'s strip is closed');
+check(await stripClosed(), 'Open the card\'s Edit taper, tap Nutrition in the Race plan panel: step 3\'s strip is closed');
 await page.context().close();
 
 // 30. No lost typing, no harmful redraw (A19). Isolation: fresh context per property.
@@ -1551,7 +1588,7 @@ await page.context().close();
   await stripBtn('taper').click();
   await strip().getByRole('button', { name: /21 days/ }).click();
   await strip().getByRole('button', { name: 'Done' }).click();
-  await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+  await viaPlan(/Race card/);
   await page.locator('.racecard').waitFor();
   const s = await store();
   const keys1 = [s.race.pace.inputKey, s.race.fuel.inputKey];
@@ -1563,7 +1600,7 @@ await page.context().close();
   // The detector is live in this session: a real change to a number the plan reads does show the notice.
   await page.goto(base + '/index.html#/pacing/1');
   await page.getByLabel('FTP', { exact: true }).fill('260');
-  await page.locator('nav.rail').getByRole('link', { name: /Race card/ }).click();
+  await viaPlan(/Race card/);
   await page.locator('.racecard').waitFor();
   check(/Your numbers changed since these targets/.test(await page.locator('.racecard').innerText()), 'Control: changing FTP does flag the targets as out of date in the same session');
   await page.context().close();
@@ -1598,20 +1635,22 @@ for (const [what, save, hash, act] of [
   await page.context().close();
 }
 
-// 34. The rail and the strip both scroll with the page (A24). Isolation: fresh context.
+// 34. The header, the status row and the strip all scroll with the page (A13). Isolation: fresh context.
 await stripPage('strip scroll', stripSeed(), '#/pacing/1');
 {
   const pos = await strip().evaluate((e) => getComputedStyle(e).position);
-  const railPos = await page.locator('nav.rail').evaluate((e) => getComputedStyle(e).position);
+  const statusPos = await statusRow().evaluate((e) => getComputedStyle(e).position);
+  const headPos = await page.locator('header.top').evaluate((e) => getComputedStyle(e).position);
   await page.evaluate(() => window.scrollTo(0, 600));
   const g = await page.evaluate(() => ({
     y: window.scrollY,
-    railBottom: document.querySelector('nav.rail').getBoundingClientRect().bottom,
+    headBottom: document.querySelector('header.top').getBoundingClientRect().bottom,
+    statusBottom: document.querySelector('div.here').getBoundingClientRect().bottom,
     stripBottom: document.querySelector('.strip').getBoundingClientRect().bottom,
   }));
   check(pos !== 'sticky' && pos !== 'fixed', `The strip is not sticky or fixed (position ${pos})`);
-  check(railPos !== 'sticky' && railPos !== 'fixed', `The rail is not sticky or fixed (position ${railPos})`);
-  check(g.y >= 590 && g.railBottom < 0 && g.stripBottom < 0, `After scrolling 600 px the rail (bottom ${Math.round(g.railBottom)}) and the strip (bottom ${Math.round(g.stripBottom)}) have both scrolled away`);
+  check([statusPos, headPos].every((v) => v !== 'sticky' && v !== 'fixed'), `The status row and the header are not sticky or fixed (positions ${statusPos}, ${headPos})`);
+  check(g.y >= 590 && g.headBottom < 0 && g.statusBottom < 0 && g.stripBottom < 0, `After scrolling 600 px the header (bottom ${Math.round(g.headBottom)}), the status row (bottom ${Math.round(g.statusBottom)}) and the strip (bottom ${Math.round(g.stripBottom)}) have all scrolled away`);
 }
 await page.context().close();
 
@@ -1627,6 +1666,226 @@ for (const hash of ['#/pacing/1', '#/fuel']) {
   check(p.img === 0 && p.onerror === 0 && p.x === 'undefined' && (await strip().getByLabel('Race name').inputValue()) === HOSTILE, `${hash}: and the same with Edit race open (the field holds the literal text)`);
   await page.context().close();
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// 36. The Race plan button, status row and panel (criterion 19). Every case is a fresh context with its own seed
+// (full reload, empty storage, then the seed), so no case inherits a panel left open by another.
+const DATE_ONLY = { pace: null, fuel: null, splits: null };
+const panelLinks = () => planPanel().locator('a');
+const expandedPlan = () => planBtn().getAttribute('aria-expanded');
+const activeIdOrTag = () => page.evaluate(() => document.activeElement && (document.activeElement.id || document.activeElement.tagName));
+const lc = (t) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+const ROUTES = [['#/setup/1', 'Race'], ['#/pacing/1', 'Pacing'], ['#/pacing/2', 'Pacing'], ['#/pacing/3', 'Pacing'], ['#/setup/4', 'Pacing'], ['#/fuel', 'Nutrition'], ['#/card', 'Race card'], ['#/saved', 'Race card']];
+
+// 36a. "You are here" follows the screen, not the saved state: eight routes, two seeds (A17). Isolation: fresh per case.
+for (const [seedName, over] of [['a race with only a date', DATE_ONLY], ['a full plan', {}]]) {
+  for (const [hash, step] of ROUTES) {
+    await stripPage(`you are here ${seedName} ${hash}`, stripSeed(over), hash);
+    check((await page.locator('[aria-current]').count()) === 0 && (await expandedPlan()) === 'false' && (await planPanel().isHidden()), `${hash} (${seedName}): closed panel, nothing on the page has aria-current`);
+    await planBtn().click();
+    const cur = planPanel().locator('a[aria-current="step"]');
+    const rowsText = (await panelLinks().allInnerTexts()).map(lc);
+    const here = rowsText.map((t) => t.includes('you are here'));
+    const idx = STEPS.indexOf(step);
+    check((await page.locator('[aria-current="step"]').count()) === 1 && (await cur.count()) === 1 && lc(await cur.innerText()).replace(/^\d /, '').startsWith(step.toLowerCase()) && here.filter(Boolean).length === 1 && here[idx] && lc(await statusRow().innerText()).startsWith(`step ${idx + 1} of 4 ${step.toLowerCase()}`), `${hash} (${seedName}): open panel has one aria-current row, ${step}, the only "You are here", and the status row names ${step}`);
+    check((await page.locator('[inert], [aria-modal]').count()) === 0, `${hash} (${seedName}): the open panel makes nothing inert and no element is aria-modal`);
+    await page.context().close();
+  }
+}
+
+// 36b. Row states and targets, and the bars, on #/pacing/2 with Race and Nutrition done (A11, A16, A17). Fresh context.
+await stripPage('panel states full plan', stripSeed(), '#/pacing/2');
+await planBtn().click();
+const rowInfo = await panelLinks().evaluateAll((els) => els.map((e) => ({ href: e.getAttribute('href'), tick: !!e.querySelector('.c svg'), cls: e.className, text: e.innerText.replace(/\s+/g, ' ').trim(), bg: getComputedStyle(e.querySelector('.c')).backgroundColor, circle: getComputedStyle(e.querySelector('.c')).borderTopColor, rowBg: getComputedStyle(e).backgroundColor, ring: getComputedStyle(e).boxShadow })));
+check(rowInfo.map((r) => r.href).join(',') === '#/setup/1,#/pacing/3,#/fuel,#/card', `With pace saved the panel targets are #/setup/1, #/pacing/3, #/fuel, #/card (${rowInfo.map((r) => r.href)})`);
+check(rowInfo[0].tick && /Done$/.test(rowInfo[0].text) && rowInfo[0].bg === 'rgb(17, 107, 67)' && !rowInfo[1].tick && /You are here$/.test(rowInfo[1].text) && rowInfo[1].bg === 'rgb(24, 37, 66)' && /^2 ?/.test(await panelLinks().nth(1).innerText()) && rowInfo[2].tick && /Done$/.test(rowInfo[2].text), 'Panel on part 2: Race done (green tick), Pacing current (ink, number, no tick, even though done), Nutrition done');
+check(!rowInfo[3].tick && /Last step$/.test(rowInfo[3].text) && !/Done/.test(rowInfo[3].text) && rowInfo[3].rowBg === 'rgb(234, 247, 252)' && rowInfo[3].ring === 'none' && rowInfo[3].circle === 'rgb(0, 112, 168)', `Race card row is on info-bg, with no tick and no "Done", before it is current (${rowInfo[3].rowBg}, ${rowInfo[3].ring})`);
+const bars = await statusRow().locator('.fours i').evaluateAll((els) => els.map((e) => [getComputedStyle(e).backgroundColor, getComputedStyle(e).boxShadow !== 'none']));
+check(bars.map((b) => b[0]).join('|') === 'rgb(17, 107, 67)|rgb(24, 37, 66)|rgb(17, 107, 67)|rgb(234, 247, 252)' && bars[3][1] && !bars[0][1] && (await statusRow().locator('.fours').getAttribute('aria-hidden')) === 'true', `Part 2 with Race and Nutrition done: bars green, ink, green, info-bg with a ring, hidden from a screen reader (${bars.map((b) => b[0])})`);
+await page.context().close();
+await stripPage('panel states date only', stripSeed(DATE_ONLY), '#/pacing/1');
+await planBtn().click();
+const rowInfo2 = await panelLinks().evaluateAll((els) => els.map((e) => ({ href: e.getAttribute('href'), tick: !!e.querySelector('.c svg') })));
+check(rowInfo2.map((r) => r.href).join(',') === '#/setup/1,#/pacing/1,#/fuel,#/card' && rowInfo2[0].tick && !rowInfo2[1].tick && !rowInfo2[2].tick && !rowInfo2[3].tick, `With no pace saved, Pacing targets part 1, and only Race is done (${rowInfo2.map((r) => r.href)})`);
+await page.context().close();
+
+// 36c. The locked row (A18). Fresh context.
+await stripPage('panel locked row', stripSeed(), '#/fuel');
+await planBtn().click();
+const locked = await planPanel().evaluate((nav) => {
+  const row = [...nav.querySelectorAll('div')].find((d) => /Review your race/.test(d.textContent));
+  const sep = [...nav.querySelectorAll('p')].find((x) => /After the race/.test(x.textContent));
+  return { found: !!row, text: row && row.innerText.replace(/\s+/g, ' ').trim(), inert: row && (row.matches('a,button,input,select,textarea,[tabindex],[href],[onclick],[aria-current],[role=link],[role=button]') || !!row.querySelector('a,button,input,[tabindex]')), icon: row && row.querySelector('svg').getAttribute('aria-hidden'), sep: !!sep };
+});
+check(locked.found && locked.sep && locked.text === 'Review your race Opens after race day' && !locked.inert && locked.icon === 'true', 'The locked row sits under an "After the race" divider, says "Opens after race day", is not a link or control, and its lock icon is hidden from a screen reader');
+check((await page.getByRole('link', { name: /Review/ }).count()) === 0 && (await page.getByRole('button', { name: /Review/ }).count()) === 0, 'No link or button on the page is named Review');
+// Tab order: the button, then the four links, then something outside the panel and the status row. The locked row never takes focus.
+await planBtn().focus();
+const order = [];
+for (let i = 0; i < 5; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => { const a = document.activeElement; return a.id || (a.closest('#race-plan-panel') ? 'in-panel' : a.closest('div.here') ? 'in-status' : a.tagName + ':' + (a.textContent || '').trim().slice(0, 20)); })); }
+check(order.slice(0, 4).join(',') === 'plan-step-1,plan-step-2,plan-step-3,plan-step-4' && !/^plan-step|in-panel|in-status/.test(order[4]), `Tab from the button goes Race, Pacing, Nutrition, Race card, then out of the panel (${order})`);
+// A strip button still works with the panel open, and nothing traps focus (A8).
+await stripBtn('race').click();
+check((await expandedPlan()) === 'true' && (await stripBtn('race').getAttribute('aria-expanded')) === 'true' && (await strip().getByLabel('Race name').isVisible()), 'With the panel open, Edit race still opens: the page behind is usable and the two panels are independent');
+await page.context().close();
+
+// 36d. Closed panel: links take no focus and are not visible (A15). Fresh context.
+await stripPage('panel closed focus', stripSeed(), '#/pacing/1');
+await planBtn().focus();
+await page.keyboard.press('Tab');
+check((await activeIdOrTag()) !== 'plan-step-1' && (await page.locator('#race-plan-panel a').count()) === 0 && (await page.locator('#race-plan-panel').isHidden()), 'Closed panel: Tab from the button does not land in it, and it holds no links');
+check(await page.evaluate(() => { const b = document.getElementById('race-plan-btn'); const p = document.getElementById('race-plan-panel'); const h = document.querySelector('header.top'); return h.nextElementSibling === p && p.nextElementSibling === document.querySelector('div.here') && b.closest('header') === h; }), 'The panel sits directly after the header and before the status row');
+await page.context().close();
+
+// 36e. Escape, a quiet redraw with the panel open, and one listener (A5, A6). Fresh context.
+await stripPage('panel escape', stripSeed(), '#/fuel');
+await page.evaluate(() => { window.__exp = []; new MutationObserver((ms) => ms.forEach((m) => { if (m.target.id === 'race-plan-btn') window.__exp.push(m.target.getAttribute('aria-expanded')); })).observe(document.getElementById('view'), { subtree: true, attributes: true, attributeFilter: ['aria-expanded'] }); });
+await planBtn().click();
+await stripBtn('race').click(); // a quiet redraw with the panel open
+await strip().getByLabel('Race name').fill('Typed while open');
+await page.waitForTimeout(100);
+check((await expandedPlan()) === 'true' && (await planPanel().isVisible()) && (await strip().getByLabel('Race name').inputValue()) === 'Typed while open' && (await store()).race.name === 'Typed while open', 'A strip edit with the panel open redraws in place: the panel stays open (aria-expanded true) and the typed name is kept and saved');
+// Escape with focus somewhere else does nothing to the panel.
+await strip().getByLabel('Race name').focus();
+await page.keyboard.press('Escape');
+check((await expandedPlan()) === 'true' && (await planPanel().isVisible()), 'Escape with focus in the page (not the button or panel) leaves the panel open');
+await page.evaluate(() => { window.__exp.length = 0; });
+await planBtn().focus();
+await page.keyboard.press('Tab');
+await page.keyboard.press('Tab');
+check((await activeIdOrTag()) === 'plan-step-2', 'Tab twice from the button reaches the second link');
+await page.keyboard.press('Escape');
+const exp = await page.evaluate(() => window.__exp.slice());
+check((await expandedPlan()) === 'false' && (await planPanel().isHidden()) && (await activeIdOrTag()) === 'race-plan-btn' && exp.length === 1 && exp[0] === 'false' && (await page.locator('[aria-current]').count()) === 0, `Escape on the second link, after a redraw, closes the panel once (aria-expanded changed ${exp.length} time: ${exp}) and puts focus on the button`);
+// Escape on the button itself closes it too.
+await planBtn().click();
+await page.keyboard.press('Escape');
+check((await expandedPlan()) === 'false' && (await activeIdOrTag()) === 'race-plan-btn', 'Escape with focus on the button closes the panel and keeps focus on the button');
+await page.context().close();
+
+// 36f. Choosing a step (A7). Fresh context per case.
+await stripPage('panel choose other', stripSeed(), '#/fuel');
+await planBtn().click();
+await planPanel().getByRole('link', { name: /Race card/ }).click();
+await page.locator('.racecard').waitFor();
+check((await expandedPlan()) === 'false' && (await planPanel().isHidden()) && (await page.evaluate(() => document.activeElement.tagName)) === 'H1' && page.url().endsWith('#/card'), 'On step 3, choosing Race card closes the panel, opens the card and puts focus on its h1');
+await page.context().close();
+await stripPage('panel choose same', stripSeed(), '#/fuel');
+await watchH1();
+await stripBtn('race').click();
+await strip().getByLabel('Race name').fill('Typed before choosing');
+await planBtn().click();
+await planPanel().getByRole('link', { name: /Nutrition/ }).click();
+await page.waitForTimeout(500);
+check((await expandedPlan()) === 'false' && (await planPanel().isHidden()) && (await activeId()) === 'race-plan-btn' && page.url().endsWith('#/fuel') && (await h1Focused()) === 0 && (await strip().getByLabel('Race name').inputValue()) === 'Typed before choosing', 'On step 3, choosing Nutrition closes the panel, leaves the address as it was, puts focus on the button, does not redraw and keeps the typed race name');
+await page.context().close();
+await stripPage('panel pacing 3 same', stripSeed(), '#/pacing/3');
+await planBtn().click();
+await planPanel().getByRole('link', { name: /Pacing/ }).click();
+check((await expandedPlan()) === 'false' && (await activeId()) === 'race-plan-btn' && page.url().endsWith('#/pacing/3'), 'On part 3 with pace saved, choosing Pacing (the same address) closes the panel and focuses the button');
+await page.context().close();
+
+// 36g. Closed on every kind of new visit (A4). Fresh context per case.
+await stripPage('panel closed after Next', stripSeed(), '#/pacing/1');
+await planBtn().click();
+await page.getByRole('button', { name: 'Next: course and heat' }).click();
+await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
+check((await expandedPlan()) === 'false' && (await planPanel().isHidden()), 'Open the panel, press Next: the next screen opens with the panel closed');
+await planBtn().click();
+await page.getByRole('link', { name: 'Back: your fitness' }).click();
+await page.getByRole('heading', { name: 'Choose pacing' }).waitFor();
+check((await expandedPlan()) === 'false' && (await planPanel().isHidden()), 'Open the panel, press Back: the earlier screen opens with the panel closed');
+await page.context().close();
+await stripPage('panel closed after typed address', stripSeed(), '#/pacing/1');
+await planBtn().click();
+await page.goto(base + '/index.html#/pacing/2');
+await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
+check((await expandedPlan()) === 'false' && (await planPanel().isHidden()), 'Open the panel, type another address: the panel is closed');
+await page.context().close();
+await stripPage('panel closed after reload', stripSeed(), '#/pacing/1');
+await planBtn().click();
+await page.reload();
+await statusRow().waitFor();
+check((await expandedPlan()) === 'false' && (await planPanel().isHidden()), 'Open the panel, reload: the panel is closed');
+check(!JSON.stringify(await store()).includes('plan-open') && !(await page.evaluate(() => JSON.stringify(localStorage) + JSON.stringify(sessionStorage))).includes('race-plan'), 'The panel\'s open state is not stored');
+await page.context().close();
+
+// 36h. After race day (A19, A20, A21). Fresh context per screen, seeded 3 days past.
+for (const [hash, step] of [['#/setup/1', 'Race'], ['#/pacing/3', 'Pacing'], ['#/fuel', 'Nutrition'], ['#/card', 'Race card']]) {
+  await stripPage(`after race day ${hash}`, stripSeed({ date: inDays(-3) }), hash);
+  const row = lc(await statusRow().innerText());
+  const complete = await statusRow().locator('.complete i').evaluateAll((els) => els.map((e) => [getComputedStyle(e).backgroundColor, e.getBoundingClientRect().width]));
+  check(row === `race done ${step.toLowerCase()} plan complete` && !/step|next/.test(row) && (await statusRow().locator('i').count()) === 1 && complete.length === 1 && complete[0][0] === 'rgb(17, 107, 67)' && complete[0][1] > 100 && (await statusRow().locator('.fours').count()) === 0, `${hash} after race day: the status row says "Race done", ${step} and "Plan complete" with one green bar, no "Step n of 4" and no "Next" (${row})`);
+  await planBtn().click();
+  const panelText = lc(await planPanel().innerText());
+  check((await planPanel().locator('div.locked').count()) === 1 && /after the race review your race opens after race day$/.test(panelText) && (await page.getByRole('link', { name: /Review/ }).count()) === 0 && (await page.getByRole('button', { name: /Review/ }).count()) === 0 && (await panelLinks().count()) === 4 && (await page.locator('[aria-current="step"]').count()) === 1, `${hash} after race day: the panel keeps four rows and the locked Review row, with no Review link or button`);
+  const yellow = await page.locator('.btn').evaluateAll((els) => els.filter((e) => getComputedStyle(e).backgroundColor === 'rgb(248, 196, 79)').length);
+  check(yellow <= 1 && !(await page.locator('.btn').filter({ hasText: /Review/ }).count()), `${hash} after race day: at most one yellow action and none says Review (${yellow})`);
+  const header = hash === '#/card' ? await flatText(page.locator('.racecard .band')) : hash.includes('setup') ? 'Race done' : await flatText(strip());
+  check(/Race done/.test(header) && !/Taper|Edit taper/.test(header), `${hash} after race day: the strip or card header still says "Race done" with no taper line`);
+  await page.context().close();
+}
+
+// 36i. A blank, unreadable or same-day date is never "Race done" (A22). Fresh context per seed.
+for (const [what, date] of [['a blank date', ''], ['2025-13-45', '2025-13-45'], ['"soon"', 'soon'], ['race day itself', inDays(0)]]) {
+  await stripPage(`not after race day ${what}`, stripSeed({ date }), '#/pacing/1');
+  const row = lc(await statusRow().innerText());
+  check(row.startsWith('step 2 of 4 pacing') && !/race done|plan complete/.test(row) && (await statusRow().locator('.fours i').count()) === 4, `${what}: the status row is the before-race-day one ("${row}"), never "Race done"`);
+  await page.context().close();
+}
+
+// 36j. S5 after race day keeps its header and list, with no Review row or action (A23). Fresh context.
+await fresh('s5 after race day', { init: seedWith(stripSeed({ date: inDays(-3) })) });
+await page.goto(base + '/index.html#/');
+await page.getByRole('heading', { name: 'Spring 70.3' }).waitFor();
+await headerIs('S5 after race day', { plan: false });
+await noStatus('S5 after race day');
+check((await page.locator('ol.steps li').count()) === 4 && (await page.locator('.btn').count()) === 1 && !/Review your race/.test(await appText()), 'S5 after race day keeps its four steps and one yellow action, with no Review row or action');
+await page.context().close();
+
+// 36k. No sideways scroll with the panel open or closed, before and after race day, at three widths (A24). Fresh per case.
+for (const [what, over] of [['before race day', {}], ['after race day', { date: inDays(-3) }]]) {
+  for (const hash of ['#/pacing/2', '#/fuel']) {
+    for (const w of [390, 360, 320]) {
+      await stripPage(`no scroll ${what} ${hash} ${w}`, stripSeed(over), hash, { width: w });
+      await noHorizontalScroll(`${hash} ${what}, panel closed`, w);
+      const b = await planBtn().boundingBox();
+      check(b.width >= 44 && b.height >= 44, `${hash} ${what}: the Race plan button is ${Math.round(b.width)} x ${Math.round(b.height)} at ${w}px`);
+      await planBtn().click();
+      await noHorizontalScroll(`${hash} ${what}, panel open`, w);
+      const rows = await panelLinks().evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+      check(rows.length === 4 && rows.every((v) => v >= 44), `${hash} ${what}: the four panel rows are at least 44 px high at ${w}px (${rows.map(Math.round)})`);
+      if (w === 390 && hash === '#/pacing/2') await shot(`panel-open-${what.replace(/ /g, '-')}`);
+      await page.context().close();
+    }
+  }
+}
+
+// 36k2. The button is at least 44 x 44 on every route at three widths (A2). Fresh context per case.
+for (const [hash] of ROUTES) {
+  for (const w of [390, 360, 320]) {
+    await stripPage(`button size ${hash} ${w}`, stripSeed(), hash, { width: w });
+    const b = await planBtn().boundingBox();
+    check(b.width >= 44 && b.height >= 44, `${hash}: the Race plan button is ${Math.round(b.width)} x ${Math.round(b.height)} at ${w}px`);
+    await page.context().close();
+  }
+}
+
+// 36l. The old header name is rendered nowhere, in text, aria-label or title (A26). Fresh context per screen, panel open.
+// The pattern is built from two pieces so this file does not match its own search.
+const OLD_NAME = 'my' + ' plan';
+for (const hash of ['#/setup/1', '#/pacing/2', '#/fuel', '#/card', '#/']) {
+  await stripPage(`no old name ${hash}`, stripSeed(), hash);
+  if (await planBtn().count()) await planBtn().click();
+  const found = await page.evaluate((word) => { const re = new RegExp(word, 'i'); return [...document.querySelectorAll('*')].filter((e) => re.test(e.getAttribute('aria-label') || '') || re.test(e.getAttribute('title') || '')).length + (re.test(document.body.innerText) ? 1 : 0); }, OLD_NAME);
+  check(found === 0, `${hash}: no rendered text, aria-label or title says the old header name`);
+  await page.context().close();
+}
+// Step 3 with no race has no button and no panel (above), and step 3 with a race has them: the positive case, so a wrong selector cannot pass.
+await stripPage('step 3 with a race has the button', stripSeed(), '#/fuel');
+await headerIs('Step 3 with a race', { plan: true });
+check((await planPanel().count()) === 1 && (await statusRow().count()) === 1, 'Step 3 with a race has the panel element and the status row');
+await page.context().close();
 
 await browser.close();
 server.close();

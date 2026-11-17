@@ -80,3 +80,18 @@ test('daysUntil counts whole local days', () => {
   assert.equal(T.daysUntil('2026-11-01', today), -1);
   assert.equal(T.daysUntil('', today), null);
 });
+
+// Past dates, so none of these depends on today. Date rolls an impossible day over; a rolled date is not a date.
+test('daysUntil and addDays refuse a day that is not on the calendar, and keep a real leap day', () => {
+  const today = new Date(2026, 10, 2);
+  for (const bad of ['2025-13-45', '2025-02-30', '2024-02-30', '2025-00-10', '2025-04-31', '2023-02-29']) {
+    assert.equal(T.daysUntil(bad, today), null, bad + ' is not a day');
+    assert.equal(T.addDays(bad, 0), null, bad + ' is not a day');
+    assert.equal(T.addDays(bad, -14), null, bad + ' is not a day, shifted or not');
+  }
+  assert.equal(T.daysUntil('2024-02-29', today), -977);
+  const leap = T.addDays('2024-02-29', 1);
+  assert.equal(leap.getMonth(), 2);
+  assert.equal(leap.getDate(), 1);
+  assert.equal(T.addDays('2024-03-01', -1).getDate(), 29, 'a shift may cross a month end');
+});
