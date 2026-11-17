@@ -16,7 +16,7 @@
 
   function startPlan(apply) {
     var S = RD.store.load();
-    if (S.race && !root.confirm('You already have a race plan on this phone. Replace it with a new one? Your details stay.')) return;
+    if (S.race && !root.confirm('You already have a race plan on this device. Replace it with a new one? Your details stay.')) return;
     S.race = { name: '', distance: '70.3', date: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null };
     apply(S);
     if (!RD.store.save(S) && !root.confirm('This browser is blocking storage, so your numbers can’t be kept. Open the planner anyway?')) return;
@@ -28,7 +28,7 @@
       h('p', null, h('b', null, 'Racing soon? Make it a full plan.')),
       h('p', { class: 'help' }, text),
       h('button', { type: 'button', class: 'btn', onclick: onSave }, 'Save to a race plan'),
-      h('p', { class: 'small center' }, 'No account. Saved on this phone.'));
+      h('p', { class: 'small center' }, 'No account. Saved on this device.'));
   }
 
   // ---------- bike target ----------

@@ -57,7 +57,7 @@ function badRequest(method, url) {
   if ((u.pathname === '/api' || u.pathname.startsWith('/api/')) && !(method === 'POST' && u.pathname === '/api/send')) return 'unexpected /api/ request';
   return null;
 }
-// Set while a scenario expects /api/send to fail (a 404, an offline phone, a refused call): the browser's own console
+// Set while a scenario expects /api/send to fail (a 404, an offline device, a refused call): the browser's own console
 // error for that one address is not a problem there. Any other console error still is.
 let sendErrorsExpected = false;
 
@@ -157,7 +157,7 @@ check(items.length === 4 && items.map((t) => t.replace(/^\d\s*/, '').trim()).joi
 check(await page.locator('ol.steps li.goal').count() === 1 && /Get your race card/.test(await page.locator('ol.steps li.goal').innerText()), 'S0 puts step 4 on the light blue');
 const goalBg = await page.locator('ol.steps li.goal').evaluate((e) => getComputedStyle(e).backgroundColor);
 check(goalBg === 'rgb(234, 247, 252)', `S0 step 4 is the --info-bg colour (${goalBg})`);
-check(await page.getByText('Free. No account needed. Saved on this phone only.', { exact: true }).isVisible(), 'S0 has the free and on-this-phone note');
+check(await page.getByText('Free. No account needed. Saved on this device only.', { exact: true }).isVisible(), 'S0 has the free and on-this-device note');
 check((await page.locator('.btn').count()) === 1 && (await page.getByRole('link', { name: 'Get started' }).isVisible()), 'S0 has one yellow action, "Get started"');
 const s0text = await appText();
 check(!/Just plan my|Countdown|Debrief|Coming later/.test(s0text) && (await page.getByRole('link', { name: /account/i }).count()) === 0 && (await page.locator('nav.rail').count()) === 0 && (await page.locator('.gallery,.gcard').count()) === 0, 'S0 has no "Just plan my" link, no account link, no rail, no Countdown or Debrief, no gallery');
@@ -942,7 +942,7 @@ await page.context().close();
 const ADDRESS = 'sam@example.test';
 const MAIL_SENT = 'Sent. It should arrive in a few minutes. Check your junk folder if not.';
 const MAIL_REFUSED = "That address didn't work. Check it and try again.";
-const MAIL_LATER = "Email isn't working right now. Your plan is saved on this phone.";
+const MAIL_LATER = "Email isn't working right now. Your plan is saved on this device.";
 const MAIL_BAD = 'Type one email address, such as sam@example.test.';
 const MAIL_STALE = 'Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first.';
 const STALE_PDF = 'Nutrition plan out of date. Update it before race day.';
@@ -1121,7 +1121,7 @@ for (const status of [503, 429]) {
   await page.context().close();
 }
 
-// 14. The network fails after the tap (the phone thinks it is online). Isolation: fresh context.
+// 14. The network fails after the tap (the device thinks it is online). Isolation: fresh context.
 {
   const seen = await mailPage('email network failure', mailSave(), (route) => route.abort('connectionreset'), { errorsExpected: true });
   const before = await storeText();
