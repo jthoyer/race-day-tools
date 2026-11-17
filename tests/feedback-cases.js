@@ -34,8 +34,13 @@ module.exports = {
     // The page replaces each run of these with one space before it checks and sends (cleanMessage), so each of these typed
     // becomes the third item. [what, typed, what the page sends, before the function trims it]
     cleaned: [
+      ['NUL', 'hello\u0000world', 'hello world'],
+      ['first low control after NUL', 'hello\u0008world', 'hello world'],
       ['vertical tab', 'hello\u000bworld', 'hello world'],
       ['form feed', 'hello\u000cworld', 'hello world'],
+      ['SO, the first control after CR', 'hello\u000eworld', 'hello world'],
+      ['ESC, as a terminal paste carries', 'hello\u001b[31mred\u001b[0m', 'hello [31mred [0m'],
+      ['US, the last low control', 'hello\u001fworld', 'hello world'],
       ['DEL', 'hello\u007fworld', 'hello world'],
       ['first C1 control', 'hello\u0080world', 'hello world'],
       ['a C1 control', 'hello\u0085world', 'hello world'],
@@ -45,12 +50,15 @@ module.exports = {
       ['tab, line feed and carriage return stay', 'a\tb\nc\r\nd', 'a\tb\nc\r\nd'],
       ['U+00A0 is not a control and stays', 'hello\u00a0world', 'hello\u00a0world']
     ],
-    // Refused by the function if they arrive (the page cleans the first six kinds, and leaves NUL, ESC and the rest to the
-    // function to say so): control characters other than tab, LF and CR.
+    // Refused by the function if they arrive (the page cleans every one of these to a space first, so a person never hits
+    // the refusal): control characters other than tab, LF and CR.
     controls: [
       ['NUL', 'hello\u0000world'],
       ['vertical tab', 'hello\u000bworld'],
       ['ESC', 'hello\u001bworld'],
+      ['U+0008', 'hello\u0008world'],
+      ['U+000E', 'hello\u000eworld'],
+      ['U+001F', 'hello\u001fworld'],
       ['form feed', 'hello\u000cworld'],
       ['DEL', 'hello\u007fworld'],
       ['a C1 control', 'hello\u0085world']

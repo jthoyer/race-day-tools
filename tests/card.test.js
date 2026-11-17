@@ -293,14 +293,11 @@ test('feedback page rules: the message length, driven by the shared table', () =
   assert.equal(FB.MESSAGE_MAX, 2000);
 });
 
-test('feedback page rules: the controls the function refuses are cleaned to a space first, driven by the shared table', () => {
+test('feedback page rules: every control the function refuses is cleaned to a space first, driven by the shared table', () => {
   for (const [what, typed, sent] of fbCases.message.cleaned) {
     assert.equal(FB.cleanMessage(typed), sent, what);
     assert.equal(FB.messageOk(FB.cleanMessage(typed)), true, what + ': passes the page check once cleaned');
   }
-  // NUL and ESC are not cleaned: they reach the function, which refuses them.
-  assert.equal(FB.cleanMessage('hello\u0000world'), 'hello\u0000world');
-  assert.equal(FB.cleanMessage('hello\u001bworld'), 'hello\u001bworld');
   assert.equal(FB.cleanMessage(42), 42);
 });
 

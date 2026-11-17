@@ -850,7 +850,7 @@ check(!('start' in soloRace) && !('transitionOpens' in soloRace) && soloRace.fue
 await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------
-// Scenario 4: a save from before this change (criterion 31). Isolation: fresh context. The fixture was captured from
+// Scenario 4: a save from before this change (criterion 27). Isolation: fresh context. The fixture was captured from
 // main at 8ba9825. Only race.date is moved to a future day, which feeds no inputKey.
 const fixture = JSON.parse(await readFile(join(ROOT, '..', 'scripts', 'fixtures', 'save-before-four-step.json'), 'utf8'));
 check(fixture.race.distance === 'standard' && fixture.race.start === '06:40' && fixture.race.transitionOpens === '05:30' && !!fixture.race.pace.inputKey && !!fixture.race.fuel.inputKey, 'The fixture is a Standard save with a start, a transition time, and a pace and nutrition plan, each with its inputKey');

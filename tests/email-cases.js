@@ -1,5 +1,5 @@
-// One table of addresses, shared by tests/card.test.js (the page's check) and tests/send.test.js (the function's check),
-// so the two copies of the rule cannot drift apart. Not a test file: the test glob is tests/*.test.js.
+// One table of addresses, shared by tests/card.test.js (the page's check), tests/send.test.js (the race-card function's check)
+// and tests/feedback.test.js (the feedback function's check), so the three copies of the rule cannot drift apart. Not a test file: the test glob is tests/*.test.js.
 const long = 'x'.repeat(250);
 module.exports = {
   // Accepted. The address is trimmed first, so the padded one is fine and is sent without its padding.
@@ -9,7 +9,8 @@ module.exports = {
     'a@b.co',
     'sam@mail.example.test',
     '  sam@example.test  ',
-    'x'.repeat(240) + '@a.test' // 247 characters
+    'x'.repeat(240) + '@a.test', // 247 characters
+    'x'.repeat(247) + '@a.test' // 254 characters, the longest the rule takes
   ],
   // Refused, each for one reason.
   bad: [
@@ -25,6 +26,7 @@ module.exports = {
     'sämm@example.test', 'sam@exämple.test', 'sam@example.test x',
     'sam@.example.test', 'sam@example.test.', 'sam@exa..mple.test',
     long + '@a.test', // 257 characters
+    'x'.repeat(248) + '@a.test', // 255 characters, one over
     ['sam@example.test'], { email: 'sam@example.test' }, null, undefined, 42, true
   ]
 };

@@ -219,6 +219,17 @@ test('AC6: message: the shared table, through the real handler, and the control 
   refusedNone(await send(good({ message: '\u{1F600}'.repeat(2000) })), '2,000 emoji is 4,000 code units');
 });
 
+test('AC6: the page cleans exactly the characters the function refuses, checked for every code point from 0 to U+00A0', async () => {
+  for (let c = 0; c <= 0xa0; c += 1) {
+    const ch = String.fromCharCode(c);
+    const typed = 'hello' + ch + 'world';
+    const r = await send(good({ message: typed }));
+    const refused = r.json.result === 'refused';
+    const cleaned = FBPAGE.cleanMessage(typed) !== typed;
+    assert.equal(cleaned, refused, 'U+' + c.toString(16).padStart(4, '0') + ': the page cleans it when, and only when, the function refuses it');
+  }
+});
+
 test('AC6/AC10: the largest valid request fits under the 16,384-byte cap', async () => {
   // 2,000 lone surrogates: each is a 6-byte JSON escape, the worst case for the message. Plus the longest address and page.
   const message = '\ud83d'.repeat(2000);

@@ -30,17 +30,17 @@
 
   // ---------- the rules (no DOM) ----------
 
-  // The message as it is checked and sent: vertical tab, form feed, DEL and the C1 range (U+0080 to U+009F), which the
-  // function refuses, each run replaced by one space. Tab, line feed and carriage return stay. NUL, ESC and the other low
-  // controls are left for the function to refuse, with its own "We couldn't send that" line. tests/feedback-cases.js
-  // (`cleaned`, `controls`) drives this and the function, so the two cannot drift apart.
+  // The message as it is checked and sent: every control character the function refuses (NUL to U+0008, vertical tab,
+  // form feed, U+000E to U+001F, DEL and the C1 range U+0080 to U+009F), each run replaced by one space, so a paste that
+  // carries one (text copied from a terminal or a PDF) still sends. Tab, line feed and carriage return stay. It is the
+  // same set as the function's check at functions/api/feedback.js. tests/feedback-cases.js (`cleaned`, `controls`) drives
+  // this and the function, so the two cannot drift apart.
   function cleanMessage(value) {
-    return typeof value === 'string' ? value.replace(/[\x0b\x0c\x7f-\x9f]+/g, ' ') : value;
+    return typeof value === 'string' ? value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]+/g, ' ') : value;
   }
 
-  // True when the message, trimmed, is 5 to 2,000 characters. (cleanMessage has already turned the hidden controls a paste
-  // can carry into spaces. The function still refuses the rest of the control characters, such as NUL and ESC; the page
-  // lets the function say so, with its own "We couldn't send that" line, rather than invent a second message.)
+  // True when the message, trimmed, is 5 to 2,000 characters. (cleanMessage has already turned every control character the
+  // function refuses into a space, so this check needs no control-character rule of its own.)
   function messageOk(value) {
     if (typeof value !== 'string') return false;
     var n = value.trim().length;
@@ -99,7 +99,7 @@
     id: 'f-fb-message', name: 'feedback-message', rows: '5', maxlength: String(MESSAGE_MAX), 'aria-describedby': 'fb-count',
     oninput: function () {
       count.textContent = countText(msg.value.length);
-      if (!msgErr.hidden && messageOk(msg.value)) showMsgError(false);
+      if (!msgErr.hidden && messageOk(cleanMessage(msg.value))) showMsgError(false);
     }
   });
   var count = h('p', { class: 'help', id: 'fb-count' }, countText(0));

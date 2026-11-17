@@ -179,7 +179,7 @@ test('the guide pages do not load or mention the feedback code, and the app page
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8'), /fb-panel|f-fb-message/, 'app.js does not build the panel');
 });
 
-// Criterion 33. The owner's receiving address is set on the host (FEEDBACK_TO) and is in no file. A real address in public/,
+// Criterion 31. The owner's receiving address is set on the host (FEEDBACK_TO) and is in no file. A real address in public/,
 // functions/ or tests/ fails here: every email-shaped string must be on example.test. The pattern holds no real address.
 // vendor/ is a pinned library and is not ours to edit.
 const EMAIL_SHAPE = /[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g;
