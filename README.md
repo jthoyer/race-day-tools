@@ -36,12 +36,13 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 | Line | `#d9dfe8` | Borders |
 | Canvas | `#f7f8fa` | Page background |
 | Green | `#116b43` | Done |
-| Yellow hover (`--accent-hover`) | `#f6cf69` | The labels and edit buttons on an ink band (the race card header and the race strip), and the yellow button on hover |
+| Yellow hover (`--accent-hover`) | `#f6cf69` | The labels on an ink band (the race card header and the race strip), and the yellow button on hover |
+| Link on ink (`--link-on-ink`) | `#7fcdf0` | The Edit race and Edit taper buttons on an ink band, at weight 500. 8.6:1 on ink; the text blue above would be about 2:1 there |
 | Light blue (`--info-bg`) | `#eaf7fc` | Step 4, the race card, in the rail and the step list |
 
 - DM Sans for body and controls, Outfit for headings and the wordmark. Both are open fonts (SIL Open Font License). They ship in `public/fonts/`, so no page asks another host for anything. The licence text is in `public/fonts/LICENSE.txt`.
 - A 9 px corner radius on buttons, inputs and cards.
-- The race strip: an ink band under the rail on pacing and step 3 (the race, its countdown, Edit race and Edit taper). It scrolls with the page, like the rail. It is the race card header's band, closed, and uses `--accent-hover` for its buttons.
+- The race strip: an ink band under the rail on pacing and step 3 (the race, its countdown, Edit race and Edit taper). It scrolls with the page, like the rail. It is the race card header's band, closed, and uses `--link-on-ink` for its buttons.
 - The rail: four numbered steps on every step and the race card. Done is a green circle with a tick, the current step is ink, and step 4 stays on the light blue with a blue ring until it is current.
 - The wordmark: three ink boxes holding white T, R and I, then "Momentum" in Outfit.
 - Controls at least 44 px high and wide.
