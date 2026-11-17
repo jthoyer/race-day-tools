@@ -393,7 +393,7 @@ test('A17: control: fresh jsPDF output and the committed fixture pass the widene
   const pace = P.planPace({ distance: '70.3', mode: 'power', css: 105, ftp: 240, ftpRecent: true, runThreshold: 290, weight: 72, course: 'rolling', heat: 'warm' });
   const [G, D] = F.DEFAULT_PRODUCTS;
   const fuel = F.planFuel({ distance: '70.3', bikeMin: 110, runMin: 45, heat: 'warm', gut: 70, sweat: null, gel: G, drink: D });
-  const fresh = C.toBase64(C.drawPdf(jsPDF, C.rows({ race: { distance: '70.3' }, pace, fuel, fuelStale: true })));
+  const fresh = C.toBase64(C.drawPdf(jsPDF, C.sheet({ race: { distance: '70.3' }, pace, fuel, fuelStale: true })));
   for (const pdf of [fresh, PDF]) assert.equal((await send(good({ pdf }))).res.status, 200);
   assert.match(Buffer.from(fresh, 'base64').toString('latin1'), /\/OpenAction \[\d+ 0 R \/FitH null\]/, 'the control really contains the OpenAction form it must allow');
 });
@@ -432,8 +432,8 @@ function realPdfs() {
   const fuel = F.planFuel({ distance: '70.3', bikeMin: 110, runMin: 45, heat: 'warm', gut: 70, sweat: null, gel: G, drink: D });
   const times = Array.from({ length: 40 }, (_, i) => 10 + i * 5);
   const big = { ...fuel, bike: { ...fuel.bike, gels: 40, gelTimes: times, minutes: 300 }, run: { ...fuel.run, gels: 40, gelTimes: times, minutes: 300 } };
-  const draw = (f, stale) => Buffer.from(C.drawPdf(jsPDF, C.rows({ race: { distance: '70.3' }, pace, fuel: f, fuelStale: stale }))).toString('latin1');
-  return { normal: draw(fuel, false), stale: draw(fuel, true), gels40: draw(big, true), fixture: FIXTURE.toString('latin1') };
+  const draw = (f, stale, name) => Buffer.from(C.drawPdf(jsPDF, C.sheet({ race: { distance: '70.3', name, date: name ? '2026-11-16' : '' }, pace, fuel: f, fuelStale: stale }))).toString('latin1');
+  return { normal: draw(fuel, false), stale: draw(fuel, true), gels40: draw(big, true), named: draw(fuel, true, 'Spring 70.3'), fixture: FIXTURE.toString('latin1') };
 }
 
 test('round 3 control: every name in real output is on the allowlist, and the allowlist holds nothing else', async () => {
@@ -709,10 +709,31 @@ test('A17: a PDF drawn now by the card module and the vendored library is accept
   const fuel = F.planFuel({ distance: 'standard', bikeMin: 70, runMin: 40, heat: 'hot', gut: 60, sweat: null, gel: G, drink: D });
   assert.ok(pace.ok && fuel.ok);
   for (const fuelStale of [false, true]) {
-    const bytes = C.drawPdf(jsPDF, C.rows({ race: { distance: 'standard' }, pace, fuel, fuelStale }));
+    const bytes = C.drawPdf(jsPDF, C.sheet({ race: { distance: 'standard' }, pace, fuel, fuelStale }));
     const r = await send(good({ pdf: C.toBase64(bytes) }));
     assert.equal(r.res.status, 200, 'stale ' + fuelStale);
   }
+});
+
+test('A17: a race name with "stream" or "obj" in it still sends, because the card sets it in capitals (17 Nov 2026)', async () => {
+  const C = require('../public/js/card.js');
+  const P = require('../public/js/pace.js');
+  const F = require('../public/js/fuel.js');
+  const { jsPDF } = require('../public/js/vendor/jspdf.umd.min.js');
+  const pace = P.planPace({ distance: '70.3', mode: 'power', css: 105, ftp: 240, ftpRecent: true, runThreshold: 290, weight: 72, course: 'rolling', heat: 'warm' });
+  const [G, D] = F.DEFAULT_PRODUCTS;
+  const fuel = F.planFuel({ distance: '70.3', bikeMin: 110, runMin: 45, heat: 'warm', gut: 70, sweat: null, gel: G, drink: D });
+  const names = ['Mainstream Sprint', 'Obj 70.3', 'Instream objective', 'stream obj', 'Upstream (Sprint) \\ Final', ')( endobj )('];
+  for (const name of names) {
+    const bytes = C.drawPdf(jsPDF, C.sheet({ race: { distance: '70.3', name, date: '2026-11-16' }, pace, fuel, fuelStale: false }));
+    const bin = Buffer.from(bytes).toString('latin1');
+    assert.doesNotMatch(bin, /stream|obj/i.test(name) ? /\((?:[^()\\]|\\.)*(?:stream|obj)(?:[^()\\]|\\.)*\)/ : /^$/, 'no lower-case stream or obj inside a text string: ' + name);
+    assert.notEqual(mod.stripStrings(bin), null, 'the grammar still reads it: ' + name);
+    assert.equal((await send(good({ pdf: C.toBase64(bytes) }))).res.status, 200, name);
+  }
+  // The control: the same words in lower case, written by hand into a text string, are refused. That is why the name is upper-cased.
+  assert.equal(mod.stripStrings('%PDF-1.3\n1 0 obj\n(Mainstream) Tj\n'), null);
+  assert.equal(C.sheet({ race: { name: 'Mainstream' } }).name, 'MAINSTREAM');
 });
 
 test('A19: the count goes up only when the mail service takes the send', async () => {
