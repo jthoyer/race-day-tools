@@ -172,6 +172,27 @@ check((await gl.allInnerTexts()).every((t) => /Draft/.test(t)) && /How many gels
 check(await gl.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44)), 'S0 guide links are at least 44 px high');
 check((await guides.locator('.btn, button').count()) === 0, 'S0 guide links are plain links, not buttons or cards');
 check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(guides)) && (await guides.evaluate((e) => e.getBoundingClientRect().bottom)) >= (await page.locator('body').evaluate((b) => b.getBoundingClientRect().bottom)) - 40, 'S0 puts the guides below the note, at the very bottom');
+// The "Four steps" label, the "Learn more" link and the About section (owner ask, 17 Nov 2026).
+const stepsLabel = page.getByText('Four steps', { exact: true });
+check(await stepsLabel.isVisible() && (await topOf(stepsLabel)) < (await topOf(page.locator('ol.steps'))) && (await page.locator('ol.steps').getAttribute('aria-labelledby')) === 'steps-label', 'S0 has a "Four steps" label above the list, naming it');
+const more = page.locator('a.more').first();
+const moreBox = await more.boundingBox();
+check(/^Learn more/.test(await more.evaluate((e) => e.textContent.trim())) && moreBox.height >= 44 && moreBox.width >= 44 && !(await more.evaluate((e) => e.classList.contains('btn'))), 'S0 has a "Learn more" link, at least 44 px, not a button');
+check((await topOf(more)) > (await topOf(page.locator('p.lead'))) && (await topOf(more)) < (await topOf(stepsLabel)), 'S0 puts "Learn more" under the subtitle and above the steps');
+const hashBefore = await page.evaluate(() => location.hash);
+await more.click();
+const aboutTop = await page.locator('#about').evaluate((e) => e.getBoundingClientRect().top);
+// The section reaches the top of the screen, or the page scrolls as far as it can go (it is short, so the bottom stops it).
+const atEnd = await page.evaluate(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1);
+check((await page.evaluate(() => location.hash)) === hashBefore && aboutTop >= -2 && (aboutTop <= 40 || atEnd) && (await page.evaluate(() => document.activeElement.id)) === 'about-h', `"Learn more" scrolls to the section and focuses its heading, with the address unchanged (top ${Math.round(aboutTop)} px)`);
+const aboutText = await page.locator('#about').innerText();
+check(await page.getByRole('heading', { name: 'What TRI Momentum does', level: 2 }).isVisible() && await page.getByRole('heading', { name: 'What you get', level: 3 }).isVisible() && await page.getByRole('heading', { name: 'How to get it', level: 3 }).isVisible(), 'The About section has its h2 and two h3s');
+check(/gut/.test(aboutText) && /sweat/.test(aboutText) && /range/.test(aboutText) && /PDF/.test(aboutText) && /not medical advice/i.test(aboutText) && !/checked|Countdown|Debrief|fuel|standard|Resend|Strava|Garmin/i.test(aboutText), 'The About section says what the plan does and keeps to the spec (no promise of Countdown or Debrief, no brand, nothing called checked)');
+check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(page.locator('#about'))) && (await topOf(page.locator('#about'))) < (await topOf(guides)), 'S0 puts the About section between the note and the guides');
+await page.locator('#about a.more').click();
+check((await page.evaluate(() => window.scrollY)) === 0 && (await page.evaluate(() => document.activeElement.tagName)) === 'H1', '"Back to the top" returns to the top and focuses the heading');
+for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('S0 with the About section', w); }
+await page.setViewportSize({ width: 390, height: 844 });
 await wordsClean('S0');
 await stripIs('S0', false);
 // The probe is expected to be refused; its console errors are dropped at the end by its unique address. It asks for another
@@ -370,6 +391,7 @@ check(/Bike 175–185 W · finish \d:\d\d–\d:\d\d/.test(s5a) && /days to go/i.
 check((await page.locator('nav.rail').count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'My plan' }).count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).count()) === 1, 'S5 has the wordmark, no My plan and no rail');
 check(!/n of 2 done|Your details|Open race card/.test(s5a) && (await page.getByRole('link', { name: 'Edit' }).count()) === 2 && (await page.getByRole('link', { name: 'Edit' }).evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'S5 has two Edit links (steps 1 and 2) at least 44 px high, and none of the old home');
 check((await page.locator('section.guides').count()) === 0 && !/Guides/.test(s5a), 'S5 has no guide links (they are on S0 only)');
+check((await page.locator('#about').count()) === 0, 'S5 has no About section (it is on S0 only)');
 check(/Ready once nutrition is done/.test(s5a) && (await page.locator('li.step.goal').count()) === 1, 'S5 keeps step 4 on the light blue until it is done');
 await headerIs('S5', { myPlan: false });
 await stripIs('S5', false);
