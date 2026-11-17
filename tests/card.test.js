@@ -83,9 +83,18 @@ test('the swim gel time is the one in fuel.js, never a number of the PDF\'s own'
   assert.equal(fuel.preRaceMin, 15);
   const other = C.sheet(input({ fuel: { ...fuel, preRaceMin: 10 } }));
   assert.equal(other.swim.gel, 'About 10 min before the start (optional)');
-  for (const bad of [null, undefined, 0, -5, NaN, '15']) {
-    assert.equal(C.sheet(input({ fuel: { ...fuel, preRaceMin: bad } })).swim.gel, '', String(bad));
+  // A plan saved before the field existed (or with a damaged one) takes the number from fuel.js, so an older save still
+  // gets the swim gel line on its card. The number is never a copy in card.js.
+  const GEL15 = 'About 15 min before the start (optional)';
+  for (const bad of [null, undefined, 0, -5, NaN, '15', Infinity]) {
+    assert.equal(C.sheet(input({ fuel: { ...fuel, preRaceMin: bad } })).swim.gel, GEL15, String(bad));
   }
+  const { preRaceMin, ...older } = fuel;
+  assert.equal(preRaceMin, 15);
+  assert.equal(C.sheet(input({ fuel: older })).swim.gel, GEL15, 'a saved plan with no preRaceMin at all');
+  assert.equal(F.PRE_SWIM_GEL_MIN, 15);
+  // No nutrition plan, no gel line: there is nothing to attach it to.
+  for (const none of [null, undefined, { ok: false }]) assert.equal(C.sheet(input({ fuel: none })).swim.gel, '', JSON.stringify(none));
 });
 
 test('notes: the words under "How to use" (A10c)', () => {

@@ -865,6 +865,7 @@ ot = await appText();
 check(!CLOCK.test(ot) && !/Transition/i.test(ot) && !/changed since/i.test(ot) && /g\/hr/.test(ot) && /Finish \d:\d\d–\d:\d\d/.test(ot) && (await page.locator('.racecard .tl').count()) === 2, 'Old save: the card shows its pacing and nutrition with no time of day, no transition and no out-of-date notice');
 const oldTT = await pdfText(false);
 check(!CLOCK.test(oldTT) && !/Transition/i.test(oldTT) && !/out of date/i.test(oldTT) && /g\/hr/.test(oldTT), 'Old save: the PDF has no time of day, no transition and no out-of-date line');
+check(/About 15 min before the start \(optional\)/.test(oldTT), 'Old save: the PDF still has the swim gel line, although the save has no preRaceMin');
 for (const hash of ['#/setup/1', '#/pacing/3', '#/fuel']) {
   await page.goto(base + '/index.html' + hash);
   await page.reload();
