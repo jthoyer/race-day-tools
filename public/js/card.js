@@ -24,6 +24,7 @@
   var isNode = typeof module !== 'undefined' && module.exports;
   var T = isNode ? require('./time.js') : root.RD.time;
   var P = isNode ? require('./pace.js') : root.RD.pace;
+  var F = isNode ? require('./fuel.js') : root.RD.fuel;
 
   var DIST_LABEL = { standard: 'Olympic', '70.3': '70.3' };
   var TITLE = 'TRI Momentum race card';
@@ -99,7 +100,10 @@
     };
 
     var swimValue = p && isObj(p.swim) && pair(p.swim.pace) ? pace(p.swim.pace) : '';
-    var swimGel = f && isNum(f.preRaceMin) && f.preRaceMin > 0 ? 'About ' + f.preRaceMin + ' min before the start (optional)' : '';
+    // The minutes come from the saved plan. A plan saved before that field existed has none, so it reads fuel.js's own
+    // number: an older save must still get the swim gel line.
+    var gelMin = f && (isNum(f.preRaceMin) && f.preRaceMin > 0 ? f.preRaceMin : F.PRE_SWIM_GEL_MIN);
+    var swimGel = f && isNum(gelMin) && gelMin > 0 ? 'About ' + gelMin + ' min before the start (optional)' : '';
     if (swimValue || swimGel) out.swim = { value: swimValue, unit: swimValue ? '/100 m' : '', gel: swimGel };
 
     var bikeValue = '';

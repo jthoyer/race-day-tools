@@ -312,6 +312,7 @@
     describeProducts: describeProducts,
     spread: spread,
     END_GAP: END_GAP,
+    PRE_SWIM_GEL_MIN: PRE_SWIM_GEL_MIN,
     TIMING_EVERY: TIMING_EVERY,
     hasTiming: hasTiming,
     timingError: timingError,
