@@ -1274,3 +1274,12 @@ p.notice.go {
 
 /* The rule between the product choice and the carry list inside the "Your nutrition" card. */
 .divider { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; width: 100%; }
+
+.home .stepsblock { display: grid; gap: 8px; }
+.home .more, .about .more { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; font-size: 15px; font-weight: 600; }
+.about { display: grid; gap: 10px; padding-top: 20px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
+.about h2:focus { outline: none; }
+.about h3 { margin: 6px 0 0; font: 600 16px/1.25 var(--display); overflow-wrap: anywhere; }
+.about p, .about li { margin: 0; font-size: 15px; line-height: 1.5; }
+.about ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.about .more { justify-self: start; }

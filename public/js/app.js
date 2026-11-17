@@ -360,6 +360,22 @@
   var OUT_OF_DATE = 'Out of date: Edit to update it';
   var SWEAT_NEEDED = 'Add your sweat rate on step 3, or use a typical value.';
 
+  function aboutSection() {
+    var gets = ['Pace targets for the swim, bike and run, with your finish time as a range.',
+      'A nutrition plan with gel times for the bike and the run. It never plans more carbs per hour than your gut handles, or more fluid than you sweat.',
+      'One race card that puts both plans on a single page.'];
+    return h('section', { class: 'about', id: 'about', 'aria-labelledby': 'about-h' },
+      h('h2', { id: 'about-h', tabindex: '-1' }, 'What TRI Momentum does'),
+      h('h3', null, 'What you get'),
+      h('ul', null, gets.map(function (t) { return h('li', null, t); })),
+      h('h3', null, 'How to get it'),
+      h('p', null, 'Tap Get started and work through the four steps. Choose your race, set your pacing, then review your nutrition. Your race card is ready at the end.'),
+      h('p', null, "It's free, and you don't need an account. Your plan saves on this phone only."),
+      h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. That is the only time anything leaves your phone, and only when you ask.'),
+      h('p', { class: 'help' }, 'A guide, not medical advice.'),
+      h('a', { class: 'more', href: '#/', onclick: function (e) { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('h1').focus({ preventScroll: true }); } }, 'Back to the top'));
+  }
+
   function home() {
     var r = S.race;
     if (isBlankRace(r)) {
@@ -367,11 +383,14 @@
         h('div', { class: 'startmark' }, wordmark(true)),
         h('div', null,
           h('h1', { tabindex: '-1' }, 'Race with a plan.'),
-          h('p', { class: 'lead' }, 'Pace targets and a timed nutrition plan for your triathlon, on one race card for your bike.')),
-        h('ol', { class: 'steps' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); })),
+          h('p', { class: 'lead' }, 'Pace targets and a timed nutrition plan for your triathlon, on one race card for your bike.'),
+          h('a', { class: 'more', href: '#about', onclick: function (e) { e.preventDefault(); var s = document.getElementById('about'); s.scrollIntoView({ block: 'start' }); s.querySelector('h2').focus({ preventScroll: true }); } }, 'Learn more', h('span', { class: 'sr-only' }, ' about the plan'))),
+        h('div', { class: 'stepsblock' }, h('p', { class: 'label', id: 'steps-label' }, 'Four steps'),
+        h('ol', { class: 'steps', 'aria-labelledby': 'steps-label' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); }))),
         h('div', { class: 'actions' },
           h('a', { class: 'btn', href: '#/setup/1' }, 'Get started'),
           note('Free. No account needed. Saved on this phone only.')),
+        aboutSection(),
         guideLinks());
     }
 
