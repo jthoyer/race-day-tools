@@ -370,8 +370,8 @@
       h('ul', null, gets.map(function (t) { return h('li', null, t); })),
       h('h3', null, 'How to get it'),
       h('p', null, 'Tap Get started and work through the four steps. Choose your race, set your pacing, then review your nutrition. Your race card is ready at the end.'),
-      h('p', null, "It's free, and you don't need an account. Your plan saves on this phone only."),
-      h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. That is the only time anything leaves your phone, and only when you ask.'),
+      h('p', null, "It's free, and you don't need an account. Your plan saves on this device only."),
+      h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. That is the only time anything leaves your device, and only when you ask.'),
       h('p', { class: 'help' }, 'A guide, not medical advice.'),
       h('a', { class: 'more', href: '#/', onclick: function (e) { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('h1').focus({ preventScroll: true }); } }, 'Back to the top'));
   }
@@ -389,7 +389,7 @@
         h('ol', { class: 'steps', 'aria-labelledby': 'steps-label' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); }))),
         h('div', { class: 'actions' },
           h('a', { class: 'btn', href: '#/setup/1' }, 'Get started'),
-          note('Free. No account needed. Saved on this phone only.')),
+          note('Free. No account needed. Saved on this device only.')),
         aboutSection(),
         guideLinks());
     }

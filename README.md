@@ -88,7 +88,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
 | `public/js/card.js` | The race card as a PDF: the rows of text (the words the PDF holds, no DOM), the one-page drawing, and the address check. Reads the saved plan; does no maths. |
-| `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the phone. |
+| `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the device. |
 | `public/js/app.js` | The screens: home (the front page, with a Learn more section and the guide links at its bottom, and coming back), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, and the rail (Race, Pacing, Nutrition, Race card) that joins them. The race strip, an ink band under the rail on pacing and step 3, shows the race and its countdown with Edit race and Edit taper. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
