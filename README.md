@@ -87,7 +87,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/time.js` | Parsing and formatting times and dates. |
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
-| `public/js/card.js` | The race card as a PDF: the rows of text (the words the PDF holds, no DOM), the one-page drawing, and the address check. Reads the saved plan; does no maths. |
+| `public/js/card.js` | The race card as a PDF: the sheet (the words the PDF holds, no DOM), the one-page A4 drawing of the top-tube strip, and the address check. Reads the saved plan; does no maths. |
 | `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the device. |
 | `public/js/app.js` | The screens: home (the front page, with a Learn more section and the guide links at its bottom, and coming back), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, and the status row and Race plan panel (Race, Pacing, Nutrition, Race card) that join them. The race strip, an ink band under the status row on pacing and step 3, shows the race and its countdown with Edit race and Edit taper. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
@@ -122,6 +122,7 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Bike speed model | `BIKE_MODEL`, `COURSE_TIME` | CdA 0.29, Crr 0.005, rolling +4%, hilly +10% |
 | Changeovers, our guide | `T1`, `T2` | 70.3: T1 4–5, T2 2–4 min; Olympic: T1 2–3, T2 1–2 min (they add up to the old combined 6–9 and 3–5) |
 | Taper length | `TAPER` | guide 14 days for a 70.3, 10 for an Olympic; offered 10, 14, 21; a picked day 1–42 days out |
+| Gel before the swim | `PRE_SWIM_GEL_MIN` | 15 minutes, optional; shown on the race card PDF beside the swim |
 | Carb ceilings | `CARB_CEILING` | 70.3: bike 90, run 60 g/h; Olympic: 60, 30 |
 | Typical sweat rate | `TYPICAL_SWEAT` | 0.6 / 0.8 / 1.1 L/h by heat |
 | Fluid share and limits | `REPLACE`, `FLUID_FLOOR`, `FLUID_CEILING` | bike 75% of sweat, 0.4–1.0 L/h |

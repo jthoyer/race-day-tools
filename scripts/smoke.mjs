@@ -95,15 +95,28 @@ const inDays = (d) => isoLocal(new Date(Date.now() + d * 86400000));
 const CLOCK = /\d{1,2}:\d\d ?(am|pm)/i;
 const taperStore = async () => (await store()).race.taperDays;
 
-// RD-039 A12. The PDF rows: the words the emailed card holds. fuelStale is what the app passes when the plan is out of date.
-const pdfRows = (fuelStale) => page.evaluate(([k, stale]) => {
+// RD-039 A12. The sheet: the words the emailed card holds. fuelStale is what the app passes when the plan is out of date.
+const pdfSheet = (fuelStale) => page.evaluate(([k, stale]) => {
   const race = JSON.parse(localStorage.getItem(k)).race;
-  return window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
+  const sheet = window.RD.card.sheet({ race, pace: race.pace, fuel: race.fuel, fuelStale: stale });
+  return { sheet, notes: window.RD.card.notes(sheet).map((n) => n.text) };
 }, [KEY, fuelStale]);
+// Every word on the sheet as one list of rows, so a check can read the card as text.
+const pdfRows = async (fuelStale) => {
+  const { sheet, notes } = await pdfSheet(fuelStale);
+  const out = [sheet.name, sheet.sub, sheet.finish, ...notes];
+  for (const leg of [sheet.swim, sheet.bike, sheet.run]) {
+    if (!leg) continue;
+    out.push(leg.value, leg.unit, leg.gel, leg.carbs, leg.note);
+    for (const g of leg.gels || []) out.push(g.t, g.km);
+  }
+  return out.filter(Boolean).map((text) => ({ text }));
+};
 const pdfText = async (fuelStale) => (await pdfRows(fuelStale)).map((r) => r.text).join('\n');
 async function pdfRowsOk(where, fuelStale) {
+  const { sheet } = await pdfSheet(fuelStale);
   const rows = await pdfRows(fuelStale);
-  check(rows.length > 4 && /^TRI Momentum race card · (Olympic|70\.3)$/.test(rows[0].text) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the PDF title row has the distance and no race name, and no row has a time of day, a start time or a transition`);
+  check(rows.length > 4 && sheet.name.length > 0 && sheet.name === sheet.name.toUpperCase() && /(OLYMPIC|70\.3)$/.test(sheet.sub) && !rows.some((r) => CLOCK.test(r.text) || /Transition|start time/i.test(r.text)), `${where}: the sheet has the race name in capitals, the day and distance, and no row has a time of day, a start time or a transition`);
 }
 
 // 28 and 29: no whole word "fuel" and no "Standard" in what a person reads.
@@ -649,13 +662,13 @@ await shot('card');
 
 // The PDF rows: what the emailed card holds
 const tt = await pdfText(false);
-check(/Bike nutrition/.test(tt) && /Run nutrition/.test(tt) && !/\bfuel\b/i.test(tt) && /175–185 W/.test(tt), 'The PDF has pace and nutrition, with Nutrition headings');
-check(/Gel 0:30 · 1:30 · 2:30/.test(tt) && /at ~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'The PDF has your gel times, their km, the KM_NOTE and not medical advice');
+check(/\d g\/hr/.test(tt) && /Water at each aid station/.test(tt) && !/\bfuel\b/i.test(tt) && /175–185/.test(tt), 'The PDF has pace and nutrition, and never the word fuel');
+check(['0:30', '1:30', '2:30'].every((g) => tt.split('\n').includes(g)) && /~\d+ km/.test(tt) && tt.includes(kmNote) && /not medical advice/i.test(tt), 'The PDF has your gel times, their km, the KM_NOTE and not medical advice');
 check(!CLOCK.test(tt) && !/Transition|start time/i.test(tt), 'The PDF has no start time, no transition and no time of day');
 await pdfRowsOk('The PDF', false);
 const drawn = await page.evaluate((k) => {
   const race = JSON.parse(localStorage.getItem(k)).race;
-  const bytes = window.RD.card.drawPdf(window.jspdf.jsPDF, window.RD.card.rows({ race, pace: race.pace, fuel: race.fuel, fuelStale: false }));
+  const bytes = window.RD.card.drawPdf(window.jspdf.jsPDF, window.RD.card.sheet({ race, pace: race.pace, fuel: race.fuel, fuelStale: false }));
   return { head: String.fromCharCode(...bytes.subarray(0, 5)), size: bytes.length };
 }, KEY);
 check(drawn.head === '%PDF-' && drawn.size > 500 && drawn.size < 33000, `The vendored library draws the card in the browser under the content policy (${drawn.size} bytes)`);
@@ -851,7 +864,7 @@ await page.goto(base + '/index.html#/card');
 ot = await appText();
 check(!CLOCK.test(ot) && !/Transition/i.test(ot) && !/changed since/i.test(ot) && /g\/hr/.test(ot) && /Finish \d:\d\d–\d:\d\d/.test(ot) && (await page.locator('.racecard .tl').count()) === 2, 'Old save: the card shows its pacing and nutrition with no time of day, no transition and no out-of-date notice');
 const oldTT = await pdfText(false);
-check(!CLOCK.test(oldTT) && !/Transition/i.test(oldTT) && !/out of date/i.test(oldTT) && /nutrition/i.test(oldTT), 'Old save: the PDF has no time of day, no transition and no out-of-date line');
+check(!CLOCK.test(oldTT) && !/Transition/i.test(oldTT) && !/out of date/i.test(oldTT) && /g\/hr/.test(oldTT), 'Old save: the PDF has no time of day, no transition and no out-of-date line');
 for (const hash of ['#/setup/1', '#/pacing/3', '#/fuel']) {
   await page.goto(base + '/index.html' + hash);
   await page.reload();
@@ -982,7 +995,8 @@ const MAIL_REFUSED = "That address didn't work. Check it and try again.";
 const MAIL_LATER = "Email isn't working right now. Your plan is saved on this device.";
 const MAIL_BAD = 'Type one email address, such as sam@example.test.';
 const MAIL_STALE = 'Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first.';
-const STALE_PDF = 'Nutrition plan out of date. Update it before race day.';
+// In the PDF the sentence wraps in its narrow column, so it sits in two text strings.
+const hasStalePdf = (pdf) => /\(Nutrition plan out of date\. Update it\)[\s\S]*\(before race day\.\)/.test(pdf);
 const YELLOW = 'rgb(248, 196, 79)';
 const mailSave = () => { const v = JSON.parse(JSON.stringify(fixture)); v.race.date = inDays(30); return v; };
 const seedWith = (save) => ({ fn: ([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); }, arg: [KEY, JSON.stringify(save)] });
@@ -1097,9 +1111,9 @@ async function typeAndSend(address) {
   const pdfBytes = Buffer.from(body.pdf, 'base64');
   const pdf = pdfBytes.toString('latin1');
   check(pdf.startsWith('%PDF-') && pdfBytes.length > 500 && pdfBytes.length * 3 < 100000, `The PDF starts %PDF- and is ${pdfBytes.length} bytes, under a third of the 100,000 byte cap`);
-  check(/not medical advice/.test(pdf) && /TRI Momentum race card/.test(pdf) && /Olympic/.test(pdf) && /Water at each aid station/.test(pdf), 'The PDF holds the card words, the distance and "not medical advice"');
-  check(!pdf.includes(save.race.name) && !/Sprint Cup|Sam Lee/.test(pdf) && !CLOCK.test(pdf) && !/Transition|start time/i.test(pdf) && !/NaN|undefined/.test(pdf), 'The PDF has no race name, no time of day, no transition and no junk');
-  check(!pdf.includes(STALE_PDF) && !/\/Filter|\/JavaScript|\/JS\b|\/URI|\/EmbeddedFile|\/Launch/.test(pdf) && (pdf.match(/\/Type \/Page\b(?!s)/g) || []).length === 1, 'A current plan has no out-of-date line; the PDF is one page, uncompressed, with no script or link');
+  check(/not medical advice/.test(pdf) && /TRI Momentum race card/.test(pdf) && /OLYMPIC/.test(pdf) && /Water at each aid station/.test(pdf) && /How to use/.test(pdf), 'The PDF holds the card words, the distance and "not medical advice"');
+  check(pdf.includes('(' + save.race.name.toUpperCase() + ')') && !pdf.includes(save.race.name) && !/Sam Lee/.test(pdf) && !CLOCK.test(pdf) && !/Transition|start time/i.test(pdf) && !/NaN|undefined/.test(pdf), 'The PDF has the race name in capitals only, no athlete name, no time of day, no transition and no junk');
+  check(!hasStalePdf(pdf) && !/\/Filter|\/JavaScript|\/JS\b|\/URI|\/EmbeddedFile|\/Launch/.test(pdf) && (pdf.match(/\/Type \/Page\b(?!s)/g) || []).length === 1, 'A current plan has no out-of-date line; the PDF is one page, uncompressed, with no script or link');
   check((await mailStatus().innerText()) === MAIL_SENT && !/delivered/i.test(await mailStatus().innerText()), 'The result says "Sent. It should arrive in a few minutes. Check your junk folder if not." and never "delivered"');
   const history = await said();
   check(history.length === 1 && history[0] === MAIL_SENT, `The result line was written once (${JSON.stringify(history)})`);
@@ -1223,7 +1237,7 @@ for (const [what, reply] of [['a page, not JSON', (route) => route.fulfill({ sta
   await typeAndSend(ADDRESS);
   await page.waitForFunction((t) => document.querySelector('.mail .mailnote').textContent === t, MAIL_SENT);
   const pdf = Buffer.from(seen[0].postDataJSON().pdf, 'base64').toString('latin1');
-  check(seen.length === 1 && pdf.includes(STALE_PDF), 'Sending was still allowed, and the PDF says "Nutrition plan out of date. Update it before race day."');
+  check(seen.length === 1 && hasStalePdf(pdf), 'Sending was still allowed, and the PDF says "Nutrition plan out of date. Update it before race day."');
   await page.context().close();
 }
 

@@ -969,8 +969,8 @@
     var pdf;
     try {
       if (!r || !r.pace || !r.fuel || r.fuel.ok === false) throw new Error('no finished plan');
-      var rows = RD.card.rows({ race: r, pace: r.pace, fuel: r.fuel, fuelStale: fuelStale(r) });
-      pdf = RD.card.toBase64(RD.card.drawPdf(root.jspdf.jsPDF, rows));
+      var sheet = RD.card.sheet({ race: r, pace: r.pace, fuel: r.fuel, fuelStale: fuelStale(r) });
+      pdf = RD.card.toBase64(RD.card.drawPdf(root.jspdf.jsPDF, sheet));
     } catch (err) {
       console.warn('TRI Momentum: could not make the PDF.', err && err.message);
       return mailDone('later');

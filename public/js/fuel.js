@@ -33,6 +33,10 @@
   var SODIUM_PER_L = { mild: 600, warm: 700, hot: 800 };
   var SODIUM_RANGE = [300, 1000];
 
+  // UNCHECKED. The optional gel before the swim start, in minutes. Shown beside the swim on the race card and in the
+  // emailed PDF, so the number lives here and nowhere else.
+  var PRE_SWIM_GEL_MIN = 15;
+
   var BOTTLE_L = 0.75;
   var BOTTLES_ON_BIKE = 2;
 
@@ -244,7 +248,8 @@
       sweat: sweat,
       sweatTypical: sweatTypical,
       gut: gut,
-      preRace: 'Optional: a gel about 15 minutes before the swim start, if you have practised it.',
+      preRace: 'Optional: a gel about ' + PRE_SWIM_GEL_MIN + ' minutes before the swim start, if you have practised it.',
+      preRaceMin: PRE_SWIM_GEL_MIN,
       bike: {
         minutes: input.bikeMin,
         target: bikeTarget,

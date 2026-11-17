@@ -286,3 +286,10 @@ test('an unknown distance is refused with "Pick Olympic or 70.3." (the stored va
   assert.equal(bad.errors.find((e) => e.field === 'distance').message, 'Pick Olympic or 70.3.');
   assert.equal(F.planFuel({ ...base, distance: 'standard' }).ok, true);
 });
+
+test('the optional gel before the swim comes from one named number, and the sentence still reads the same', () => {
+  const plan = F.planFuel({ distance: '70.3', bikeMin: 110, runMin: 45, heat: 'warm', gut: 70, sweat: null, gel: F.DEFAULT_PRODUCTS[0], drink: F.DEFAULT_PRODUCTS[1] });
+  assert.equal(plan.preRaceMin, 15);
+  assert.equal(plan.preRace, 'Optional: a gel about 15 minutes before the swim start, if you have practised it.');
+  assert.equal(plan.bike.carbsPerHour <= 70 && plan.run.carbsPerHour <= 70, true, 'it adds nothing to a leg, so the gut cap is untouched');
+});
