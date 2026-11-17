@@ -13,7 +13,7 @@
  * LIMITS, said plainly. The limiter below lives in this isolate's memory. Cloudflare runs many isolates, in many
  * places, and restarts them often, so each one counts for itself and forgets. It slows a loop down; it is NOT a real
  * limit. The real limit is a Cloudflare rate-limiting rule on /api/send, which the owner sets in the dashboard
- * (RD-039 step 5), plus the mail service's own quota. The PDF is made by the visitor's phone, so anyone can post any
+ * (RD-039 step 5), plus the mail service's own quota. The PDF is made by the visitor's device, so anyone can post any
  * PDF to any address: the exact keys, the size caps, the content checks and the limits cut that down; they do not
  * remove it.
  *
@@ -147,7 +147,7 @@ let sendCount = 0; // sends the mail service accepted, since this isolate starte
 
 // ---------- the address ----------
 
-// The same rules as normaliseEmail in public/js/card.js, which checks the same address on the phone first.
+// The same rules as normaliseEmail in public/js/card.js, which checks the same address on the device first.
 // tests/email-cases.js drives both. One plain address: 6 to 254 characters after trimming, one "@", ASCII only, no
 // whitespace or control characters, none of , ; < > ' " ` \, and a dot in the domain.
 function normaliseEmail(value) {

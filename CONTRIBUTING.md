@@ -1,6 +1,6 @@
 # Contributing
 
-Race-day tools is a static web app in `public/`, with no build step. It runs on the athlete's phone. It has one small server function, `functions/api/send.js`, that only emails a race card when the athlete asks. This guide is for people and for AI agents, who must also follow [AGENTS.md](AGENTS.md). [README.md](README.md) explains how it works; [docs/spec.md](docs/spec.md) lists what every change must keep.
+Race-day tools is a static web app in `public/`, with no build step. It runs on the athlete's device. It has one small server function, `functions/api/send.js`, that only emails a race card when the athlete asks. This guide is for people and for AI agents, who must also follow [AGENTS.md](AGENTS.md). [README.md](README.md) explains how it works; [docs/spec.md](docs/spec.md) lists what every change must keep.
 
 The working rules are adapted from the Balance Tri Club maintainer docs (`balancetriclub/docs`), so the club's apps and this suite work the same way. The suite is not a club app. It shares the club apps' look, not their sign-in, data or branding.
 

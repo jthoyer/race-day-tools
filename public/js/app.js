@@ -371,7 +371,7 @@
         h('ol', { class: 'steps' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); })),
         h('div', { class: 'actions' },
           h('a', { class: 'btn', href: '#/setup/1' }, 'Get started'),
-          note('Free. No account needed. Saved on this phone only.')),
+          note('Free. No account needed. Saved on this device only.')),
         guideLinks());
     }
 
@@ -430,7 +430,7 @@
             }
           }
         }, 'Start a new race'),
-        note('Saved on this phone only.')));
+        note('Saved on this device only.')));
   }
 
   // ---------- step 1: choose a race ----------
@@ -521,7 +521,7 @@
         h('div', { class: 'actions' },
           h('button', { type: 'button', class: 'btn', onclick: next('pacing/1', checkRace) }, 'Next: choose pacing'),
           hasPlan(r) ? backToCard(checkRace) : null,
-          h('p', { class: 'small center' }, 'Saved on this phone as you go.'))));
+          h('p', { class: 'small center' }, 'Saved on this device as you go.'))));
   }
 
   // Taper length (RD-011, RD-031): one tap for 10, 14 or 21 days, or pick the day it starts. Our guide is marked.
@@ -793,7 +793,7 @@
     stale: 'Your nutrition plan is out of date. The emailed card will say so. Update it on step 3 first.',
     sent: 'Sent. It should arrive in a few minutes. Check your junk folder if not.',
     refused: 'That address didn\'t work. Check it and try again.',
-    later: 'Email isn\'t working right now. Your plan is saved on this phone.'
+    later: 'Email isn\'t working right now. Your plan is saved on this device.'
   };
   var MAIL_TIMEOUT_MS = 15000;
   function blankMail() { return { value: '', busy: false, error: '', result: '', kind: '', refocus: false }; }
@@ -1361,7 +1361,7 @@
       plan.ok ? capNote(plan) : null,
       h('div', { class: 'actions' },
         saveBtn,
-        solo ? h('p', { class: 'small center' }, 'No account. Saved on this phone.') : null));
+        solo ? h('p', { class: 'small center' }, 'No account. Saved on this device.') : null));
   }
 
   // Gel timing (RD-031): for each leg, the first gel and then one every so many minutes. Blank uses our suggested

@@ -1,6 +1,6 @@
 # Race-day tools
 
-Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can email to yourself as a PDF. It's a static web app. It runs on the athlete's phone with no account and no health data held. The one thing that leaves the phone is a PDF of the race card, and only when the athlete types an address and taps to email it. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
+Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can email to yourself as a PDF. It's a static web app. It runs on the athlete's device with no account and no health data held. The one thing that leaves the device is a PDF of the race card, and only when the athlete types an address and taps to email it. Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
 
 This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Countdown and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
 
@@ -62,7 +62,7 @@ GitHub Pages can't set response headers, so each page carries its content policy
 
 The move to Cloudflare Pages, in order, with its checks and its roll-back, is in [docs/host-move.md](docs/host-move.md). Steps 1 to 10 are mostly done and step 11 is open: see the table there. Whether `race.trimomentum.com` is the long-term domain is still open (D4).
 
-**Owner set-up for email, as of 16 November 2026.** Checked means read from the Cloudflare account or the live site that day, with no write. The email block shows on `race.trimomentum.com`, and **RD-005 is still open**: every range below is `UNCHECKED`, and the PDF carries them off the phone.
+**Owner set-up for email, as of 16 November 2026.** Checked means read from the Cloudflare account or the live site that day, with no write. The email block shows on `race.trimomentum.com`, and **RD-005 is still open**: every range below is `UNCHECKED`, and the PDF carries them off the device.
 
 - Create the Resend account and a send-only key. Done: a commit on 16 November says the send works. No agent has sent one.
 - Set `RESEND_API_KEY` and `MAIL_FROM` as secrets on the host, never in the repo. Done. Checked: production holds both names and preview holds none. The values were not read.
@@ -88,7 +88,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/store.js` | The one details store, in `localStorage`, shared by every tool. |
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
 | `public/js/card.js` | The race card as a PDF: the rows of text (the words the PDF holds, no DOM), the one-page drawing, and the address check. Reads the saved plan; does no maths. |
-| `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the phone. |
+| `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the device. |
 | `public/js/app.js` | The screens: home (the front page, and coming back, with the guide links at the bottom of the front page), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, and the rail (Race, Pacing, Nutrition, Race card) that joins them. The race strip, an ink band under the rail on pacing and step 3, shows the race and its countdown with Edit race and Edit taper. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
@@ -129,7 +129,7 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Gel timing limits | `TIMING_EVERY`, `END_GAP` | a gel every 5–120 min; none in the last 10 min of a leg |
 | Carb list on My products | `CARB_PICK` | 20–50 g in 5 g steps (a figure off the list goes under Other) |
 
-**Email must not go live while these ranges are marked UNCHECKED (RD-005):** the PDF carries them off the phone and has no DRAFT mark (the owner decided no DRAFT mark, 13 Nov 2026).
+**Email must not go live while these ranges are marked UNCHECKED (RD-005):** the PDF carries them off the device and has no DRAFT mark (the owner decided no DRAFT mark, 13 Nov 2026).
 
 Good places to check them: the ACSM position stands on nutrition and on fluid replacement, and the consensus statements on exercise-associated hyponatraemia.
 
