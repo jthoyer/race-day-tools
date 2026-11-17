@@ -34,20 +34,28 @@
     return Math.floor(m / 60) + ':' + pad(m % 60);
   }
 
-  // Whole days from today to an ISO date (yyyy-mm-dd), in local time.
-  function daysUntil(isoDate, today) {
+  // A calendar date read from "yyyy-mm-dd", or null. Date rolls an impossible day over ("2025-13-45" becomes 14 Feb 2026,
+  // "2025-02-30" becomes 2 Mar), so the built date must give back the year, month and day that were parsed.
+  function readDate(isoDate, shift) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || '');
     if (!m) return null;
-    var race = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    var y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+    var plain = new Date(y, mo, d);
+    if (plain.getFullYear() !== y || plain.getMonth() !== mo || plain.getDate() !== d) return null;
+    return shift ? new Date(y, mo, d + shift) : plain;
+  }
+
+  // Whole days from today to an ISO date (yyyy-mm-dd), in local time. null when the date is blank or not a real day.
+  function daysUntil(isoDate, today) {
+    var race = readDate(isoDate);
+    if (!race) return null;
     var now = today ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : null;
     if (!now) { var d = new Date(); now = new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
     return Math.round((race - now) / 86400000);
   }
 
   function addDays(isoDate, days) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || '');
-    if (!m) return null;
-    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days);
+    return readDate(isoDate, days);
   }
 
   // Typed digits become a time, so a phone's digits-only keypad is enough (it has no colon key).

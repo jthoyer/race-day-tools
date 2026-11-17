@@ -18,6 +18,10 @@
   // Which part of the race header is open for editing: 'race', 'taper' or null. The race card band and the race strip
   // (RD-041) share it. They are never on the same screen, and render() resets it on every new visit.
   var cardEdit = null;
+  // Whether the Race plan panel (the four step links) is open. In memory only. Like cardEdit it is reset by render() on
+  // every new visit, and a quiet refresh() keeps it. It is a separate flag: opening one never closes the other.
+  var planOpen = false;
+  var planCurrent = null; // the step the screen on view is (see stepRoute), for the panel rows
   // The email block on the race card (RD-039). The typed address and the last result live here, in memory, so a redraw
   // of the card keeps them. Nothing here is saved: a reload, or a new visit to the card, starts blank.
   var mail = blankMail();
@@ -198,7 +202,6 @@
     return big ? h('div', { class: 'mark big', role: 'img', 'aria-label': 'TRI Momentum' }, kids)
       : h('a', { class: 'mark', href: '#/', 'aria-label': 'TRI Momentum' }, kids);
   }
-  function myPlan() { return h('a', { class: 'toplink', href: '#/' }, 'My plan'); }
   function backLink(href, text) {
     return h('a', { class: 'back', href: href },
       svg('M15 5l-7 7 7 7'), text || 'Back');
@@ -218,9 +221,9 @@
   }
   var TICK = 'M5 12l5 5 9-10';
 
-  // The four steps, and where each opens. Home and the rail both read this, so they never disagree about what is done.
+  // The four steps, and where each opens. Home and the Race plan panel both read this, so they never disagree about what is done.
   // Race is done when the race has a date, Pacing when pace is saved, Nutrition when nutrition is saved. The race card
-  // (step 4) is done only once pace and nutrition are both saved, and the rail never shows it done (it is the goal).
+  // (step 4) is done only once pace and nutrition are both saved, and the panel never shows it done (it is the goal).
   function stepState(r) {
     return {
       race: !!(r && r.date),
@@ -231,25 +234,96 @@
   }
   function pacingHref(r) { return r && r.pace ? '#/pacing/3' : '#/pacing/1'; }
 
-  // The rail (replaces the step bar, 9 Nov 2026): Race, Pacing, Nutrition and Race card, on every step and the race card.
-  // Any step opens from any other, so a person can change one thing and go straight back to the card. A step that is
-  // done has a green circle with a tick, and says so to a screen reader. It scrolls with the page.
-  function rail(current) {
+  // The Race plan button, panel and status row (17 Nov 2026) replace the four-circle step bar and the old header link.
+  // The button is in the header and opens a panel in the page, directly under it, with the four step links and a locked "Review your race"
+  // row. The status row under the panel is read-only: the step the screen is, what is next, and four bars. Nothing here
+  // is a modal: the page behind stays usable and nothing is inert. Fixed words only; the race name is never shown here.
+  var STEP_IDS = ['race', 'pacing', 'nutrition', 'card'];
+  var STEP_LABELS = ['Race', 'Pacing', 'Nutrition', 'Race card'];
+  var PLAN_BTN_ID = 'race-plan-btn';
+  var PLAN_PANEL_ID = 'race-plan-panel';
+  // After race day: the date reads, and is before today. A blank or unreadable date is never after race day, and race
+  // day itself (0) is not either. isNum, because null < 0 is false but null >= 0 is true.
+  function afterRaceDay(r) {
+    var days = r ? T.daysUntil(r.date) : null;
+    return isNum(days) && days < 0;
+  }
+  // The rows of the panel, for the screen that is `current` (a step id). Done comes from what is saved, the marker from the
+  // screen. Step 4 never shows done. With no race (solo step 3) nothing is done.
+  function planRows(current) {
+    var r = S.race;
+    var done = stepState(r);
+    var hrefs = ['#/setup/1', pacingHref(r), '#/fuel', '#/card'];
+    var rows = STEP_IDS.map(function (id, i) {
+      var now = id === current;
+      var isDone = i < 3 && done[id] && !now;
+      var goal = i === 3 && !now;
+      var cls = ['r', isDone ? 'done' : '', goal ? 'goal' : '', now ? 'now' : ''].filter(Boolean).join(' ');
+      var status = now ? 'You are here' : isDone ? 'Done' : goal ? 'Last step' : '';
+      return h('a', {
+        href: hrefs[i], id: 'plan-step-' + (i + 1), class: cls, 'aria-current': now ? 'step' : null,
+        onclick: function (e) {
+          // The address already shown fires no hashchange, so nothing would close the panel: close it here.
+          if (e.currentTarget.getAttribute('href') === location.hash) { e.preventDefault(); setPlan(false); focusPlanButton(); }
+        }
+      }, h('span', { class: 'c', 'aria-hidden': 'true' }, isDone ? svg(TICK, 14) : String(i + 1)),
+        STEP_LABELS[i], status ? h('span', { class: 'st' }, status) : null);
+    });
+    // The locked row: a plain block, not a link, button or field, so it has no tab stop and nothing to activate.
+    rows.push(h('p', { class: 'label sep' }, 'After the race'));
+    rows.push(h('div', { class: 'locked' },
+      h('span', { class: 'c', 'aria-hidden': 'true' }, svg('M7 11V8a5 5 0 0110 0v3M6 11h12v9H6z', 14)),
+      'Review your race', h('span', { class: 'st' }, 'Opens after race day')));
+    return rows;
+  }
+  function focusPlanButton() { var b = document.getElementById(PLAN_BTN_ID); if (b) b.focus(); }
+  // Open or close the panel in place, with no redraw, so focus, typing and scroll stay where they are. Its rows exist only
+  // while it is open, so nothing in it (and no aria-current) is on the page when it is closed.
+  function setPlan(open) {
+    planOpen = open;
+    var btn = document.getElementById(PLAN_BTN_ID);
+    var panel = document.getElementById(PLAN_PANEL_ID);
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+    if (!panel) return;
+    RD.ui.clear(panel);
+    if (open) planRows(planCurrent).forEach(function (row) { panel.appendChild(row); });
+    panel.hidden = !open;
+  }
+  // The header's button. S0, S5, My products and the guides call topBar without it. Step 3 with no race has no button
+  // either: three of the panel's links would leave the solo plan, and two would make a blank race behind it.
+  function planButton(current) {
+    if (!S.race) return null;
+    planCurrent = current;
+    return h('button', {
+      type: 'button', id: PLAN_BTN_ID, class: 'planbtn', 'aria-expanded': String(planOpen), 'aria-controls': PLAN_PANEL_ID,
+      onclick: function () { setPlan(!planOpen); }
+    }, 'Race plan', svg('M6 9l6 6 6-6', 16));
+  }
+  // The panel, closed and empty unless planOpen (a quiet redraw while it is open keeps it open).
+  function planPanel(current) {
+    if (!S.race) return null;
+    planCurrent = current;
+    return h('nav', { id: PLAN_PANEL_ID, class: 'planpanel', 'aria-label': 'Your four steps', hidden: !planOpen }, planOpen ? planRows(current) : null);
+  }
+  // The status row. Read-only: no link, button or tab stop. Not shown with no race (solo step 3), where there is no button either.
+  function statusRow(current) {
     var r = S.race;
     if (!r) return null;
+    var n = STEP_IDS.indexOf(current) + 1;
+    var after = afterRaceDay(r);
     var done = stepState(r);
-    var steps = [
-      { id: 'race', label: 'Race', href: '#/setup/1', done: done.race },
-      { id: 'pacing', label: 'Pacing', href: pacingHref(r), done: done.pacing },
-      { id: 'nutrition', label: 'Nutrition', href: '#/fuel', done: done.nutrition },
-      { id: 'card', label: 'Race card', href: '#/card', done: false, goal: true }
-    ];
-    return h('nav', { class: 'rail', 'aria-label': 'Your four steps' }, steps.map(function (st, i) {
-      var cls = ['r', st.done ? 'done' : '', st.goal ? 'goal' : '', st.id === current ? 'now' : ''].filter(Boolean).join(' ');
-      return h('a', { href: st.href, class: cls, 'aria-current': st.id === current ? 'step' : null },
-        h('span', { class: 'c', 'aria-hidden': 'true' }, st.done ? svg(TICK, 14) : String(i + 1)),
-        st.label, st.done ? h('span', { class: 'sr-only' }, ', done') : null);
-    }));
+    var next = !after && n < 4 ? 'Next: ' + STEP_LABELS[n] : null;
+    var bars = after
+      ? h('div', { class: 'complete' }, h('i', { 'aria-hidden': 'true' }), 'Plan complete')
+      : h('div', { class: 'fours', 'aria-hidden': 'true' }, STEP_IDS.map(function (id, i) {
+        var cls = id === current ? 'now' : i === 3 ? 'goal' : done[id] ? 'done' : '';
+        return h('i', { class: cls || null });
+      }));
+    return h('div', { class: 'here', role: 'group', 'aria-label': 'Where you are' },
+      h('div', { class: 'here-top' },
+        h('p', { class: 'now-t' }, h('span', { class: 'label' }, after ? 'Race done' : 'Step ' + n + ' of 4'), STEP_LABELS[n - 1]),
+        next ? h('p', { class: 'next' }, next) : null),
+      bars);
   }
   // The part bar on the three pacing parts.
   var PARTS = ['Your fitness', 'Course and heat', 'Your targets'];
@@ -288,6 +362,7 @@
     if (!render.quiet) {
       aboutShown = false;
       cardEdit = null; // a new visit opens with the race card header, or the race strip, closed
+      planOpen = false; // and with the Race plan panel closed
       if (!mail.busy) mail = blankMail(); // and with an empty email field: the address is not kept
       // The "targets saved" line shows on the first arrival at step 3 only, and stays while that screen redraws.
       if (savedNote === 'shown') savedNote = false;
@@ -475,8 +550,9 @@
     var r = ensureRace();
     var parts = { 1: pacingFitness, 2: pacingCourse, 3: pacingTargets };
     return h('div', { class: 'app' },
-      topBar(wordmark(), myPlan()),
-      rail('pacing'),
+      topBar(wordmark(), planButton('pacing')),
+      planPanel('pacing'),
+      statusRow('pacing'),
       raceStrip(),
       partBar(n),
       parts[n](r));
@@ -524,8 +600,9 @@
       return {};
     }
     return h('div', { class: 'app' },
-      topBar(wordmark(), myPlan()),
-      rail('race'),
+      topBar(wordmark(), planButton('race')),
+      planPanel('race'),
+      statusRow('race'),
       h('div', { class: 'stack' },
         title('Choose a race', 'Every step works back from race day.'),
         bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3' }),
@@ -795,8 +872,9 @@
     var nextAction = !r.pace ? h('a', { class: 'btn', href: '#/pacing/1' }, 'Choose pacing')
       : !r.fuel ? h('a', { class: 'btn', href: '#/fuel' }, 'Review nutrition') : null;
     return h('div', { class: 'app' },
-      topBar(wordmark(), myPlan()),
-      rail('card'),
+      topBar(wordmark(), planButton('card')),
+      planPanel('card'),
+      statusRow('card'),
       cardBody(r),
       emailBlock(r),
       nextAction,
@@ -1038,9 +1116,9 @@
       open === 'taper' ? ed.panel('Edit taper', taperControls(r, tp)) : null);
   }
 
-  // The race strip (RD-041): the same ink band, closed, under the rail on pacing parts 1 to 3 and on step 3. It shows
-  // wherever the rail does (a race exists). Line 1 is the race and its date, line 2 the countdown and the taper. The
-  // panels are the race card header's own, from raceEditor. It scrolls with the page, like the rail.
+  // The race strip (RD-041): the same ink band, closed, under the status row on pacing parts 1 to 3 and on step 3. It shows
+  // wherever the status row does (a race exists). Line 1 is the race and its date, line 2 the countdown and the taper. The
+  // panels are the race card header's own, from raceEditor. It scrolls with the page, like the status row.
   // There is no heading in it: the page's own h1 keeps the focus on arrival.
   function raceStrip() {
     var r = S.race;
@@ -1367,8 +1445,9 @@
     }
 
     return h('div', { class: 'app' },
-      topBar(wordmark(), myPlan()),
-      rail('nutrition'),
+      topBar(wordmark(), planButton('nutrition')),
+      planPanel('nutrition'),
+      statusRow('nutrition'),
       raceStrip(),
       title('Review nutrition', fromPlan ? 'Built from your pacing. Change anything that looks wrong.' : 'Add your bike and run times. Change anything that looks wrong.'),
       savedNote ? statusLine('Pace targets saved to your race card') : null,
@@ -1543,5 +1622,14 @@
   }
 
   root.addEventListener('hashchange', function () { errors = {}; render(); });
+  // Escape closes the Race plan panel and puts focus on its button, but only when focus is on the button or in the panel.
+  // Added once here, not in a screen, so redraws never pile listeners up; it reads the live elements by id.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !planOpen) return;
+    var btn = document.getElementById(PLAN_BTN_ID);
+    var panel = document.getElementById(PLAN_PANEL_ID);
+    var at = document.activeElement;
+    if (at && (at === btn || (panel && panel.contains(at)))) { setPlan(false); focusPlanButton(); }
+  });
   render();
 })(this);

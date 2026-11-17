@@ -37,12 +37,12 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 | Canvas | `#f7f8fa` | Page background |
 | Green | `#116b43` | Done |
 | Yellow hover (`--accent-hover`) | `#f6cf69` | The labels and edit buttons on an ink band (the race card header and the race strip), and the yellow button on hover |
-| Light blue (`--info-bg`) | `#eaf7fc` | Step 4, the race card, in the rail and the step list |
+| Light blue (`--info-bg`) | `#eaf7fc` | Step 4, the race card, in the status row, the Race plan panel and the step list |
 
 - DM Sans for body and controls, Outfit for headings and the wordmark. Both are open fonts (SIL Open Font License). They ship in `public/fonts/`, so no page asks another host for anything. The licence text is in `public/fonts/LICENSE.txt`.
 - A 9 px corner radius on buttons, inputs and cards.
-- The race strip: an ink band under the rail on pacing and step 3 (the race, its countdown, Edit race and Edit taper). It scrolls with the page, like the rail. It is the race card header's band, closed, and uses `--accent-hover` for its buttons.
-- The rail: four numbered steps on every step and the race card. Done is a green circle with a tick, the current step is ink, and step 4 stays on the light blue with a blue ring until it is current.
+- The race strip: an ink band under the status row on pacing and step 3 (the race, its countdown, Edit race and Edit taper). It scrolls with the page, like the status row. It is the race card header's band, closed, and uses `--accent-hover` for its buttons.
+- The status row and the Race plan panel: a read-only row under the header on every step and the race card, except step 3 with no race ("Step 2 of 4", the step's name, "Next: ..." and four bars; after race day, "Race done" and one green "Plan complete" bar). A "Race plan" button in the header opens a panel with the four step links and a locked "Review your race" row. In the panel, done is a green circle with a tick, the current step is ink and says "You are here", and step 4 stays on the light blue with a blue ring until it is current. Neither is sticky.
 - The wordmark: three ink boxes holding white T, R and I, then "Momentum" in Outfit.
 - Controls at least 44 px high and wide.
 - One yellow action per screen; secondary actions are grey or outlined.
@@ -89,7 +89,7 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
 | `public/js/card.js` | The race card as a PDF: the rows of text (the words the PDF holds, no DOM), the one-page drawing, and the address check. Reads the saved plan; does no maths. |
 | `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the device. |
-| `public/js/app.js` | The screens: home (the front page, with a Learn more section and the guide links at its bottom, and coming back), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, and the rail (Race, Pacing, Nutrition, Race card) that joins them. The race strip, an ink band under the rail on pacing and step 3, shows the race and its countdown with Edit race and Edit taper. |
+| `public/js/app.js` | The screens: home (the front page, with a Learn more section and the guide links at its bottom, and coming back), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, and the status row and Race plan panel (Race, Pacing, Nutrition, Race card) that join them. The race strip, an ink band under the status row on pacing and step 3, shows the race and its countdown with Edit race and Edit taper. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
 | `functions/api/send.js` | The one server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing durable (the limiter keeps hashes of the address and visitor in memory only); logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
