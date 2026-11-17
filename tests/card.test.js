@@ -280,3 +280,50 @@ test('the email block shows only where the send function can be (canEmailHere)',
   // Unknown is the safe side: nothing is posted when the host cannot be told.
   for (const unknown of ['', '  ', undefined, null, 42, {}]) assert.equal(C.canEmailHere(unknown), false, String(unknown));
 });
+
+// The feedback panel's rules (public/js/feedback.js) load in Node and are driven by the same tables as the function's
+// (tests/feedback.test.js), so the two copies cannot drift apart.
+const FB = require('../public/js/feedback.js');
+const fbCases = require('./feedback-cases.js');
+
+test('feedback page rules: the message length, driven by the shared table', () => {
+  for (const [what, v] of fbCases.message.good) assert.equal(FB.messageOk(v), true, what);
+  for (const [what, v] of fbCases.message.bad) assert.equal(FB.messageOk(v), false, what);
+  assert.equal(FB.MESSAGE_MIN, 5);
+  assert.equal(FB.MESSAGE_MAX, 2000);
+});
+
+test('feedback page rules: the controls the function refuses are cleaned to a space first, driven by the shared table', () => {
+  for (const [what, typed, sent] of fbCases.message.cleaned) {
+    assert.equal(FB.cleanMessage(typed), sent, what);
+    assert.equal(FB.messageOk(FB.cleanMessage(typed)), true, what + ': passes the page check once cleaned');
+  }
+  // NUL and ESC are not cleaned: they reach the function, which refuses them.
+  assert.equal(FB.cleanMessage('hello\u0000world'), 'hello\u0000world');
+  assert.equal(FB.cleanMessage('hello\u001bworld'), 'hello\u001bworld');
+  assert.equal(FB.cleanMessage(42), 42);
+});
+
+test('feedback page rules: the reply address is the card\'s rule, with a blank allowed, driven by the shared table', () => {
+  for (const g of fbCases.address.good) assert.equal(FB.checkAddress(g), g.trim(), JSON.stringify(g));
+  // The card refuses '' and '   '; feedback sends them as '' (no reply address). Every other bad one is refused here too.
+  for (const b of fbCases.address.bad) {
+    if (typeof b === 'string' && b.trim() === '') assert.equal(FB.checkAddress(b), '', JSON.stringify(b));
+    else assert.equal(FB.checkAddress(b), null, JSON.stringify(b));
+  }
+  for (const b of fbCases.blankAddress) assert.equal(FB.checkAddress(b), '', JSON.stringify(b));
+  assert.equal(C.normaliseEmail('   '), null, 'the card still refuses a blank address');
+});
+
+test('feedback page rules: the page value, driven by the shared table', () => {
+  for (const g of fbCases.page.good) assert.equal(FB.pageValue(g), g, JSON.stringify(g));
+  // A page the function would refuse is sent as blank instead of being sent and refused.
+  for (const b of fbCases.page.bad) assert.equal(FB.pageValue(b), '', JSON.stringify(b));
+});
+
+test('feedback page rules: the wait before a send is 3 seconds, and the words are the spec\'s', () => {
+  assert.equal(FB.MIN_FILL_MS, 3000);
+  assert.equal(FB.TEXT.shortMessage, 'Write a little more: at least 5 characters.');
+  assert.equal(FB.TEXT.badEmail, 'Type one email address, such as sam@example.test, or leave this blank.');
+  for (const k of ['refused', 'rate', 'later', 'net']) assert.match(FB.TEXT[k], /Your message is still here\.$/, k);
+});

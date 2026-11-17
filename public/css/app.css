@@ -99,7 +99,8 @@ a:hover {
   white-space: nowrap;
 }
 
-.app {
+.app,
+.fb {
   max-width: 480px;
   margin: 0 auto;
   display: flex;
@@ -304,7 +305,8 @@ h2 {
   min-width: 0;
 }
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -332,7 +334,14 @@ h2 {
   background: var(--seg-bg);
   color: var(--muted);
 }
-.field input[aria-invalid='true'] {
+.field textarea {
+  display: block;
+  min-height: 120px;
+  line-height: 1.4;
+  resize: vertical;
+}
+.field input[aria-invalid='true'],
+.field textarea[aria-invalid='true'] {
   border-color: var(--warn);
   box-shadow: 0 0 0 1px var(--warn);
 }
@@ -465,7 +474,8 @@ h2 {
   box-shadow: 0 0 0 1px var(--pick);
 }
 
-.btn {
+.btn,
+.fbtn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -488,7 +498,8 @@ h2 {
 .btn.second {
   background: var(--seg-bg);
 }
-.btn.ghost {
+.btn.ghost,
+.fbtn {
   background: var(--surface);
   border: 1px solid var(--line);
 }
@@ -1374,3 +1385,8 @@ p.notice.go {
 .about p, .about li { margin: 0; font-size: 15px; line-height: 1.5; }
 .about ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .about .more { justify-self: start; }
+
+/* Feedback (17 Nov 2026): a footer outside <main>, with an inline panel. The buttons are .fbtn: the ghost button's look, but
+   not a .btn, so each screen keeps its one yellow action. It takes the layout of .app. Display rules would beat the hidden attribute, so it is restated. */
+.fb [hidden] { display: none; }
+.fb { padding-top: 8px; }
