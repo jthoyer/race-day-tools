@@ -46,6 +46,7 @@
   --field: #aab5c6;
   --accent: #f8c44f;
   --accent-hover: #f6cf69;
+  --link-on-ink: #7fcdf0;
   --accent-ink: #6b4d00;
   --accent-bg: #fff6df;
   --go: #116b43;
@@ -915,8 +916,8 @@ details.test p {
   padding: 0 6px;
   border: 0;
   background: none;
-  color: var(--accent-hover);
-  font: 700 14px var(--body);
+  color: var(--link-on-ink);
+  font: 500 14px var(--body);
   cursor: pointer;
 }
 .band .editbtn:hover {
