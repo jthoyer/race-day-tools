@@ -106,13 +106,13 @@ test('the index lists every card once, each link goes to a card that exists, and
   assert.doesNotMatch(INDEX, /<script|<img|<iframe|<form|\sstyle=|\son[a-z]+=/i);
 });
 
-test('the grid: D01 and D02 are tiles, one per card, each linking to its card, and the tile shows the card\'s own headline (18 Nov 2026)', () => {
+test('the grid: every topic, D01 to D14, is tiles, one per card, each linking to its card, and the tile shows the card\'s own headline (18 Nov 2026)', () => {
   const grid = [...INDEX.matchAll(/<section class="truism-grid" aria-label="(D\d\d)[^"]*">([\s\S]*?)<\/section>/g)];
-  assert.deepEqual(grid.map((m) => m[1]), ['D01', 'D02'], 'the grid holds D01 and D02');
+  assert.deepEqual(grid.map((m) => m[1]), Array.from({ length: 14 }, (_, i) => 'D' + String(i + 1).padStart(2, '0')), 'the grid holds D01 to D14, in order');
   for (const [, d, body] of grid) {
     const tiles = [...body.matchAll(/<li><a class="tile" href="([^"]+)"><span class="tile-label">([^<]+)<\/span><span class="tile-headline">([^<]+)<\/span><span class="tile-go" aria-hidden="true">View card →<\/span><\/a><\/li>/g)];
     const cards = CARDS.filter((f) => f.startsWith(d.toLowerCase() + '-'));
-    assert.equal(cards.length, 6, `${d}: an overview and five cards`);
+    assert.ok(cards.length >= 5, `${d}: an overview and its cards`);
     assert.deepEqual(tiles.map((t) => t[1]).sort(), cards, `${d}: one tile for every card`);
     assert.equal((body.match(/<a /g) || []).length, tiles.length, `${d}: every link is a tile`);
     for (const [, href, label, headline] of tiles) {
