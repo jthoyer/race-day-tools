@@ -6,7 +6,8 @@ const path = require('node:path');
 // The truism cards (public/truisms/): static pages that share one stylesheet and make no request of their own.
 const ROOT = path.join(__dirname, '..', 'public');
 const DIR = path.join(ROOT, 'truisms');
-const CARDS = fs.readdirSync(DIR).filter((f) => f.endsWith('.html')).sort();
+const CARDS = fs.readdirSync(DIR).filter((f) => f.endsWith('.html') && f !== 'index.html').sort();
+const INDEX = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
 const html = Object.fromEntries(CARDS.map((f) => [f, fs.readFileSync(path.join(DIR, f), 'utf8')]));
 const css = fs.readFileSync(path.join(ROOT, 'css', 'truisms.css'), 'utf8');
 const csp = (src) => /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(src)?.[1];
@@ -89,4 +90,22 @@ test('truisms.css has no print rule, and sizes its type with clamp(), never belo
     assert.ok(m, `font-size is a clamp(): ${s}`);
     assert.ok(Number(m[1]) >= 14, `the smallest size is at least 14px: ${s}`);
   }
+});
+
+test('the index lists every card once, each link goes to a card that exists, and it names no outside host', () => {
+  const links = [...INDEX.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]).filter((href) => !href.startsWith('..'));
+  assert.deepEqual([...links].sort(), CARDS, 'the index links to every card, once, and to nothing else');
+  for (const href of links) assert.ok(fs.existsSync(path.join(DIR, href)), `${href} is missing`);
+  assert.doesNotMatch(INDEX.replace(/<!--[\s\S]*?-->/g, ''), /https?:/);
+  assert.doesNotMatch(INDEX, /<script|<img|<iframe|<form|\sstyle=|\son[a-z]+=/i);
+});
+
+test('the index is a page of the app: the app\'s content policy, stylesheet version and wordmark, and a title ending "· TRI Momentum"', () => {
+  const app = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.equal(csp(INDEX), csp(app));
+  assert.match(INDEX, /<title>Truisms · TRI Momentum<\/title>/);
+  assert.equal((INDEX.match(/<h1[ >]/g) || []).length, 1);
+  assert.equal(/css\/app\.css\?v=(\d+)"/.exec(INDEX)?.[1], /css\/app\.css\?v=(\d+)"/.exec(app)[1], 'the same app.css ?v= as the app');
+  assert.match(INDEX, /<span class="tri" aria-hidden="true"><b>T<\/b><b>R<\/b><b>I<\/b><\/span><span class="word">Momentum<\/span>/);
+  assert.doesNotMatch(visibleText(INDEX), /Race-day tools/);
 });
