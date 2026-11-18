@@ -26,24 +26,20 @@ const IDS = [
   'd07-fuelling-and-hydration'
 ];
 
-// The headline of each image, as the owner's graphic says it. The alt text starts with it.
-const HEADLINES = {
-  'd01-race-formats-rules-and-logistics': 'Fitness sets the ceiling. Execution decides the race.',
-  'd01-01-race-formats-standard-vs-70-3': 'Standard is hard. 70.3 is patient.',
-  'd01-02-race-rules-drafting-penalties-equipment': 'The draft zone is a box, not a suggestion.',
-  'd01-03-race-courses-and-conditions': 'Pace the profile, not the distance.',
-  'd01-04-choosing-and-sequencing-races': 'One season, one peak.',
-  'd01-05-race-logistics-and-travel': 'Logistics is the fourth discipline.',
-  'd02-swim': 'Arrive fresh, not first.',
-  'd02-01-swim-open-water-skills': 'Straight is faster than strong.',
-  'd02-02-swim-stroke-efficiency-and-drag': 'Drag costs more than power.',
-  'd02-03-swim-threshold-sets-and-pacing': 'The first 200 m always lies.',
-  'd02-04-swim-wetsuit-swimming': 'Fit beats brand.',
-  'd02-05-swim-weekly-structure-and-fitness': 'Two or three swims beat one long one.'
-};
-
-const images = T.LIST.filter((e) => e.kind === 'image');
-const live = T.LIST.filter((e) => e.kind === 'live');
+const LIVE = T.LIST;
+const CARD_DIR = path.join(PUBLIC, 'truisms');
+const unescape = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+// The words of a card page in public/truisms/: headline, subtext and, for each stat card, label, detail and value.
+function cardWords(id) {
+  const src = fs.readFileSync(path.join(CARD_DIR, id + '.html'), 'utf8');
+  const one = (re) => unescape(re.exec(src)[1]);
+  const tiles = [...src.matchAll(/<div class="pill-card pill-(lime|lavender)">([\s\S]*?)<div class="pill-value">([^<]*)<\/div>\s*<\/div>/g)].map((m) => ({
+    label: unescape(/class="pill-label">([^<]*)</.exec(m[2])[1]),
+    detail: /class="pill-detail">([^<]*)</.test(m[2]) ? unescape(/class="pill-detail">([^<]*)</.exec(m[2])[1]) : '',
+    value: unescape(m[3]), tone: m[1]
+  }));
+  return { headline: one(/class="headline">([^<]*)</), body: one(/class="subtext">([^<]*)</), cards: tiles };
+}
 
 // Every string in an entry, however deep.
 function strings(v) {
@@ -53,16 +49,14 @@ function strings(v) {
   return [];
 }
 
-test('T-list: 13 entries, 12 images then 1 live, in the agreed order, with unique ids', () => {
+test('T-list: 13 entries, all live text, in the agreed order, with unique ids and no picture', () => {
   assert.equal(T.LIST.length, 13);
-  assert.equal(images.length, 12);
-  assert.equal(live.length, 1);
   assert.deepEqual(T.LIST.map((e) => e.id), IDS);
   assert.equal(new Set(T.LIST.map((e) => e.id)).size, 13);
-  assert.equal(T.LIST[12].kind, 'live', 'the live truism is last');
-  for (const e of images) {
-    assert.equal(e.width, 1200, e.id);
-    assert.equal(e.height, 630, e.id);
+  for (const e of T.LIST) {
+    assert.equal(e.kind, 'live', e.id);
+    assert.equal(e.src, undefined, `${e.id}: no image`);
+    assert.equal(e.alt, undefined, `${e.id}: no alt text, because the words are real text`);
   }
 });
 
@@ -74,46 +68,21 @@ test('T-list: no string in the list holds a "<", so none can be read as markup',
   assert.deepEqual(markup([{ id: 'x', cards: [{ detail: 'a<b' }] }]), ['a<b']);
 });
 
-// WebP: "RIFF", a size, "WEBP", then a VP8, VP8L or VP8X chunk. Returns [width, height].
-function webpSize(buf) {
-  const chunk = buf.toString('latin1', 12, 16);
-  if (chunk === 'VP8X') return [buf.readUIntLE(24, 3) + 1, buf.readUIntLE(27, 3) + 1];
-  if (chunk === 'VP8 ') return [buf.readUInt16LE(26) & 0x3fff, buf.readUInt16LE(28) & 0x3fff];
-  if (chunk === 'VP8L') { const b = buf.readUInt32LE(21); return [(b & 0x3fff) + 1, ((b >> 14) & 0x3fff) + 1]; }
-  return [0, 0];
-}
-
-test('T-files: every image src is a relative public/img/truisms path to a real WebP of 1200 x 630, and no file is extra', () => {
-  for (const e of images) {
-    assert.match(e.src, /^img\/truisms\/[a-z0-9-]+\.webp$/, e.id);
-    assert.equal(e.src, 'img/truisms/' + e.id + '.webp', 'the file is named for its id');
-    const buf = fs.readFileSync(path.join(PUBLIC, e.src));
-    assert.equal(buf.toString('latin1', 0, 4), 'RIFF', e.id);
-    assert.equal(buf.toString('latin1', 8, 12), 'WEBP', e.id);
-    assert.deepEqual(webpSize(buf), [1200, 630], e.id + ' is 1200 x 630 in its own header');
-  }
-  const onDisk = fs.readdirSync(path.join(PUBLIC, 'img', 'truisms')).sort();
-  assert.deepEqual(onDisk, images.map((e) => path.basename(e.src)).sort(), 'the folder holds the listed files and nothing else');
-  // The pattern refuses an outside host, a root-absolute path, a data: address and a climb out of the folder.
-  for (const bad of ['https://x.test/img/truisms/a.webp', '/img/truisms/a.webp', 'data:image/webp;base64,AAAA', 'img/truisms/../a.webp', '//x.test/img/truisms/a.webp', 'img/truisms/a.png']) {
-    assert.doesNotMatch(bad, /^img\/truisms\/[a-z0-9-]+\.webp$/, bad);
+test('T-files: the landscape pictures are gone, and each entry is the same words as its card page', () => {
+  assert.equal(fs.existsSync(path.join(PUBLIC, 'img', 'truisms')), false, 'public/img/truisms/ is gone');
+  for (const e of LIVE) {
+    assert.ok(fs.existsSync(path.join(CARD_DIR, e.id + '.html')), `${e.id} has a card page`);
+    assert.ok(e.cards.length >= 2 && e.cards.length <= 5, `${e.id}: two to five cards`);
+    assert.deepEqual({ headline: e.headline, body: e.body, cards: e.cards }, cardWords(e.id), `${e.id}: the front page says what its card page says`);
+    for (const c of e.cards) {
+      assert.ok(c.label && c.value, `${e.id}: a card has its label and its figure`);
+      assert.ok(c.tone === 'lime' || c.tone === 'lavender', `${e.id}: tone ${c.tone}`);
+    }
   }
 });
 
-test('T-alt: every image has real alt text that starts with its headline and leaves out the logo', () => {
-  assert.deepEqual(Object.keys(HEADLINES), images.map((e) => e.id));
-  for (const e of images) {
-    assert.equal(typeof e.alt, 'string', e.id);
-    assert.ok(e.alt.length >= 60, `${e.id}: alt is ${e.alt.length} characters`);
-    assert.ok(e.alt.startsWith(HEADLINES[e.id]), `${e.id}: alt starts with its headline`);
-    assert.doesNotMatch(e.alt, /TRI Momentum/i, `${e.id}: the logo is not read out`);
-    assert.doesNotMatch(e.alt, /shift gear/i, `${e.id}: the tagline is not read out`);
-  }
-  assert.equal(live[0].alt, undefined, 'the live truism has no alt text: its words are real text');
-});
-
-test('T-live: the live truism holds the owner\'s strings exactly, as two toned cards', () => {
-  const e = live[0];
+test('T-live: the fuelling truism holds the owner\'s strings exactly, as two toned cards', () => {
+  const e = LIVE[12];
   assert.equal(e.id, 'd07-fuelling-and-hydration');
   assert.equal(e.headline, 'Fuelling is a trained skill. 70.3 is an eating contest.');
   assert.equal(e.body, 'What, when, and how much you consume is calculated and rehearsed in training. Standard forgives minor fuelling errors; 70.3 will completely sink under-fuelled athletes.');
@@ -122,7 +91,6 @@ test('T-live: the live truism holds the owner\'s strings exactly, as two toned c
     { label: '70.3 FUEL', detail: '60–90 g/hr carbs · 500–1000 mg sodium · Gut lock', value: '60–90 g / HR', tone: 'lavender' }
   ]);
   assert.equal(T.TAGLINE, 'Helping Triathletes shift gear');
-  assert.equal(e.src, undefined);
 });
 
 test('T-pick: every value of r gives a valid index, and floor(r * 13) inside [0, 1)', () => {

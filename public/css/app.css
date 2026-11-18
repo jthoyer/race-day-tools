@@ -1525,9 +1525,8 @@ p.notice.go {
 }
 
 /* The split front page (18 Nov 2026). S0 is a truism stage, the S0 column, then the About section and the guides under both.
-   One random truism per page load, shown whole: an image (never cropped, at most 960 px wide, twice the 480 px column) or the live
-   fuelling truism (a square, at most 720 px, one and a half times the column). The stage is truism blue, and its three card colours belong to the live truism only: this blue and these
-   colours are used nowhere else. Stacked by default (a phone: the stage on top); side by side from 1024 px, the one media query. */
+   One random truism per page load, shown whole: a square of live text, at most 720 px (one and a half times the 480 px column). The
+   stage is truism blue, and its three card colours belong to the truism only: this blue and these colours are used nowhere else. Stacked by default (a phone: the stage on top); side by side from 1024 px, the one media query. */
 .split {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1541,19 +1540,12 @@ p.notice.go {
   justify-content: center;
   min-width: 0;
 }
-.truism-img {
-  display: block;
-  width: 100%;
-  max-width: 1200px;
-  height: auto;
-  object-fit: contain;
-}
 .home.s0col {
   padding-top: 40px;
   padding-bottom: 0;
 }
 
-/* The live truism, stacked: the phone layout, in pixels. */
+/* The truism, stacked: the phone layout, in pixels. */
 .truism-live {
   --truism-navy: #0a0a8c;
   --truism-lime: #d5ff4f;
@@ -1659,6 +1651,14 @@ p.notice.go {
   line-height: 1;
   white-space: nowrap;
 }
+/* Three or more cards, or a long figure: smaller type, and the figure may wrap. */
+.tl-cards.fit .tl-value {
+  font-size: 24px;
+  letter-spacing: -0.4px;
+  line-height: 1.05;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 @media (min-width: 1024px) {
   /* Side by side, the truism stage runs straight into the footer's blue band: no page-coloured gap between them. */
@@ -1674,10 +1674,6 @@ p.notice.go {
   .truism {
     padding: 32px;
   }
-  /* An image is at most twice the column wide (960 px); the stage still sets the limit where it is narrower. */
-  .truism-img {
-    max-width: min(100%, calc(var(--s0col) * 2));
-  }
   .home.s0col {
     align-self: center;
     width: 100%;
@@ -1687,7 +1683,7 @@ p.notice.go {
     padding-left: clamp(24px, 3.5vw, 56px);
     padding-right: clamp(24px, 3.5vw, 56px);
   }
-  /* The live truism, side by side: a square scaled to the stage with container units, as in the owner's layout,
+  /* The truism, side by side: a square scaled to the stage with container units, as in the owner's layout,
      at most 1.5 times the column (720 px) and never taller than the screen. */
   .truism-live {
     width: min(100%, calc(100vh - 64px), calc(var(--s0col) * 1.5));
@@ -1759,5 +1755,31 @@ p.notice.go {
   .tl-value {
     font-size: 6.64cqw;
     letter-spacing: -0.15cqw;
+  }
+  /* Three or more cards, or a long figure: the same cards, a little smaller, so the square still holds them. */
+  .tl-cards.fit {
+    gap: 1.4cqw;
+  }
+  .tl-cards.fit .tl-card {
+    height: auto;
+    min-height: 8.4cqw;
+    padding: 1cqw 3.2cqw;
+    gap: 1.6cqw;
+    border-radius: 1.9cqw;
+  }
+  .tl-cards.fit .tl-left {
+    flex: 1 1 50%;
+  }
+  .tl-cards.fit .tl-label {
+    font-size: 2.3cqw;
+  }
+  .tl-cards.fit .tl-detail {
+    font-size: 1.85cqw;
+  }
+  .tl-cards.fit .tl-value {
+    flex: 0 1 44%;
+    font-size: 4.1cqw;
+    letter-spacing: -0.1cqw;
+    text-align: right;
   }
 }
