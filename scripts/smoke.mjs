@@ -2425,10 +2425,9 @@ async function openFront(label, { i, width = 390, height = 844, init = [], hash 
   await page.goto(base + '/index.html' + hash);
   await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
   await page.waitForFunction(() => document.activeElement && document.activeElement.tagName === 'H1');
-  await page.waitForFunction(() => { const im = document.querySelector('.truism img'); return !im || im.complete; });
 }
 const truismId = () => page.locator('.truism').getAttribute('data-truism');
-const imagePaths = (asked) => asked.filter((u) => /\/img\/truisms\//.test(u));
+const imagePaths = (asked) => asked.filter((u) => /\/img\/|\.(webp|png|jpe?g|gif|svg)$/.test(u));
 const watchImages = () => { const asked = []; page.on('request', (r) => asked.push(new URL(r.url()).pathname)); return asked; };
 const box = (sel) => page.locator(sel).first().evaluate((e) => { const b = e.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height }; });
 
@@ -2452,6 +2451,8 @@ async function truismWhole(i, where, { firstViewport = false } = {}) {
   check(g.id === e.id && g.kids === 1, `${where}: truism ${i} shows ${e.id}, as the stage's one child`);
   const eps = 1;
   const l = g.live;
+  check(!!l, `${where}: truism ${i} is live text`);
+  if (!l) return;
   check(l.sw <= l.cw + 1 && l.sh <= l.ch + 1 && l.stSw <= l.stCw + 1 && l.stSh <= l.stCh + 1 && l.clip.length === 0 && l.outside.length === 0 && l.b.r <= g.vw + eps, `${where}: the live truism fits whole, with nothing clipped (${JSON.stringify({ sw: l.sw, cw: l.cw, sh: l.sh, ch: l.ch, clip: l.clip, outside: l.outside })})`);
   if (firstViewport) check(g.live.b.b <= g.vh + 0.5, `${where}: truism ${i} is inside the first viewport (bottom ${Math.round(g.live.b.b)} of ${g.vh})`);
   await noHorizontalScroll(`${where} (truism ${i})`, g.vw);
@@ -2675,7 +2676,7 @@ for (let i = 0; i < TRUISM_N; i++) {
 }
 
 // Criterion 23 (18 Nov 2026): every truism is live text, so the front page asks for no picture at all, and no image or folder of
-// pictures is left to fail. One fresh load each for a five-card truism, a two-card one and the fuelling one.
+// pictures is left to fail. One fresh load each for a five-card truism, a three-card one and the fuelling one.
 {
   for (const i of [0, 8, 12]) {
     await fresh(`no pictures ${i}`, { init: forceTruism(i) });
