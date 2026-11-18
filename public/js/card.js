@@ -26,7 +26,8 @@
   var P = isNode ? require('./pace.js') : root.RD.pace;
   var F = isNode ? require('./fuel.js') : root.RD.fuel;
 
-  var DIST_LABEL = { standard: 'Olympic', '70.3': '70.3' };
+  // Olympic is stored as 'standard' so older saves load. The PDF upper-cases this beside the race day.
+  var DIST_LABEL = { sprint: 'Sprint', standard: 'Olympic', '70.3': '70.3', ironman: 'Ironman' };
   var TITLE = 'TRI Momentum race card';
   var FILE_NAME = 'race-card.pdf';
   // A fixed creation date, so the PDF carries no date or time of today. jsPDF would write the moment it was drawn.

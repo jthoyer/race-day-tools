@@ -130,6 +130,8 @@ test('sheet: the date is the race day as a calendar day, and nothing when it doe
   const sub = (d, dist = '70.3') => C.sheet(input({ race: { ...RACE, date: d, distance: dist } })).sub;
   assert.equal(sub('2026-11-16'), 'MON 16 NOV · 70.3');
   assert.equal(sub('2026-12-31', 'standard'), 'THU 31 DEC · OLYMPIC');
+  assert.equal(sub('2026-11-16', 'sprint'), 'MON 16 NOV · SPRINT');
+  assert.equal(sub('2026-11-16', 'ironman'), 'MON 16 NOV · IRONMAN');
   for (const bad of ['', '2026-02-30', '2026-13-01', '16/11/2026', 'soon', null, undefined, 20261116]) assert.equal(sub(bad), '70.3', JSON.stringify(bad));
 });
 
@@ -201,7 +203,7 @@ test('sheet: a blank is never read as zero, and nothing prints NaN (risk 8)', ()
 test('sheet: every character can be drawn in built-in Helvetica (A10h)', () => {
   const pcs = ['power', 'hr', 'effort'].map((mode) => P.planPace({ ...example, mode, bikeLthr: 160, runLthr: 170, steadySpeed: 30 }));
   for (const pc of pcs) {
-    for (const d of ['standard', '70.3']) {
+    for (const d of ['sprint', 'standard', '70.3', 'ironman']) {
       for (const text of everyText(C.sheet(input({ pace: pc, race: { ...RACE, distance: d }, fuelStale: true })))) assert.match(text, ALLOWED_TEXT, text);
     }
   }
@@ -212,8 +214,12 @@ test('sheet: every character can be drawn in built-in Helvetica (A10h)', () => {
   assert.equal(v, '5–6 out of 10 caf');
 });
 
-test('sheet: the distance is Olympic or 70.3 beside the date, from the race, the pace or the nutrition', () => {
+test('sheet: the distance is Sprint, Olympic, 70.3 or Ironman beside the date, from the race, the pace or the nutrition', () => {
   assert.equal(C.sheet(input({ race: { ...RACE, date: '', distance: 'standard' } })).sub, 'OLYMPIC');
+  assert.equal(C.sheet(input({ race: { ...RACE, date: '', distance: 'sprint' } })).sub, 'SPRINT');
+  assert.equal(C.sheet(input({ race: { ...RACE, date: '', distance: 'ironman' } })).sub, 'IRONMAN');
+  assert.equal(C.sheet(input({ race: { date: '' }, pace: { ...pace, distance: 'ironman' }, fuel: null })).sub, 'IRONMAN', 'from the pace');
+  assert.equal(C.sheet(input({ race: { date: '' }, pace: null, fuel: { ...fuel, distance: 'sprint' } })).sub, 'SPRINT', 'from the nutrition');
   assert.equal(C.sheet(input({ race: { date: '' }, pace: { ...pace, distance: '70.3' }, fuel: null })).sub, '70.3');
   assert.equal(C.sheet(input({ race: { name: 'x' }, pace: null, fuel: null })).sub, '');
   assert.equal(C.TITLE, 'TRI Momentum race card');
