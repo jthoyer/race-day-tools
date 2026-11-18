@@ -410,15 +410,16 @@
   // (Opening step 1 and then leaving it with nothing typed leaves such a race behind.)
   function isBlankRace(r) { return !r || (!r.name && !r.date && !r.pace && !r.fuel); }
 
-  // The guides, at the bottom of the front page only (owner, 9 Nov 2026). A new guide is one more entry here. Both are
-  // drafts: their ranges are not yet checked against sources, so each link says so.
+  // The guides, in the footer of every app screen (footer redesign, 18 Nov 2026; before that the front page only, owner,
+  // 9 Nov 2026). A new guide is one more entry here. Both are drafts: their ranges are not yet checked against sources,
+  // so each link says so.
   var GUIDES = [
     { href: 'guides/race-fuel.html', title: 'How many gels for a 70.3?', draft: true },
     { href: 'guides/bike-pacing.html', title: 'How hard should you ride a 70.3 bike?', draft: true }
   ];
   function guideLinks() {
     return h('section', { class: 'guides', 'aria-label': 'Guides' },
-      h('p', { class: 'label' }, 'Guides'),
+      h('h3', null, 'Guides'),
       h('ul', null, GUIDES.map(function (g) {
         return h('li', null, h('a', { href: g.href }, g.title, g.draft ? h('span', { class: 'tag' }, 'Draft') : null));
       })));
@@ -440,20 +441,28 @@
   var OUT_OF_DATE = 'Out of date: Edit to update it';
   var SWEAT_NEEDED = 'Add your sweat rate on step 3, or use a typical value.';
 
-  function aboutSection() {
+  // The footer's link area (18 Nov 2026): the About text, as three columns with the guides, and a legal row. It is built once
+  // and sits after the feedback band on every app screen, so a redraw never touches it. Fixed words only.
+  function siteFooter() {
     var gets = ['Pace targets for the swim, bike and run, with your finish time as a range.',
       'A nutrition plan with gel times for the bike and the run. It never plans more carbs per hour than your gut handles, or more fluid than you sweat.',
       'One race card that puts both plans on a single page.'];
-    return h('section', { class: 'about', id: 'about', 'aria-labelledby': 'about-h' },
-      h('h2', { id: 'about-h', tabindex: '-1' }, 'What TRI Momentum does'),
-      h('h3', null, 'What you get'),
-      h('ul', null, gets.map(function (t) { return h('li', null, t); })),
-      h('h3', null, 'How to get it'),
-      h('p', null, 'Tap Get started and work through the four steps. Choose your race, set your pacing, then review your nutrition. Your race card is ready at the end.'),
-      h('p', null, "It's free, and you don't need an account. Your plan saves on this device only."),
-      h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. Nothing leaves your device unless you ask: emailing your card, or sending us feedback.'),
-      h('p', { class: 'help' }, 'A guide, not medical advice.'),
-      h('a', { class: 'more', href: '#/', onclick: function (e) { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('h1').focus({ preventScroll: true }); } }, 'Back to the top'));
+    return h('section', { class: 'sitefoot', id: 'about', 'aria-labelledby': 'about-h' },
+      h('div', { class: 'sf-in' },
+        h('h2', { id: 'about-h', tabindex: '-1' }, 'What TRI Momentum does'),
+        h('div', { class: 'sf-cols' },
+          h('div', { class: 'sf-col' },
+            h('h3', null, 'What you get'),
+            h('ul', null, gets.map(function (t) { return h('li', null, t); }))),
+          h('div', { class: 'sf-col' },
+            h('h3', null, 'How to get it'),
+            h('p', null, 'Tap Get started and work through the four steps. Choose your race, set your pacing, then review your nutrition. Your race card is ready at the end.'),
+            h('p', null, "It's free, and you don't need an account. Your plan saves on this device only."),
+            h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. Nothing leaves your device unless you ask: emailing your card, or sending us feedback.')),
+          h('div', { class: 'sf-col' }, guideLinks())),
+        h('div', { class: 'sf-legal' },
+          h('p', null, 'A guide, not medical advice.'),
+          h('a', { class: 'sf-top', href: '#/', onclick: function (e) { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('h1').focus({ preventScroll: true }); } }, 'Back to the top'))));
   }
 
   function home() {
@@ -472,10 +481,7 @@
           h('ol', { class: 'steps', 'aria-labelledby': 'steps-label' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); }))),
           h('div', { class: 'actions' },
             h('a', { class: 'btn', href: '#/setup/1' }, 'Get started'),
-            note('Free. No account needed. Saved on this device only.'))),
-        h('div', { class: 'app home s0below' },
-          aboutSection(),
-          guideLinks()));
+            note('Free. No account needed. Saved on this device only.'))));
     }
 
     var days = T.daysUntil(r.date);
@@ -1640,5 +1646,8 @@
     var at = document.activeElement;
     if (at && (at === btn || (panel && panel.contains(at)))) { setPlan(false); focusPlanButton(); }
   });
+  // Mount the footer's link area once, after the feedback band when there is one (it is hidden on github.io).
+  var footAnchor = document.getElementById('feedback') || document.getElementById('view');
+  footAnchor.parentNode.insertBefore(siteFooter(), footAnchor.nextSibling);
   render();
 })(this);

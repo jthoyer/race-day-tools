@@ -1357,18 +1357,160 @@ p.notice.go {
 .divider { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; width: 100%; }
 
 .home .stepsblock { display: grid; gap: 8px; }
-.home .more, .about .more { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; font-size: 15px; font-weight: 600; }
-.about { display: grid; gap: 10px; padding-top: 20px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
-.about h2:focus { outline: none; }
-.about h3 { margin: 6px 0 0; font: 600 16px/1.25 var(--display); overflow-wrap: anywhere; }
-.about p, .about li { margin: 0; font-size: 15px; line-height: 1.5; }
-.about ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
-.about .more { justify-self: start; }
+.home .more { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; font-size: 15px; font-weight: 600; }
 
 /* Feedback (17 Nov 2026): a footer outside <main>, with an inline panel. The buttons are .fbtn: the ghost button's look, but
    not a .btn, so each screen keeps its one yellow action. It takes the layout of .app. Display rules would beat the hidden attribute, so it is restated. */
 .fb [hidden] { display: none; }
-.fb { padding-top: 8px; }
+
+/* The footer (18 Nov 2026), in three parts that read as one: the feedback band on the light blue (this block), the panel it opens
+   on the page colour, and the link area on ink (.sitefoot, below). It is full width on every app screen; only the guides and
+   the embeds have none. It uses the app's own tokens: light blue, ink, yellow and white, and the 9 px radius. */
+.fb {
+  max-width: none;
+  margin: 48px 0 0;
+  padding: 0;
+  gap: 0;
+}
+.fb {
+  --fb-blue: #3694d7;
+  --fb-navy: #0d1b2a;
+}
+.fb-band {
+  background: var(--fb-blue);
+  color: var(--fb-navy);
+}
+.fb-bar {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+}
+.fb-lead {
+  flex: 1 1 260px;
+  margin: 0;
+  font: 800 22px/1.3 var(--display);
+  text-transform: uppercase;
+}
+.fb-bar .fbtn {
+  width: auto;
+  padding: 10px 22px;
+  border-color: var(--fb-navy);
+  border-radius: 999px;
+  background: var(--fb-navy);
+  color: var(--surface);
+}
+.fb-bar .fbtn svg {
+  color: var(--accent);
+}
+.fb-bar .fbtn:hover {
+  background: #1b3350;
+}
+.fb-bar .fbtn:focus-visible {
+  outline: 3px solid var(--fb-navy);
+  outline-offset: 3px;
+}
+.fb-bar .fbtn[aria-expanded='true'] {
+  background: var(--surface);
+  color: var(--fb-navy);
+}
+.fb > .card {
+  width: calc(100% - 32px);
+  max-width: 448px;
+  margin: 24px auto;
+}
+.sitefoot {
+  margin-top: 48px;
+  background: var(--ink);
+  color: var(--surface);
+  scroll-margin-top: 0;
+}
+.fb + .sitefoot {
+  margin-top: 0;
+}
+.sf-in {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.sitefoot h2 {
+  margin: 0 0 24px;
+  color: var(--accent);
+  font: 700 14px var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sitefoot h2:focus {
+  outline: none;
+}
+.sf-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 32px 48px;
+}
+.sf-col {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+.sitefoot h3 {
+  margin: 0;
+  font: 600 16px/1.25 var(--display);
+  overflow-wrap: anywhere;
+}
+.sitefoot p,
+.sitefoot li {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.sitefoot ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+.sitefoot a {
+  color: var(--surface);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.sitefoot a:hover {
+  color: var(--accent-hover);
+}
+.sitefoot :focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.sitefoot .guides ul {
+  padding: 0;
+  gap: 0;
+}
+.sf-legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 24px;
+  margin-top: 40px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+.sf-legal p {
+  font-size: 14px;
+}
+.sf-top {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+}
 
 /* The split front page (18 Nov 2026). S0 is a truism stage, the S0 column, then the About section and the guides under both.
    One random truism per page load, shown whole: an image (never cropped, never scaled past its own 1200 px) or the live
@@ -1397,9 +1539,6 @@ p.notice.go {
 .home.s0col {
   padding-top: 40px;
   padding-bottom: 0;
-}
-.home.s0below {
-  margin-top: 16px;
 }
 
 /* The live truism, stacked: the phone layout, in pixels. */
@@ -1510,9 +1649,14 @@ p.notice.go {
 }
 
 @media (min-width: 1024px) {
+  /* Side by side, the truism stage runs straight into the footer's blue band: no page-coloured gap between them. */
+  #view:has(.split) + .fb,
+  #view:has(.split) + .sitefoot {
+    margin-top: 0;
+  }
   .split {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    grid-template-rows: minmax(100vh, auto) auto;
+    grid-template-rows: minmax(100vh, auto);
   }
   .truism {
     padding: 32px;
@@ -1522,11 +1666,6 @@ p.notice.go {
     width: 100%;
     padding-top: 24px;
     padding-bottom: 24px;
-  }
-  .home.s0below {
-    grid-column: 1 / -1;
-    width: 100%;
-    margin-top: 24px;
   }
   /* The live truism, side by side: a square scaled to the stage with container units, as in the owner's layout. */
   .truism-live {

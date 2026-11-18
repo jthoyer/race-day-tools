@@ -91,9 +91,21 @@
   var view = doc.getElementById('view');
   if (!view || !view.parentNode || !card.canEmailHere(root.location && root.location.hostname)) return;
 
+  // A yellow arrow after the label (decorative, hidden from a screen reader).
+  function arrow() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = doc.createElementNS(ns, 'svg');
+    ['width', '18', 'height', '18', 'viewBox', '0 0 24 24', 'fill', 'none', 'stroke', 'currentColor', 'stroke-width', '2.5', 'stroke-linecap', 'round', 'stroke-linejoin', 'round', 'aria-hidden', 'true']
+      .forEach(function (v, i, a) { if (i % 2 === 0) svg.setAttribute(v, a[i + 1]); });
+    var path = doc.createElementNS(ns, 'path');
+    path.setAttribute('d', 'M5 12h14M13 6l6 6-6 6');
+    svg.appendChild(path);
+    return svg;
+  }
+
   var st = { open: false, busy: false, sent: false, openedAt: 0, refocus: false };
 
-  var btn = h('button', { type: 'button', class: 'fbtn', id: 'fb-btn', 'aria-expanded': 'false', 'aria-controls': 'fb-panel', onclick: toggle }, TEXT.open);
+  var btn = h('button', { type: 'button', class: 'fbtn', id: 'fb-btn', 'aria-expanded': 'false', 'aria-controls': 'fb-panel', onclick: toggle }, h('span', null, TEXT.open), arrow());
 
   var msg = h('textarea', {
     id: 'f-fb-message', name: 'feedback-message', rows: '5', maxlength: String(MESSAGE_MAX), 'aria-describedby': 'fb-count',
@@ -135,7 +147,10 @@
     h('p', { class: 'help' }, TEXT.intro),
     fields, status, formActions, doneActions);
 
-  var footer = h('footer', { class: 'fb', id: 'feedback' }, h('p', { class: 'small' }, TEXT.footer), btn, panel);
+  // The band (18 Nov 2026 footer): the prompt and the button on the light blue. The panel opens under it, on the page colour.
+  var footer = h('footer', { class: 'fb', id: 'feedback' },
+    h('div', { class: 'fb-band' }, h('div', { class: 'fb-bar' }, h('p', { class: 'fb-lead' }, TEXT.footer), btn)),
+    panel);
   view.parentNode.insertBefore(footer, view.nextSibling);
 
   function showMsgError(on) {
