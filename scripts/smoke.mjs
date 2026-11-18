@@ -2609,32 +2609,64 @@ for (let i = 0; i < TRUISM_N; i++) {
 }
 
 // Criterion 21: the pick is never saved. Fresh context, then a reload with a different stub (a second init script wins).
+// Two runs, each on a fresh context. The unseeded run starts with nothing saved, so the app itself creates and saves the blank
+// race on Get started (ensureRace calls commit): a later change that stored the pick through commit() shows up there. The seeded
+// run starts from a known value, so the store can be compared byte for byte; the app writes nothing in it, because ensureRace finds
+// a race and never commits.
 {
-  // A blank race is seeded before the page loads (the same shape the app makes on Get started), so the value in the store
-  // before load is known and the three readings below are compared with it byte for byte.
-  const blankSave = { details: { weight: null, sweat: null, sweatTypical: true, gut: null }, race: { name: '', distance: '70.3', date: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null } };
-  const seed = seedWith(blankSave);
-  const seededBefore = JSON.stringify(blankSave);
-  await openFront('persist', { i: 4, init: [seed] });
-  const seeded = await page.evaluate((k) => localStorage.getItem(k), KEY);
-  check(seeded === seededBefore, 'S0-persist: after load, the store holds exactly the seeded blank race, byte for byte');
-  await page.getByRole('link', { name: 'Get started' }).click();
-  await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
-  await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
-  await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
-  check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === seededBefore, 'S0-persist: after Get started and back to home, the store is still byte for byte the seed');
   const state = () => page.evaluate((k) => ({ session: sessionStorage.length, cookie: document.cookie, search: location.search, hash: location.hash, hist: history.state, name: window.name, store: localStorage.getItem(k), keys: Object.keys(localStorage), values: Object.keys(localStorage).map((x) => localStorage.getItem(x)).join('\n') }), KEY);
-  const clean = (st, when) => check(st.session === 0 && st.cookie === '' && st.search === '' && (st.hash === '' || st.hash === '#/') && st.hist === null && st.name === '' && !TRUISMS.some((t) => st.values.includes(t.id)) && st.keys.join() === KEY, `S0-persist: ${when}: no session storage, cookie, query, hash, history state or window name, and no truism id in storage`);
-  check(!!seeded && JSON.parse(seeded).race && !JSON.parse(seeded).race.name, 'S0-persist: the seed is the blank race the app made');
-  clean(await state(), 'after load');
-  await page.addInitScript(forceTruism(10).fn, 10);
-  await page.reload();
-  await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
-  const after = await state();
-  check((await truismId()) === TRUISMS[10].id, 'S0-persist: the reload picked again (a different truism)');
-  clean(after, 'after a reload');
-  check(after.store === seededBefore, 'S0-persist: the saved blank race is byte for byte the same as the seed after a reload with a different pick');
-  await page.context().close();
+  const cleanFor = (tag) => (st, when) => check(st.session === 0 && st.cookie === '' && st.search === '' && (st.hash === '' || st.hash === '#/') && st.hist === null && st.name === '' && !TRUISMS.some((t) => st.values.includes(t.id)) && st.keys.join() === KEY, `${tag}: ${when}: no session storage, cookie, query, hash, history state or window name, and no truism id in storage`);
+
+  // Run 1: unseeded. The app makes and saves the blank race.
+  {
+    const tag = 'S0-persist (unseeded)';
+    const clean = cleanFor(tag);
+    await openFront('persist unseeded', { i: 4 });
+    check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === null, `${tag}: nothing is saved before Get started`);
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+    await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    const saved = await page.evaluate((k) => localStorage.getItem(k), KEY);
+    check(!!saved && JSON.parse(saved).race && !JSON.parse(saved).race.name, `${tag}: Get started made and saved a blank race`);
+    clean(await state(), 'after load, Get started and back to home');
+    await page.addInitScript(forceTruism(10).fn, 10);
+    await page.reload();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    const after = await state();
+    check((await truismId()) === TRUISMS[10].id, `${tag}: the reload picked again (a different truism)`);
+    clean(after, 'after a reload');
+    check(after.store === saved, `${tag}: the saved blank race is byte for byte the same after a reload with a different pick`);
+    await page.context().close();
+  }
+
+  // Run 2: seeded. The seed is built by hand to match the race object app.js builds in ensureRace (about line 545). It has no
+  // `fitness` field, which store.js blank() adds to every save the app writes, so it is not a save the app made.
+  {
+    const tag = 'S0-persist (seeded)';
+    const clean = cleanFor(tag);
+    const blankSave = { details: { weight: null, sweat: null, sweatTypical: true, gut: null }, race: { name: '', distance: '70.3', date: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null } };
+    const seed = seedWith(blankSave);
+    const seededBefore = JSON.stringify(blankSave);
+    await openFront('persist seeded', { i: 4, init: [seed] });
+    const seeded = await page.evaluate((k) => localStorage.getItem(k), KEY);
+    check(seeded === seededBefore, `${tag}: after load, the store holds exactly the seeded blank race, byte for byte`);
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+    await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === seededBefore, `${tag}: after Get started and back to home, the store is still byte for byte the seed`);
+    check(!!seeded && JSON.parse(seeded).race && !JSON.parse(seeded).race.name, `${tag}: the seed is a hand-built blank race matching the one app.js builds, without the fitness field the app adds when it saves`);
+    clean(await state(), 'after load');
+    await page.addInitScript(forceTruism(10).fn, 10);
+    await page.reload();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    const after = await state();
+    check((await truismId()) === TRUISMS[10].id, `${tag}: the reload picked again (a different truism)`);
+    clean(after, 'after a reload');
+    check(after.store === seededBefore, `${tag}: the seeded blank race is byte for byte the same as the seed after a reload with a different pick`);
+    await page.context().close();
+  }
 }
 
 // Criteria 23, 24 and 26: a failed image gives way to the next truism. Fresh context per case; the failure is made by a route.
