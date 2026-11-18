@@ -285,6 +285,16 @@ check((await store()).race.distance === 'standard' && (await page.getByText('Swi
 check(!/\bstandard\b/i.test(await appText()), 'Step 1 never shows "Standard"');
 await page.getByRole('button', { name: '70.3', exact: true }).click();
 check(await page.getByText('Swim 1.9 km · Bike 90 km · Run 21.1 km').isVisible() && (await store()).race.distance === '70.3', 'Choosing 70.3 shows the 70.3 leg distances');
+// Sprint and Ironman (18 Nov 2026) store their own keys and show their own legs. Then back to 70.3 for what follows.
+check((await page.getByRole('group', { name: 'Distance' }).getByRole('button').allInnerTexts()).join('|') === 'Sprint|Olympic|70.3|Ironman', 'Step 1 offers Sprint, Olympic, 70.3 and Ironman, in that order');
+await page.getByRole('button', { name: 'Sprint', exact: true }).click();
+check((await store()).race.distance === 'sprint' && (await page.getByText('Swim 0.75 km · Bike 20 km · Run 5 km').isVisible()), 'Choosing Sprint stores "sprint" and shows 0.75 / 20 / 5 km');
+await page.getByRole('button', { name: 'Ironman', exact: true }).click();
+check((await store()).race.distance === 'ironman' && (await page.getByText('Swim 3.8 km · Bike 180 km · Run 42.2 km').isVisible()), 'Choosing Ironman stores "ironman" and shows 3.8 / 180 / 42.2 km');
+for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('Step 1 with four distances', w); }
+await page.setViewportSize({ width: 390, height: 844 });
+await page.getByRole('button', { name: '70.3', exact: true }).click();
+check((await store()).race.distance === '70.3', 'Back on 70.3 for the steps that follow');
 // The countdown and the taper choices left step 1 (decided 16 Nov 2026). They start at step 2, in the strip (scenario 24).
 check((await page.locator('.countdown').count()) === 0 && !/days to go|COUNTDOWN|Taper length|Or pick the day your taper starts|our guide/.test(await appText()) && (await page.getByRole('button', { name: /10 days|14 days|21 days/ }).count()) === 0, 'Step 1 has no countdown and no taper choices');
 await wordsClean('Step 1');

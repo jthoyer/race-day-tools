@@ -32,7 +32,10 @@
 
   // ---------- formatting ----------
 
-  var DIST_LABEL = { standard: 'Olympic', '70.3': '70.3' };
+  // The four distances, shortest first. 'standard' is stored for Olympic so older saves load.
+  var DIST_LABEL = { sprint: 'Sprint', standard: 'Olympic', '70.3': '70.3', ironman: 'Ironman' };
+  var DIST_ARTICLE = { sprint: 'a Sprint', standard: 'an Olympic', '70.3': 'a 70.3', ironman: 'an Ironman' };
+  var DISTANCE_CHOICES = ['sprint', 'standard', '70.3', 'ironman'].map(function (v) { return { value: v, label: DIST_LABEL[v] }; });
   // A real, finite number. Note null >= 0 is true in JavaScript, so a plain comparison is not enough.
   function isNum(v) { return typeof v === 'number' && isFinite(v); }
   var HEAT = [
@@ -608,7 +611,7 @@
         bound('race.name', 'text', { label: 'Race name', placeholder: 'For example, Spring 70.3' }),
         h('section', { class: 'card' },
           h('p', { class: 'label' }, 'Distance'),
-          RD.ui.choice([{ value: 'standard', label: 'Olympic' }, { value: '70.3', label: '70.3' }], r.distance,
+          RD.ui.choice(DISTANCE_CHOICES, r.distance,
             function (v) { set('race.distance', v); refresh(); }, 'pill', 'Distance'),
           h('p', { class: 'help' }, legsText(r.distance))),
         bound('race.date', 'text', { label: 'Race date', type: 'date', live: refresh }),
@@ -657,7 +660,7 @@
             }
           })),
         dateErr ? h('p', { class: 'error', id: 'f-race-taperDate-err', role: 'alert' }, dateErr) : null),
-      h('p', { class: 'help' }, 'We count back from race day. Our guide is ' + guide + ' days for ' + (r.distance === 'standard' ? 'an Olympic' : 'a 70.3') + ' race' +
+      h('p', { class: 'help' }, 'We count back from race day. Our guide is ' + guide + ' days for ' + (DIST_ARTICLE[r.distance] || DIST_ARTICLE['70.3']) + ' race' +
         (tp.own ? '. You chose ' + tp.len + '.' : '.') + ' If your coach says otherwise, go with your coach.')];
   }
 
@@ -1328,7 +1331,7 @@
       if (!solo && !r.splitsByHand) { r.splitsByHand = { bike: null, run: null }; commit(); }
       splitsBox = h('section', { class: 'card' },
         solo ? h('div', null, h('p', { class: 'label' }, 'Distance'),
-          RD.ui.choice([{ value: 'standard', label: 'Olympic' }, { value: '70.3', label: '70.3' }], S.solo.distance,
+          RD.ui.choice(DISTANCE_CHOICES, S.solo.distance,
             function (v) { set('solo.distance', v); refresh(); }, 'pill', 'Distance')) : null,
         h('div', { class: 'two' },
           bound(solo ? 'solo.bikeMin' : timesPath + '.bike', 'hm', { label: 'Bike time', placeholder: '2:45', live: refreshLater }),
