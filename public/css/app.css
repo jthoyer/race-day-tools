@@ -1390,3 +1390,237 @@ p.notice.go {
    not a .btn, so each screen keeps its one yellow action. It takes the layout of .app. Display rules would beat the hidden attribute, so it is restated. */
 .fb [hidden] { display: none; }
 .fb { padding-top: 8px; }
+
+/* The split front page (18 Nov 2026). S0 is a truism stage, the S0 column, then the About section and the guides under both.
+   One random truism per page load, shown whole: an image (never cropped, never scaled past its own 1200 px) or the live
+   fuelling truism. The stage is truism blue, and its three card colours belong to the live truism only: this blue and these
+   colours are used nowhere else. Stacked by default (a phone: the stage on top); side by side from 1024 px, the one media query. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.truism {
+  --truism-blue: #0b23ef;
+  background: var(--truism-blue);
+  color: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.truism-img {
+  display: block;
+  width: 100%;
+  max-width: 1200px;
+  height: auto;
+  object-fit: contain;
+}
+.home.s0col {
+  padding-bottom: 0;
+}
+.home.s0below {
+  margin-top: 16px;
+}
+
+/* The live truism, stacked: the phone layout, in pixels. */
+.truism-live {
+  --truism-navy: #0a0a8c;
+  --truism-lime: #d5ff4f;
+  --truism-lavender: #cad0ff;
+  container-type: inline-size;
+  width: 100%;
+  max-width: 560px;
+  font-family: var(--display);
+}
+.tl-body {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px 20px 24px;
+}
+.tl-brand {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tl-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--truism-navy);
+  font-weight: 800;
+  font-size: 15px;
+}
+.tl-name {
+  margin-left: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1;
+}
+.tl-tag {
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.tl-copy {
+  margin-top: 22px;
+}
+.tl-headline {
+  margin: 0 0 12px;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.9px;
+}
+.tl-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.tl-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tl-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  color: var(--truism-navy);
+}
+.tl-card.lime {
+  background: var(--truism-lime);
+}
+.tl-card.lavender {
+  background: var(--truism-lavender);
+}
+.tl-left {
+  flex: 1 1 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tl-label {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  line-height: 1.1;
+}
+.tl-detail {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.tl-value {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .split {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-rows: minmax(100vh, auto) auto;
+  }
+  .truism {
+    padding: 32px;
+  }
+  .home.s0col {
+    align-self: center;
+    width: 100%;
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+  .home.s0col .startmark {
+    padding-top: 0;
+  }
+  .home.s0below {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-top: 24px;
+  }
+  /* The live truism, side by side: a square scaled to the stage with container units, as in the owner's layout. */
+  .truism-live {
+    width: min(100%, calc(100vh - 64px));
+    max-width: none;
+    aspect-ratio: 1 / 1;
+  }
+  .tl-body {
+    height: 100%;
+    gap: 0;
+    justify-content: space-between;
+    padding: 5.27cqw 5.66cqw 4.98cqw;
+  }
+  .tl-brand {
+    gap: 0.78cqw;
+    height: 5.08cqw;
+  }
+  .tl-badge {
+    width: 5.08cqw;
+    height: 4.98cqw;
+    border-radius: 1.17cqw;
+    font-size: 2.54cqw;
+  }
+  .tl-name {
+    margin-left: 1.17cqw;
+    font-size: 4.49cqw;
+    letter-spacing: -0.05cqw;
+  }
+  .tl-tag {
+    margin-top: 1.76cqw;
+    font-size: 2.73cqw;
+    line-height: 1;
+  }
+  .tl-copy {
+    margin-top: 2.73cqw;
+  }
+  .tl-headline {
+    margin-bottom: 1.95cqw;
+    font-size: 6.64cqw;
+    line-height: 1.15;
+    letter-spacing: -0.18cqw;
+  }
+  .tl-text {
+    max-width: 88.7cqw;
+    font-size: 2.54cqw;
+    line-height: 1.42;
+  }
+  .tl-cards {
+    gap: 2.15cqw;
+  }
+  .tl-card {
+    flex-wrap: nowrap;
+    height: 13.28cqw;
+    padding: 0 3.71cqw;
+    border-radius: 2.15cqw;
+  }
+  .tl-left {
+    flex: 0 1 auto;
+    gap: 0.39cqw;
+  }
+  .tl-label {
+    font-size: 3.13cqw;
+    letter-spacing: -0.04cqw;
+  }
+  .tl-detail {
+    font-size: 2.25cqw;
+    letter-spacing: -0.02cqw;
+    line-height: 1.2;
+  }
+  .tl-value {
+    font-size: 6.64cqw;
+    letter-spacing: -0.15cqw;
+  }
+}

@@ -193,7 +193,7 @@ function foreignAddresses(text, file) {
 test('no address outside example.test in public/ (not vendor/), functions/ or tests/', () => {
   const repo = path.join(__dirname, '..');
   const files = [
-    ...filesUnder(ROOT).filter((f) => !f.split(path.sep).includes('vendor') && !/\.(woff2?|png|jpe?g|ico)$/.test(f)),
+    ...filesUnder(ROOT).filter((f) => !f.split(path.sep).includes('vendor') && !/\.(woff2?|png|jpe?g|ico|webp)$/.test(f)),
     ...filesUnder(path.join(repo, 'functions')),
     ...filesUnder(path.join(repo, 'tests')).filter((f) => !/\.(pdf)$/.test(f))
   ];
@@ -226,4 +226,48 @@ test('the three scripts that label a distance carry the same four labels, in pac
     assert.ok(m, file + ' defines DIST_LABEL');
     assert.deepEqual(Function('return ' + m[1])(), LABELS, file);
   }
+});
+
+// The front page split (18 Nov 2026). The truism code is the app page's alone: loaded once, after ui.js (it builds with
+// RD.ui.h) and before app.js (which asks it for the stage). The guides have no front page, so they do not load or name it.
+test('P-load: index.html loads truisms.js once, after ui.js and before app.js; the guide pages never mention it', () => {
+  assert.equal((html['index.html'].match(/js\/truisms\.js\?v=\d+/g) || []).length, 1);
+  assert.match(html['index.html'], /<script src="js\/ui\.js\?v=\d+"><\/script>[\s\S]*<script src="js\/truisms\.js\?v=\d+"><\/script>\s*<script src="js\/app\.js\?v=\d+"><\/script>/);
+  for (const p of PAGES.slice(1)) assert.doesNotMatch(html[p], /truism/i, `${p} mentions the truism code`);
+  // The script builds with RD.ui.h and the no-innerHTML test above reads it too: confirm that test's folder holds it.
+  assert.ok(fs.readdirSync(path.join(ROOT, 'js')).includes('truisms.js'));
+});
+
+// Truism blue is the stage behind a truism, and the live truism's navy, lime and lavender are its own cards: each hex is
+// written in a rule for the truism only, and each custom property that holds one is used only in the truism's rules.
+const TRUISM_HEX = ['#0b23ef', '#0a0a8c', '#d5ff4f', '#cad0ff'];
+// The selector of the rule that holds each place in the stylesheet where `pattern` matches (nested rules included).
+function selectorsOf(css, pattern) {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...bare.matchAll(pattern)].map((m) => {
+    const open = bare.lastIndexOf('{', m.index);
+    const start = Math.max(bare.lastIndexOf('}', open), bare.lastIndexOf('{', open - 1)) + 1;
+    return bare.slice(start, open).trim();
+  });
+}
+test('P-colour: truism blue and the live truism\'s three colours appear only in the truism rules (18 Nov 2026)', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8');
+  for (const hex of TRUISM_HEX) {
+    const sel = selectorsOf(css, new RegExp(hex, 'gi'));
+    assert.ok(sel.length >= 1, `${hex} is used`);
+    for (const s of sel) assert.match(s, /^\.truism(-live)?$/, `${hex} is written in "${s}"`);
+  }
+  const uses = selectorsOf(css, /var\(--truism-(?:blue|navy|lime|lavender)\)/g);
+  assert.ok(uses.length >= 4, 'the truism colours are used through custom properties');
+  for (const s of uses) assert.match(s, /^\.(truism|tl-)/, `a truism colour is used in "${s}"`);
+  // The check can see what it is for.
+  assert.deepEqual(selectorsOf('.a { color: #0b23ef; } @media (min-width: 1px) { .b { background: #0b23ef } }', /#0b23ef/gi), ['.a', '.b']);
+});
+
+// One width media query only: stacked by default, side by side from 1024 px. Never a print rule (criterion 14).
+test('P-media: app.css has one media query, a min-width of 1024 px, and no print rule', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const queries = [...css.matchAll(/@media([^{]*)\{/g)].map((m) => m[1].trim());
+  assert.deepEqual(queries, ['(min-width: 1024px)']);
+  assert.doesNotMatch(css, /@media[^{]*print/);
 });
