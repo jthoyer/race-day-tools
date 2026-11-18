@@ -145,24 +145,6 @@ a:hover {
   font: 700 17px var(--display);
   letter-spacing: -0.2px;
 }
-/* The big wordmark on the front page. */
-.mark.big {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-.mark.big .tri {
-  gap: 7px;
-}
-.mark.big .tri b {
-  width: 39px;
-  height: 24px;
-  font-size: 18px;
-}
-.mark.big .word {
-  font-size: 23px;
-  line-height: 1.2;
-}
 .back {
   display: inline-flex;
   align-items: center;
@@ -624,15 +606,12 @@ details.test p {
 }
 
 /* Home: the four steps, on the front page and on the coming-back screen. They use the same tokens as the Race plan panel. */
-.home .startmark {
-  padding-top: 40px;
-}
 .home .lead {
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 17px;
 }
-.home .startmark + div h1 {
+.home.s0col h1 {
   font-size: 34px;
   letter-spacing: -0.8px;
 }
@@ -1416,6 +1395,7 @@ p.notice.go {
   object-fit: contain;
 }
 .home.s0col {
+  padding-top: 40px;
   padding-bottom: 0;
 }
 .home.s0below {
@@ -1542,9 +1522,6 @@ p.notice.go {
     width: 100%;
     padding-top: 24px;
     padding-bottom: 24px;
-  }
-  .home.s0col .startmark {
-    padding-top: 0;
   }
   .home.s0below {
     grid-column: 1 / -1;

@@ -198,12 +198,11 @@
     return h('header', { class: 'top' }, left, right);
   }
   // The wordmark (the owner's, 9 Nov 2026): three ink boxes holding white T, R and I, then "Momentum" in Outfit.
-  // In a header it is a link home. Big, on the front page, it is a picture with the same name.
-  function wordmark(big) {
+  // In a header it is a link home. The front page has none (owner, 18 Nov 2026): each truism carries the logo.
+  function wordmark() {
     var kids = [h('span', { class: 'tri', 'aria-hidden': 'true' }, h('b', null, 'T'), h('b', null, 'R'), h('b', null, 'I')),
       h('span', { class: 'word' }, 'Momentum')];
-    return big ? h('div', { class: 'mark big', role: 'img', 'aria-label': 'TRI Momentum' }, kids)
-      : h('a', { class: 'mark', href: '#/', 'aria-label': 'TRI Momentum' }, kids);
+    return h('a', { class: 'mark', href: '#/', 'aria-label': 'TRI Momentum' }, kids);
   }
   function backLink(href, text) {
     return h('a', { class: 'back', href: href },
@@ -465,7 +464,6 @@
       return h('div', { class: 'split' },
         RD.truisms.stage(),
         h('div', { class: 'app home s0col' },
-          h('div', { class: 'startmark' }, wordmark(true)),
           h('div', null,
             h('h1', { tabindex: '-1' }, 'Race with a plan.'),
             h('p', { class: 'lead' }, 'Pace targets and a timed nutrition plan for your triathlon, on one race card for your bike.'),
