@@ -2425,10 +2425,9 @@ async function openFront(label, { i, width = 390, height = 844, init = [], hash 
   await page.goto(base + '/index.html' + hash);
   await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
   await page.waitForFunction(() => document.activeElement && document.activeElement.tagName === 'H1');
-  await page.waitForFunction(() => { const im = document.querySelector('.truism img'); return !im || im.complete; });
 }
 const truismId = () => page.locator('.truism').getAttribute('data-truism');
-const imagePaths = (asked) => asked.filter((u) => /\/img\/truisms\//.test(u));
+const imagePaths = (asked) => asked.filter((u) => /\/img\/|\.(webp|png|jpe?g|gif|svg)$/.test(u));
 const watchImages = () => { const asked = []; page.on('request', (r) => asked.push(new URL(r.url()).pathname)); return asked; };
 const box = (sel) => page.locator(sel).first().evaluate((e) => { const b = e.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height }; });
 
@@ -2439,8 +2438,6 @@ async function truismWhole(i, where, { firstViewport = false } = {}) {
     const r = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
     const st = document.querySelector('.truism');
     const out = { id: st.getAttribute('data-truism'), st: r(st), vw: document.documentElement.clientWidth, vh: innerHeight, kids: st.children.length };
-    const img = st.querySelector('img');
-    if (img) out.img = { b: r(img), nw: img.naturalWidth, nh: img.naturalHeight, fit: getComputedStyle(img).objectFit };
     const live = st.querySelector('.truism-live');
     if (live) {
       const lb = r(live);
@@ -2453,16 +2450,11 @@ async function truismWhole(i, where, { firstViewport = false } = {}) {
   });
   check(g.id === e.id && g.kids === 1, `${where}: truism ${i} shows ${e.id}, as the stage's one child`);
   const eps = 1;
-  if (e.kind === 'image') {
-    const b = g.img.b;
-    check(b.l >= g.st.l - eps && b.r <= g.st.r + eps && b.t >= g.st.t - eps && b.b <= g.st.b + eps && b.r <= g.vw + eps && b.l >= -eps, `${where}: truism ${i} lies inside the stage and the viewport width`);
-    check(Math.abs(b.w / b.h / (1200 / 630) - 1) <= 0.01 || g.img.fit === 'contain', `${where}: truism ${i} keeps its 1200:630 shape (${(b.w / b.h).toFixed(3)}, ${g.img.fit})`);
-    check(g.img.nw === 1200 && g.img.nh === 630, `${where}: truism ${i} is 1200 x 630 on the page`);
-  } else {
-    const l = g.live;
-    check(l.sw <= l.cw + 1 && l.sh <= l.ch + 1 && l.stSw <= l.stCw + 1 && l.stSh <= l.stCh + 1 && l.clip.length === 0 && l.outside.length === 0 && l.b.r <= g.vw + eps, `${where}: the live truism fits whole, with nothing clipped (${JSON.stringify({ sw: l.sw, cw: l.cw, sh: l.sh, ch: l.ch, clip: l.clip, outside: l.outside })})`);
-  }
-  if (firstViewport) check((g.img ? g.img.b.b : g.live.b.b) <= g.vh + 0.5, `${where}: truism ${i} is inside the first viewport (bottom ${Math.round(g.img ? g.img.b.b : g.live.b.b)} of ${g.vh})`);
+  const l = g.live;
+  check(!!l, `${where}: truism ${i} is live text`);
+  if (!l) return;
+  check(l.sw <= l.cw + 1 && l.sh <= l.ch + 1 && l.stSw <= l.stCw + 1 && l.stSh <= l.stCh + 1 && l.clip.length === 0 && l.outside.length === 0 && l.b.r <= g.vw + eps, `${where}: the live truism fits whole, with nothing clipped (${JSON.stringify({ sw: l.sw, cw: l.cw, sh: l.sh, ch: l.ch, clip: l.clip, outside: l.outside })})`);
+  if (firstViewport) check(g.live.b.b <= g.vh + 0.5, `${where}: truism ${i} is inside the first viewport (bottom ${Math.round(g.live.b.b)} of ${g.vh})`);
   await noHorizontalScroll(`${where} (truism ${i})`, g.vw);
 }
 
@@ -2556,9 +2548,7 @@ for (let i = 0; i < TRUISM_N; i++) {
     });
     check(g.tag === 'SECTION' && g.label === 'Truism' && g.taps === 0 && g.styled === 0 && g.moving === 0, `S0-a11y: truism ${i}'s stage is one section named Truism, with nothing to tap, no style attribute and no animation (${JSON.stringify(g)})`);
     check(g.imgs === 0 && (await page.getByRole('img', { name: /TRI Momentum/ }).count()) === 0, `S0-a11y: truism ${i}: no image on S0 is named TRI Momentum (the wordmark is gone; the tab title still names the app)`);
-    if (TRUISMS[i].kind === 'image') {
-      check((await page.locator('.truism img').getAttribute('alt')) === TRUISMS[i].alt && (await page.getByRole('img', { name: TRUISMS[i].alt, exact: true }).count()) === 1, `S0-a11y: truism ${i}'s alt text is the list's, as the image's accessible name`);
-    } else {
+    {
       const e = TRUISMS[i];
       const t = await page.evaluate(() => {
         const q = (s) => [...document.querySelectorAll(s)].map((x) => x.innerText);
@@ -2597,8 +2587,7 @@ for (let i = 0; i < TRUISM_N; i++) {
     await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
     await page.waitForLoadState('networkidle');
     const n = imagePaths(asked).length;
-    check(n === (TRUISMS[i].kind === 'image' ? 1 : 0), `S0-rotate: truism ${i} makes ${n} image request${n === 1 ? '' : 's'} (${TRUISMS[i].kind === 'image' ? 'one' : 'none'} expected)`);
-    check((await page.locator('.truism img').evaluateAll((els) => els.every((e) => e.getAttribute('loading') !== 'lazy'))), `S0-rotate: truism ${i} is not lazy-loaded`);
+    check(n === 0, `S0-rotate: truism ${i} makes ${n} image request${n === 1 ? '' : 's'} (none expected)`);
     await page.context().close();
   }
   // The pick comes from Math.random only once: this stub changes its answer on every call.
@@ -2686,50 +2675,20 @@ for (let i = 0; i < TRUISM_N; i++) {
   }
 }
 
-// Criteria 23, 24 and 26: a failed image gives way to the next truism. Fresh context per case; the failure is made by a route.
+// Criterion 23 (18 Nov 2026): every truism is live text, so the front page asks for no picture at all, and no image or folder of
+// pictures is left to fail. One fresh load each for a five-card truism, a three-card one and the fuelling one.
 {
-  check(expectedConsoleUrl === null, 'S0-fallback: no console error is tolerated before these scenarios');
-  const tol = /\/img\/truisms\/d01-02-race-rules-drafting-penalties-equipment\.webp$/;
-  check(tol.test('http://localhost:1/img/truisms/d01-02-race-rules-drafting-penalties-equipment.webp') && !tol.test('http://localhost:1/js/app.js') && !tol.test('http://localhost:1/img/truisms/d01-03-race-courses-and-conditions.webp') && !tol.test('http://localhost:1/api/send'), 'S0-fallback: the tolerance names one routed image address and nothing else');
-  for (const [from, label] of [[2, 'an image fails, the next image shows'], [11, 'the last image fails, the live truism shows']]) {
-    const gone = TRUISMS[from].id;
-    const next = TRUISMS[from + 1].id;
-    expectedConsoleUrl = new RegExp('/img/truisms/' + gone + '\\.webp$');
-    await fresh(`fallback ${from}`, { init: forceTruism(from) });
-    const asked = watchImages();
-    await page.route('**/img/truisms/' + gone + '.webp', (route) => route.abort());
+  for (const i of [0, 8, 12]) {
+    await fresh(`no pictures ${i}`, { init: forceTruism(i) });
+    const asked = [];
+    page.on('request', (r) => asked.push(new URL(r.url()).pathname));
     await page.goto(base + '/index.html');
     await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
-    await page.waitForFunction((id) => document.querySelector('.truism').getAttribute('data-truism') === id, next);
-    await page.waitForFunction(() => { const im = document.querySelector('.truism img'); return !im || im.complete; });
-    const broken = await page.locator('.truism img').evaluateAll((els) => els.filter((e) => e.complete && e.naturalWidth === 0).length);
-    const srcs = await page.locator('.truism img').evaluateAll((els) => els.map((e) => e.getAttribute('src')));
-    check((await truismId()) === next && broken === 0 && !srcs.some((u) => u.includes(gone)) && srcs.length === (TRUISMS[from + 1].kind === 'image' ? 1 : 0), `S0-fallback: ${label} (${gone} -> ${next}), and the failed image is out of the page`);
-    await page.getByRole('link', { name: 'Get started' }).click();
-    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
-    await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
-    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
-    await page.waitForTimeout(300);
-    check((await truismId()) === next && imagePaths(asked).filter((u) => u.includes(gone)).length === 1, 'S0-fallback: a redraw keeps the substitute and does not ask for the failed file again');
-    await noHorizontalScroll(`S0-fallback ${from}`);
+    await page.waitForLoadState('networkidle');
+    check(asked.filter((u) => /\/img\/|\.(webp|png|jpe?g|gif|svg)$/.test(u)).length === 0, `S0-no-pictures: truism ${i} makes no image request (${asked.filter((u) => /\/img\//.test(u)).join(', ')})`);
+    check((await page.locator('.truism img').count()) === 0 && (await page.locator('.truism-live').count()) === 1, `S0-no-pictures: truism ${i} is one block of live text, with no <img>`);
     await page.context().close();
-    expectedConsoleUrl = null;
   }
-  // Every image fails: the live truism shows, and no file is asked for twice.
-  expectedConsoleUrl = /\/img\/truisms\//;
-  await fresh('fallback all', { init: forceTruism(0) });
-  const asked = watchImages();
-  await page.route('**/img/truisms/**', (route) => route.abort());
-  await page.goto(base + '/index.html');
-  await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
-  await page.waitForFunction((id) => document.querySelector('.truism').getAttribute('data-truism') === id, TRUISMS[TRUISM_N - 1].id);
-  const first = imagePaths(asked).length;
-  await page.waitForTimeout(500);
-  const files = imagePaths(asked);
-  check((await truismId()) === 'd07-fuelling-and-hydration' && (await page.locator('.tl-headline').isVisible()) && (await page.locator('.truism img').count()) === 0, 'S0-fallback: with every image failing, S0 shows the live truism and no image');
-  check(files.length === first && new Set(files).size === files.length && files.length === TRUISM_N - 1, `S0-fallback: each of the ${TRUISM_N - 1} image files was asked for once and the asking stopped (${files.length} requests)`);
-  await page.context().close();
-  expectedConsoleUrl = null;
 }
 
 await browser.close();

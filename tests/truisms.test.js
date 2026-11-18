@@ -18,7 +18,7 @@ function visibleText(src) {
 }
 
 test('there are cards, and each is named like a page the site can serve', () => {
-  assert.ok(CARDS.length >= 72, `expected the D03 to D14 cards, found ${CARDS.length}`);
+  assert.ok(CARDS.length >= 84, `expected the D01 to D14 cards, found ${CARDS.length}`);
   for (const f of CARDS) assert.match(f, /^d\d\d(?:-\d\d)?-[a-z0-9-]+\.html$/, f);
 });
 
@@ -55,17 +55,23 @@ test('every card loads the one shared stylesheet, at the same ?v=, and nothing e
   assert.ok(fs.existsSync(path.join(ROOT, 'css', 'truisms.css')));
 });
 
-test('every card is one truism and two stat cards, with their words', () => {
+test('every card is one truism and two to five stat cards, with their words', () => {
   for (const f of CARDS) {
     const src = html[f];
     assert.equal((src.match(/class="headline"/g) || []).length, 1, `${f}: one headline`);
     assert.equal((src.match(/class="subtext"/g) || []).length, 1, `${f}: one subtext`);
-    assert.equal((src.match(/class="pill-card pill-(?:lime|lavender)"/g) || []).length, 2, `${f}: two stat cards`);
-    for (const part of ['pill-label', 'pill-detail', 'pill-value']) {
+    const n = (src.match(/class="pill-card pill-(?:lime|lavender)"/g) || []).length;
+    assert.ok(n >= 2 && n <= 5, `${f}: two to five stat cards, found ${n}`);
+    // Three or more cards, as the D01 and D02 cards have, take the smaller size so the card stays near a square.
+    assert.equal(/class="diagram-wrap dense"/.test(src), n >= 3, `${f}: dense only with three or more stat cards`);
+    for (const part of ['pill-label', 'pill-value']) {
       const found = [...src.matchAll(new RegExp(`class="${part}">([^<]*)<`, 'g'))].map((m) => m[1].trim());
-      assert.equal(found.length, 2, `${f}: two ${part}`);
+      assert.equal(found.length, n, `${f}: a ${part} on every stat card`);
       assert.ok(found.every(Boolean), `${f}: no blank ${part}`);
     }
+    // The sentence under a label is optional: the "Sharp taper" tile of the owner's design has none.
+    const details = [...src.matchAll(/class="pill-detail">([^<]*)</g)].map((m) => m[1].trim());
+    assert.ok(details.length <= n && details.every(Boolean), `${f}: no blank pill-detail`);
     assert.match(src, /<div class="brand-row" role="img" aria-label="TRI Momentum">/, `${f}: the wordmark is one image to a screen reader`);
   }
 });
