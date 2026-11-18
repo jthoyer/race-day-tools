@@ -1418,10 +1418,22 @@ p.notice.go {
   background: var(--surface);
   color: var(--fb-navy);
 }
+/* The panel (19 Nov 2026) is as wide as the band's content (960 px less its 16 px sides) and centred, so its edges line up
+   with the headline and the button. The two fields stay stacked, just wider. It wraps without a media query, because the
+   page has only the one (P-media): the buttons sit in a row when two fit at 160 px each, and stack below that. */
 .fb > .card {
   width: calc(100% - 32px);
-  max-width: 448px;
+  max-width: 928px;
   margin: 24px auto;
+}
+.fb .actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: min(100%, 420px);
+}
+.fb .actions .fbtn {
+  flex: 1 1 160px;
+  width: auto;
 }
 .sitefoot {
   margin-top: 48px;
