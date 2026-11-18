@@ -2014,7 +2014,7 @@ for (const [what, hash, save] of [['S0', '#/', null], ['S5', '#/', fbSave()], ['
       panelHidden: document.getElementById('fb-panel').hidden, target: !!document.getElementById(btn.getAttribute('aria-controls')) };
   });
   check(f.count === 1 && f.tag === 'FOOTER' && !f.inView && f.below, `${what}: one footer, outside the screen (#view) and below it`);
-  check(f.text.startsWith('Something broken? Got an idea? Tell us what to fix') && f.expanded === 'false' && f.controls === 'fb-panel' && f.target && f.panelHidden, `${what}: the footer says "Something broken? Got an idea?" and has a "Tell us what to fix" button, closed, with aria-controls naming the panel`);
+  check(f.text.toLowerCase().startsWith('something broken? got an idea? tell us what to fix') && f.expanded === 'false' && f.controls === 'fb-panel' && f.target && f.panelHidden, `${what}: the footer says "Something broken? Got an idea?" and has a "Tell us what to fix" button, closed, with aria-controls naming the panel`);
   check(f.w >= 44 && f.h >= 44 && f.bg !== YELLOW, `${what}: the button is ${Math.round(f.w)} x ${Math.round(f.h)} and not yellow (${f.bg})`);
   await page.waitForTimeout(150);
   check(seen.length === 0 && (await fbFetches()).length === 0, `${what}: showing the footer makes no request`);
@@ -2488,6 +2488,9 @@ for (const [w, hh] of [[1440, 900], [1024, 768]]) {
   check(st.left <= 1 && st.top <= 1 && col.left >= st.right - 1 && st.width / w >= 0.62 && st.width / w <= 0.7, `S0-desktop ${w}: the stage is on the left and ${(st.width / w).toFixed(3)} of the width`);
   check(col.width >= 320 && Math.max(...kids) <= 480, `S0-desktop ${w}: the S0 column is ${Math.round(col.width)} px wide with content at most ${Math.round(Math.max(...kids))} px`);
   check(below.top >= st.bottom - 1 && below.top >= col.bottom - 1, `S0-desktop ${w}: the footer's About section and the guides sit below the stage and the column`);
+  const band = await box('#feedback .fb-band');
+  check(Math.abs(band.top - st.bottom) <= 1 && band.top >= col.bottom - 1, `S0-desktop ${w}: the blue band starts where the truism stage ends, with no gap (stage bottom ${Math.round(st.bottom)}, band top ${Math.round(band.top)})`);
+  check((await page.locator('#feedback .fb-band').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(54, 148, 215)' && (await page.locator('#fb-btn svg').count()) === 1, `S0-desktop ${w}: the band is #3694d7 and the button has its arrow`);
   check((await page.locator('.truism').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(11, 35, 239)', `S0-desktop ${w}: the stage is #0b23ef`);
   check((await page.locator('.btn').count()) === 1, `S0-desktop ${w}: the S0 column has one yellow action`);
   const small = await page.locator('#view a, #view button').evaluateAll((els) => els.filter((e) => { const b = e.getBoundingClientRect(); return b.height < 44 || b.width < 44; }).map((e) => e.textContent.trim()));
