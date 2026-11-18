@@ -206,14 +206,14 @@ await noStatus('S0');
 // The h1, the steps and then the button come in that order.
 const s0tops = [await topOf(page.getByRole('heading', { name: 'Race with a plan.' })), await topOf(page.locator('ol.steps')), await topOf(page.getByRole('link', { name: 'Get started' }))];
 check(s0tops.every((v, i) => i === 0 || v > s0tops[i - 1]), 'S0 shows heading, steps and button in order');
-// O1, resolved by the owner: the guide links sit at the very bottom of S0, as plain links, each tagged Draft.
+// O1, resolved by the owner: the guide links are plain links, each tagged Draft. Since the footer redesign (18 Nov 2026) they sit in the footer's link area, on every app screen.
 const guides = page.locator('section.guides');
 const gl = guides.getByRole('link');
-check((await guides.locator('.label').innerText()).trim().toLowerCase() === 'guides' && (await gl.count()) === 2, 'S0 has a Guides label and two guide links');
+check((await guides.getByRole('heading', { name: 'Guides', level: 3 }).count()) === 1 && (await gl.count()) === 2 && (await guides.evaluate((e) => !!e.closest('.sitefoot'))), 'S0 has a Guides heading and two guide links, in the footer');
 check((await gl.allInnerTexts()).every((t) => /Draft/.test(t)) && /How many gels for a 70\.3\?/.test(await gl.nth(0).innerText()) && /How hard should you ride a 70\.3 bike\?/.test(await gl.nth(1).innerText()), 'S0 guide links use the guides\' own titles and say Draft');
 check(await gl.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44)), 'S0 guide links are at least 44 px high');
 check((await guides.locator('.btn, button').count()) === 0, 'S0 guide links are plain links, not buttons or cards');
-check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(guides)) && (await guides.evaluate((e) => e.getBoundingClientRect().bottom)) >= (await page.locator('#view').evaluate((b) => b.getBoundingClientRect().bottom)) - 40, 'S0 puts the guides below the note, at the very bottom of the screen (the feedback footer sits below the screen, outside #view)');
+check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(guides)) && (await guides.evaluate((e) => e.getBoundingClientRect().top)) >= (await page.locator('#view').evaluate((b) => b.getBoundingClientRect().bottom)), 'S0 puts the guides below the note, in the footer under the screen (#view)');
 // The "Four steps" label, the "Learn more" link and the About section (owner ask, 17 Nov 2026).
 const stepsLabel = page.getByText('Four steps', { exact: true });
 check(await stepsLabel.isVisible() && (await topOf(stepsLabel)) < (await topOf(page.locator('ol.steps'))) && (await page.locator('ol.steps').getAttribute('aria-labelledby')) === 'steps-label', 'S0 has a "Four steps" label above the list, naming it');
@@ -228,10 +228,10 @@ const aboutTop = await page.locator('#about').evaluate((e) => e.getBoundingClien
 const atEnd = await page.evaluate(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1);
 check((await page.evaluate(() => location.hash)) === hashBefore && aboutTop >= -2 && (aboutTop <= 40 || atEnd) && (await page.evaluate(() => document.activeElement.id)) === 'about-h', `"Learn more" scrolls to the section and focuses its heading, with the address unchanged (top ${Math.round(aboutTop)} px)`);
 const aboutText = await page.locator('#about').innerText();
-check(await page.getByRole('heading', { name: 'What TRI Momentum does', level: 2 }).isVisible() && await page.getByRole('heading', { name: 'What you get', level: 3 }).isVisible() && await page.getByRole('heading', { name: 'How to get it', level: 3 }).isVisible(), 'The About section has its h2 and two h3s');
+check(await page.getByRole('heading', { name: 'What TRI Momentum does', level: 2 }).isVisible() && await page.getByRole('heading', { name: 'What you get', level: 3 }).isVisible() && await page.getByRole('heading', { name: 'How to get it', level: 3 }).isVisible(), 'The About section has its h2 and its What you get and How to get it h3s');
 check(/gut/.test(aboutText) && /sweat/.test(aboutText) && /range/.test(aboutText) && /PDF/.test(aboutText) && /not medical advice/i.test(aboutText) && !/checked|Countdown|Debrief|fuel|standard|Resend|Strava|Garmin/i.test(aboutText), 'The About section says what the plan does and keeps to the spec (no promise of Countdown or Debrief, no brand, nothing called checked)');
-check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(page.locator('#about'))) && (await topOf(page.locator('#about'))) < (await topOf(guides)), 'S0 puts the About section between the note and the guides');
-await page.locator('#about a.more').click();
+check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(page.locator('#about'))) && (await guides.evaluate((e) => !!e.closest('#about'))), 'S0 puts the About section under the note, with the guides in it');
+await page.locator('#about a.sf-top').click();
 check((await page.evaluate(() => window.scrollY)) === 0 && (await page.evaluate(() => document.activeElement.tagName)) === 'H1', '"Back to the top" returns to the top and focuses the heading');
 for (const w of [390, 360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('S0 with the About section', w); }
 await page.setViewportSize({ width: 390, height: 844 });
@@ -446,8 +446,20 @@ check((await page.getByRole('link', { name: 'Continue: review nutrition' }).isVi
 check(/Bike 175–185 W · finish \d:\d\d–\d:\d\d/.test(s5a) && /days to go/i.test(s5a) && /Taper starts|In your taper/.test(s5a), 'S5 shows the days to go, the taper line and the pacing summary');
 check((await statusRow().count()) === 0 && (await planBtn().count()) === 0 && (await page.locator('nav.rail').count()) === 0 && (await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).count()) === 1, 'S5 has the wordmark, no Race plan button, no status row and no rail');
 check(!/n of 2 done|Your details|Open race card/.test(s5a) && (await page.getByRole('link', { name: 'Edit' }).count()) === 2 && (await page.getByRole('link', { name: 'Edit' }).evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44))), 'S5 has two Edit links (steps 1 and 2) at least 44 px high, and none of the old home');
-check((await page.locator('section.guides').count()) === 0 && !/Guides/.test(s5a), 'S5 has no guide links (they are on S0 only)');
-check((await page.locator('#about').count()) === 0, 'S5 has no About section (it is on S0 only)');
+check((await page.locator('#view section.guides').count()) === 0 && !/Guides/.test(await page.locator('#view').innerText()), 'S5 has no guide links in the screen itself (they are in the footer)');
+check((await page.locator('footer#feedback ~ #about section.guides').count()) === 1 && (await page.locator('#view #about').count()) === 0, 'S5 has the footer with the About section and the guides under the screen, as every app screen does');
+// The footer (18 Nov 2026) is on every app screen: the feedback band, then the About link area on ink, with 44 px links and no sideways scroll at 320 px.
+{
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: 320, height: 844 });
+  const ft = await page.evaluate(() => {
+    const fb = document.getElementById('feedback'); const ab = document.getElementById('about');
+    const small = [...ab.querySelectorAll('a')].filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim());
+    return { order: !!fb && fb.nextElementSibling === ab, bg: getComputedStyle(ab).backgroundColor, small, wide: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  check(ft.order && ft.bg === 'rgb(24, 37, 66)' && ft.small.length === 0 && ft.wide <= 0, `S5 footer: the band is followed by the About area on ink (${ft.bg}), its links are at least 44 px high (${ft.small.join(', ') || 'none short'}), and nothing scrolls sideways at 320 px (${ft.wide})`);
+  await page.setViewportSize(vp);
+}
 check(/Ready once nutrition is done/.test(s5a) && (await page.locator('li.step.goal').count()) === 1, 'S5 keeps step 4 on the light blue until it is done');
 await headerIs('S5', { plan: false });
 await stripIs('S5', false);
@@ -2471,11 +2483,11 @@ for (const [w, hh] of [[1440, 900], [1024, 768]]) {
   await openFront(`desktop ${w}`, { i: 1, width: w, height: hh });
   const st = await box('.truism');
   const col = await box('.s0col');
-  const below = await box('.s0below');
+  const below = await box('#about');
   const kids = await page.locator('.s0col').evaluate((e) => [...e.children].map((c) => c.getBoundingClientRect().width));
   check(st.left <= 1 && st.top <= 1 && col.left >= st.right - 1 && st.width / w >= 0.62 && st.width / w <= 0.7, `S0-desktop ${w}: the stage is on the left and ${(st.width / w).toFixed(3)} of the width`);
   check(col.width >= 320 && Math.max(...kids) <= 480, `S0-desktop ${w}: the S0 column is ${Math.round(col.width)} px wide with content at most ${Math.round(Math.max(...kids))} px`);
-  check(below.top >= st.bottom - 1 && below.top >= col.bottom - 1, `S0-desktop ${w}: About and the guides sit below the stage and the column`);
+  check(below.top >= st.bottom - 1 && below.top >= col.bottom - 1, `S0-desktop ${w}: the footer's About section and the guides sit below the stage and the column`);
   check((await page.locator('.truism').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(11, 35, 239)', `S0-desktop ${w}: the stage is #0b23ef`);
   check((await page.locator('.btn').count()) === 1, `S0-desktop ${w}: the S0 column has one yellow action`);
   const small = await page.locator('#view a, #view button').evaluateAll((els) => els.filter((e) => { const b = e.getBoundingClientRect(); return b.height < 44 || b.width < 44; }).map((e) => e.textContent.trim()));
@@ -2600,7 +2612,7 @@ for (let i = 0; i < TRUISM_N; i++) {
     if (link === 'wordmark') await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click(); else await page.goBack();
     await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
     await page.locator('#view a.more').first().click();
-    await page.locator('#about a.more').click();
+    await page.locator('#about a.sf-top').click();
     check((await truismId()) === first && (await page.evaluate(() => window.__stage === document.querySelector('.truism'))), `S0-rotate: a second round trip, Learn more and Back to the top keep ${first}, as the same element`);
     await page.waitForTimeout(200);
     check(imagePaths(asked).length === 0, 'S0-rotate: no redraw asks for the picture again');

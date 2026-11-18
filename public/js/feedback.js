@@ -135,7 +135,10 @@
     h('p', { class: 'help' }, TEXT.intro),
     fields, status, formActions, doneActions);
 
-  var footer = h('footer', { class: 'fb', id: 'feedback' }, h('p', { class: 'small' }, TEXT.footer), btn, panel);
+  // The band (18 Nov 2026 footer): the prompt and the button on the light blue. The panel opens under it, on the page colour.
+  var footer = h('footer', { class: 'fb', id: 'feedback' },
+    h('div', { class: 'fb-band' }, h('div', { class: 'fb-bar' }, h('p', { class: 'fb-lead' }, TEXT.footer), btn)),
+    panel);
   view.parentNode.insertBefore(footer, view.nextSibling);
 
   function showMsgError(on) {
