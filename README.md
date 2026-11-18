@@ -139,7 +139,14 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Gel timing limits | `TIMING_EVERY`, `END_GAP` | a gel every 5–120 min; none in the last 10 min of a leg |
 | Carb list on My products | `CARB_PICK` | 20–50 g in 5 g steps (a figure off the list goes under Other) |
 
-The front page truisms (18 Nov 2026) carry figures too: the owner's content, in the 12 graphics and the live fuelling truism. All are UNCHECKED, they are never read from or written to `pace.js` or `fuel.js`, and the pull request lists each one for the owner to sign off. Three disagree with the ranges above (about 90% FTP for Olympic, about 75 to 80% FTP for 70.3, and 500 to 1000 mg sodium).
+The front page truisms (18 Nov 2026) carry figures too: the owner's content, in the 12 graphics and the live fuelling truism. All are UNCHECKED, this change does not alter any of them, they are never read from or written to `pace.js` or `fuel.js`, and the pull request lists each one for the owner to sign off. Five disagree with the ranges above, and one is for the owner to settle:
+
+1. Olympic "about 90% FTP", against `BIKE_IF` Olympic (`standard`) 0.81 to 0.89 of FTP (rolling 0.83 to 0.88).
+2. 70.3 "about 75 to 80% FTP", against `BIKE_IF` 70.3 0.71 to 0.78 (rolling 0.73 to 0.77).
+3. "500-1000 mg sodium" with no time unit, against `SODIUM_RANGE` 300 to 1,000 mg an hour.
+4. Olympic "~60 g/hr carbs" (shown as STANDARD FUEL), against `CARB_CEILING` Olympic: 60 on the bike but 30 on the run.
+5. 70.3 "60-90 g/hr carbs", against `CARB_CEILING` 70.3: 90 on the bike but 60 on the run, and shown with no word that the plan never passes the gut figure the athlete enters.
+6. For the owner, not a disagreement: "Weeks 15 to 16: sharp taper" before a week 18 race, against the `TAPER` guide (14 days for a 70.3, 10 for an Olympic), and "105% watts cap", which does not say 105% of what.
 
 **Email must not go live while these ranges are marked UNCHECKED (RD-005):** the PDF carries them off the device and has no DRAFT mark (the owner decided no DRAFT mark, 13 Nov 2026).
 

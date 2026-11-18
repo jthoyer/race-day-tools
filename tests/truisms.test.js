@@ -67,10 +67,11 @@ test('T-list: 13 entries, 12 images then 1 live, in the agreed order, with uniqu
 });
 
 test('T-list: no string in the list holds a "<", so none can be read as markup', () => {
-  const all = strings(T.LIST).concat(T.TAGLINE);
-  assert.ok(all.length > 30, 'looked at the strings');
-  for (const s of all) assert.doesNotMatch(s, /</, s.slice(0, 40));
-  assert.match('a<b', /</); // the check can see what it is for
+  const markup = (list) => strings(list).filter((s) => /</.test(s));
+  assert.ok(strings(T.LIST).concat(T.TAGLINE).length > 30, 'looked at the strings');
+  assert.deepEqual(markup([T.LIST, T.TAGLINE]), []);
+  // The checker finds a "<" in a deliberately bad entry, nested as deep as the real ones.
+  assert.deepEqual(markup([{ id: 'x', cards: [{ detail: 'a<b' }] }]), ['a<b']);
 });
 
 // WebP: "RIFF", a size, "WEBP", then a VP8, VP8L or VP8X chunk. Returns [width, height].
@@ -141,18 +142,18 @@ test('T-pick: every value of r gives a valid index, and floor(r * 13) inside [0,
 });
 
 test('T-figures: truisms.js reads nothing from the pacing or nutrition code and loads alone', () => {
-  for (const word of ['RD.pace', 'RD.fuel', 'require(', 'pace.js', 'fuel.js', 'CARB_CEILING', 'SODIUM_RANGE', 'BIKE_IF']) {
-    assert.ok(!source.includes(word), `truisms.js mentions ${word}`);
-  }
+  const WORDS = ['RD.pace', 'RD.fuel', 'require(', 'pace.js', 'fuel.js', 'CARB_CEILING', 'SODIUM_RANGE', 'BIKE_IF'];
+  const mentioned = (text) => WORDS.filter((w) => text.includes(w));
+  assert.deepEqual(mentioned(source), [], 'truisms.js mentions the pacing or nutrition code');
   assert.ok(source.includes('UNCHECKED'), 'the file says its figures are unchecked');
-  // The scan can see what it is for.
-  assert.ok('x = RD.pace.LEGS'.includes('RD.pace'));
-  assert.ok("require('./pace.js')".includes('require('));
+  // The scan finds each word in a deliberately bad source.
+  assert.deepEqual(mentioned("x = RD.pace.LEGS; y = RD.fuel; require('./pace.js'); BIKE_IF; SODIUM_RANGE; CARB_CEILING; 'fuel.js'"), WORDS);
 });
 
 test('T-persist: truisms.js names no place a pick could be saved', () => {
-  for (const word of ['localStorage', 'sessionStorage', 'cookie', 'history', 'window.name', 'location', 'indexedDB', 'caches']) {
-    assert.ok(!source.toLowerCase().includes(word.toLowerCase()), `truisms.js names ${word}`);
-  }
-  assert.ok('document.cookie'.toLowerCase().includes('cookie'));
+  const PLACES = ['localStorage', 'sessionStorage', 'cookie', 'history', 'window.name', 'location', 'indexedDB', 'caches'];
+  const named = (text) => PLACES.filter((w) => text.toLowerCase().includes(w.toLowerCase()));
+  assert.deepEqual(named(source), [], 'truisms.js names a place a pick could be saved');
+  // The scan finds each place in a deliberately bad source, whatever its case.
+  assert.deepEqual(named('LOCALSTORAGE sessionStorage document.COOKIE history.replaceState window.name location.hash indexedDB caches.open'), PLACES);
 });

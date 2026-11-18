@@ -2478,8 +2478,8 @@ for (const [w, hh] of [[1440, 900], [1024, 768]]) {
   check(below.top >= st.bottom - 1 && below.top >= col.bottom - 1, `S0-desktop ${w}: About and the guides sit below the stage and the column`);
   check((await page.locator('.truism').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(11, 35, 239)', `S0-desktop ${w}: the stage is #0b23ef`);
   check((await page.locator('.btn').count()) === 1, `S0-desktop ${w}: the S0 column has one yellow action`);
-  const small = await page.locator('#view a, #view button').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim()));
-  check(small.length === 0, `S0-desktop ${w}: every link is at least 44 px high (${small.join(', ') || 'none short'})`);
+  const small = await page.locator('#view a, #view button').evaluateAll((els) => els.filter((e) => { const b = e.getBoundingClientRect(); return b.height < 44 || b.width < 44; }).map((e) => e.textContent.trim()));
+  check(small.length === 0, `S0-desktop ${w}: every link and button is at least 44 px high and wide (${small.join(', ') || 'none short'})`);
   await noHorizontalScroll(`S0-desktop ${w}`, w);
   await page.getByRole('link', { name: 'Get started' }).click();
   await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
@@ -2610,12 +2610,19 @@ for (let i = 0; i < TRUISM_N; i++) {
 
 // Criterion 21: the pick is never saved. Fresh context, then a reload with a different stub (a second init script wins).
 {
-  await openFront('persist', { i: 4 });
+  // A blank race is seeded before the page loads (the same shape the app makes on Get started), so the value in the store
+  // before load is known and the three readings below are compared with it byte for byte.
+  const blankSave = { details: { weight: null, sweat: null, sweatTypical: true, gut: null }, race: { name: '', distance: '70.3', date: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null } };
+  const seed = seedWith(blankSave);
+  const seededBefore = JSON.stringify(blankSave);
+  await openFront('persist', { i: 4, init: [seed] });
+  const seeded = await page.evaluate((k) => localStorage.getItem(k), KEY);
+  check(seeded === seededBefore, 'S0-persist: after load, the store holds exactly the seeded blank race, byte for byte');
   await page.getByRole('link', { name: 'Get started' }).click();
   await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
   await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
   await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
-  const seeded = await page.evaluate((k) => localStorage.getItem(k), KEY);
+  check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === seededBefore, 'S0-persist: after Get started and back to home, the store is still byte for byte the seed');
   const state = () => page.evaluate((k) => ({ session: sessionStorage.length, cookie: document.cookie, search: location.search, hash: location.hash, hist: history.state, name: window.name, store: localStorage.getItem(k), keys: Object.keys(localStorage), values: Object.keys(localStorage).map((x) => localStorage.getItem(x)).join('\n') }), KEY);
   const clean = (st, when) => check(st.session === 0 && st.cookie === '' && st.search === '' && (st.hash === '' || st.hash === '#/') && st.hist === null && st.name === '' && !TRUISMS.some((t) => st.values.includes(t.id)) && st.keys.join() === KEY, `S0-persist: ${when}: no session storage, cookie, query, hash, history state or window name, and no truism id in storage`);
   check(!!seeded && JSON.parse(seeded).race && !JSON.parse(seeded).race.name, 'S0-persist: the seed is the blank race the app made');
@@ -2626,7 +2633,7 @@ for (let i = 0; i < TRUISM_N; i++) {
   const after = await state();
   check((await truismId()) === TRUISMS[10].id, 'S0-persist: the reload picked again (a different truism)');
   clean(after, 'after a reload');
-  check(after.store === seeded, 'S0-persist: the saved blank race is byte for byte the same after a reload with a different pick');
+  check(after.store === seededBefore, 'S0-persist: the saved blank race is byte for byte the same as the seed after a reload with a different pick');
   await page.context().close();
 }
 
