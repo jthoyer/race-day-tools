@@ -149,6 +149,17 @@ test('the grid has its own stylesheet, with no media rule, no print rule and the
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8'), /truism-grid|\.tile\b/);
 });
 
+test('a tile never grows to fill its list item, because its square aspect ratio would then make it wider than its column (18 Nov 2026)', () => {
+  // Safari and Firefox size a grown flex item's width from its aspect ratio: a tile in an item made taller by a research link
+  // ran over the next tile. The tile must take its column's width and keep its own height.
+  const grid = fs.readFileSync(path.join(ROOT, 'css', 'truism-grid.css'), 'utf8');
+  const rule = /\.truism-grid li > \.tile \{([^}]*)\}/.exec(grid)?.[1] || '';
+  assert.match(rule, /flex:\s*none;/, 'the tile does not grow');
+  assert.match(rule, /width:\s*100%;/, 'the tile takes its column\'s width');
+  assert.doesNotMatch(rule, /flex:\s*1/, 'no flex-grow on the tile');
+  assert.match(grid, /\.truism-grid li \{[^}]*min-width:\s*0;/, 'the item lets the column set its width');
+});
+
 test('the index is a page of the app: the app\'s content policy, stylesheet version and wordmark, and a title ending "· TRI Momentum"', () => {
   const app = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.equal(csp(INDEX), csp(app));
