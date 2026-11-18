@@ -128,7 +128,7 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Taper length | `TAPER` | guide 14 days for a 70.3, 10 for an Olympic or a Sprint, 21 for an Ironman; offered 10, 14, 21; a picked day 1–42 days out |
 | Gel before the swim | `PRE_SWIM_GEL_MIN` | 15 minutes, optional; shown on the race card PDF beside the swim |
 | Carb ceilings | `CARB_CEILING` | 70.3: bike 90, run 60 g/h; Olympic: 60, 30; Sprint: 60, 30 (copied from Olympic); Ironman: 90, 60 (copied from 70.3) |
-| Bike and run times we accept | `BIKE_MIN`, `RUN_MIN` | bike 0:20–10:00, run 0:15–7:00 (wide enough for a fast Sprint and a slow Ironman) |
+| Bike and run times we accept | `BIKE_MIN`, `RUN_MIN` | bike 0:20–15:00, run 0:15–9:00 (wide enough for a fast Sprint and for every time pacing can hand over, which for a very slow Ironman is about 14 h and 8 h 15) |
 | Typical sweat rate | `TYPICAL_SWEAT` | 0.6 / 0.8 / 1.1 L/h by heat |
 | Fluid share and limits | `REPLACE`, `FLUID_FLOOR`, `FLUID_CEILING` | bike 75% of sweat, 0.4–1.0 L/h |
 | Sodium | `SODIUM_PER_L`, `SODIUM_RANGE` | 600–800 mg/L, 300–1,000 mg/h |

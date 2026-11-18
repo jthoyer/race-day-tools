@@ -18,7 +18,7 @@
   };
   var DISTANCE_MESSAGE = 'Pick Sprint, Olympic, 70.3 or Ironman.';
   // How a distance reads in a sentence ("a 70.3", "an Olympic race").
-  var DISTANCE_WORDS = { sprint: 'a sprint race', standard: 'an Olympic race', '70.3': 'a 70.3', ironman: 'an Ironman' };
+  var DISTANCE_WORDS = { sprint: 'a Sprint race', standard: 'an Olympic race', '70.3': 'a 70.3', ironman: 'an Ironman' };
 
   // UNCHECKED. Open-water race pace as a multiple of pool CSS (slower: sighting, start, wetsuit varies).
   // The sprint and Ironman rows are new (18 Nov 2026) and are first guesses, not checked against any source.

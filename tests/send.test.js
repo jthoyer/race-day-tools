@@ -745,12 +745,12 @@ test('A17: Sprint and Ironman cards, drawn now from real plans, are one A4 page 
   const ex = { mode: 'power', css: 105, ftp: 240, ftpRecent: true, runThreshold: 290, weight: 72, course: 'rolling', heat: 'warm' };
   const pages = (bytes) => (Buffer.from(bytes).toString('latin1').match(/\/Type \/Page\b(?!s)/g) || []).length;
   const small = { ...G, carbs: 20 };
-  // The last case is the worst the limits allow: a 10 hour bike and a 7 hour run on small gels and no drink.
+  // The last case is the worst the limits allow: a 15 hour bike and a 9 hour run on small gels and no drink.
   const cases = [
     { distance: 'sprint', gel: G, drink: D },
     { distance: 'ironman', gel: G, drink: D },
     { distance: 'ironman', gel: small, drink: D },
-    { distance: 'ironman', gel: small, drink: null, bikeMin: 600, runMin: 420, gut: 120 }
+    { distance: 'ironman', gel: small, drink: null, bikeMin: 900, runMin: 540, gut: 120 }
   ];
   for (const c of cases) {
     const pace = P.planPace({ ...ex, distance: c.distance });

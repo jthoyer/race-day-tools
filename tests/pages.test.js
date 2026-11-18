@@ -213,3 +213,17 @@ test('no address outside example.test in public/ (not vendor/), functions/ or te
   assert.equal(foreignAddresses('a@b' + '.co', 'other.js').length, 1, 'and nowhere else');
   assert.equal(foreignAddresses('z@b' + '.co', 'email-cases.js').length, 1, 'and only that exact string');
 });
+
+// The label for each distance is written out in three scripts (the app, the card, the guide tool), and none can load the
+// others. They must say the same thing, in the same order as the legs in pace.js, or one screen names a distance wrongly.
+test('the three scripts that label a distance carry the same four labels, in pace.js order (18 Nov 2026)', () => {
+  const P = require('../public/js/pace.js');
+  const LABELS = { sprint: 'Sprint', standard: 'Olympic', '70.3': '70.3', ironman: 'Ironman' };
+  assert.deepEqual(Object.keys(LABELS), Object.keys(P.LEGS), 'one label per distance, in the order pace.js lists them');
+  for (const file of ['app.js', 'card.js', 'embed.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', file), 'utf8');
+    const m = /var DIST_LABEL = (\{[^}]*\});/.exec(src);
+    assert.ok(m, file + ' defines DIST_LABEL');
+    assert.deepEqual(Function('return ' + m[1])(), LABELS, file);
+  }
+});

@@ -222,7 +222,7 @@ test('the four distances have their standard leg lengths', () => {
   assert.deepEqual(P.LEGS.ironman, { swim: 3.8, bike: 180, run: 42.2 });
 });
 
-test('every table in pace.js has a row for every distance', () => {
+test('every exported table in pace.js has a row for every distance', () => {
   const keys = Object.keys(P.LEGS).sort();
   assert.deepEqual(keys, ['70.3', 'ironman', 'sprint', 'standard']);
   for (const table of [P.BIKE_IF, P.T1, P.T2, P.TRANSITIONS, P.TAPER.guide]) assert.deepEqual(Object.keys(table).sort(), keys);
@@ -251,7 +251,7 @@ test('an Ironman is a long day, and a sprint is a short one, both as ranges that
   assert.ok(iron.finish[0] >= 8 * 60 && iron.finish[1] <= 17 * 60, 'ironman finish ' + iron.finish);
   assert.deepEqual(iron.legs, { swim: 3.8, bike: 180, run: 42.2 });
   assert.match(iron.why.find((w) => w.leg === 'Bike').text, /for an Ironman on a rolling course/);
-  assert.match(sprint.why.find((w) => w.leg === 'Bike').text, /for a sprint race on a rolling course/);
+  assert.match(sprint.why.find((w) => w.leg === 'Bike').text, /for a Sprint race on a rolling course/);
   assert.match(iron.why.find((w) => w.leg === 'Run').text, /after 180 km on the bike/);
 });
 

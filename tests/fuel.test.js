@@ -317,15 +317,15 @@ test('every distance has a carb ceiling, and sprint and Ironman plans keep the g
 });
 
 test('an Ironman and a sprint time are accepted, and a blank or absurd one is still refused, never read as zero', () => {
-  assert.equal(F.planFuel({ ...base, distance: 'ironman', bikeMin: 540, runMin: 400 }).ok, true, '9:00 bike and 6:40 run');
+  assert.equal(F.planFuel({ ...base, distance: 'ironman', bikeMin: 900, runMin: 540 }).ok, true, '15:00 bike and 9:00 run, the top of both limits');
   assert.equal(F.planFuel({ ...base, distance: 'sprint', bikeMin: 25, runMin: 16 }).ok, true, 'a fast sprint');
-  for (const [field, bad] of [['bikeMin', 601], ['bikeMin', 19], ['bikeMin', null], ['bikeMin', 0], ['runMin', 421], ['runMin', 14], ['runMin', null], ['runMin', '']]) {
+  for (const [field, bad] of [['bikeMin', 901], ['bikeMin', 19], ['bikeMin', null], ['bikeMin', 0], ['runMin', 541], ['runMin', 14], ['runMin', null], ['runMin', '']]) {
     const r = F.planFuel({ ...base, [field]: bad });
     assert.equal(r.ok, false, `${field} ${bad}`);
     assert.ok(r.errors.some((e) => e.field === field));
   }
-  assert.match(F.planFuel({ ...base, bikeMin: 700 }).errors[0].message, /0:20 and 10:00/);
-  assert.match(F.planFuel({ ...base, runMin: 500 }).errors[0].message, /0:15 and 7:00/);
+  assert.match(F.planFuel({ ...base, bikeMin: 1000 }).errors[0].message, /0:20 and 15:00/);
+  assert.match(F.planFuel({ ...base, runMin: 600 }).errors[0].message, /0:15 and 9:00/);
 });
 
 test('a long Ironman bike gives many gels, none in the last 10 minutes of a leg, and gel times never pass the gut figure', () => {
@@ -341,4 +341,36 @@ test('a sodium top-up is suggested for an Ironman as for a 70.3, and not for a m
   const sprint = F.planFuel({ ...low, distance: 'sprint', bikeMin: 35, runMin: 22 });
   assert.ok(iron.bike.sodiumShort > 0 || iron.run.sodiumShort > 0, 'Ironman top-up');
   assert.equal(sprint.bike.sodiumShort + sprint.run.sodiumShort, 0);
+});
+
+// Pace feeds nutrition (RD-05-A1): the times pacing hands over must never be refused by the nutrition limits.
+// This sweeps the extremes of every input pacing accepts, for all four distances. A slow Ironman can run to about 14 h
+// on the bike and 8 h 15 on the run, so BIKE_MIN and RUN_MIN in fuel.js have to reach that far.
+test('every valid pacing plan gives times that nutrition accepts, at the extremes of every pacing input (18 Nov 2026)', () => {
+  const P = require('../public/js/pace.js');
+  const L = P.LIMITS;
+  let checked = 0;
+  for (const distance of Object.keys(P.LEGS)) {
+    for (const mode of ['power', 'hr', 'effort']) {
+      for (const course of ['flat', 'hilly']) {
+        for (const heat of ['mild', 'hot']) {
+          for (const ftp of [L.ftp[0], L.ftp[1]]) {
+            for (const weight of [L.weight[0], L.weight[1]]) {
+              for (const runThreshold of [L.runThreshold[0], L.runThreshold[1]]) {
+                for (const steadySpeed of [L.steadySpeed[0], L.steadySpeed[1]]) {
+                  const pace = P.planPace({ distance, mode, course, heat, css: 100, ftp, ftpRecent: false, runThreshold, weight, bikeLthr: 160, runLthr: 170, steadySpeed });
+                  assert.ok(pace.ok, JSON.stringify(pace.errors));
+                  const m = P.midSplits(pace);
+                  const plan = F.planFuel({ ...base, distance, bikeMin: m.bike, runMin: m.run, heat });
+                  assert.ok(plan.ok, `${distance} ${mode} ${course} ${heat} ftp ${ftp} ${weight} kg run ${runThreshold}: bike ${m.bike} run ${m.run} refused: ${JSON.stringify(plan.errors)}`);
+                  checked++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked >= 500, 'the sweep really ran: ' + checked);
 });

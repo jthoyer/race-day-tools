@@ -24,9 +24,11 @@
     ironman: { bike: 90, run: 60 }
   };
   var DISTANCE_MESSAGE = 'Pick Sprint, Olympic, 70.3 or Ironman.';
-  // UNCHECKED. The bike and run times we accept, in minutes. Wide enough for a fast sprint and a slow Ironman (18 Nov 2026).
-  var BIKE_MIN = [20, 600];
-  var RUN_MIN = [15, 420];
+  // UNCHECKED. The bike and run times we accept, in minutes (18 Nov 2026). Wide enough for a fast Sprint and for every time
+  // pace.js can produce from the inputs it accepts, so a valid pacing plan is never refused here. The slowest Ironman it can
+  // produce is about 14 h on the bike and 8 h 15 on the run (a test sweeps the extremes and fails if these limits fall short).
+  var BIKE_MIN = [20, 900];
+  var RUN_MIN = [15, 540];
   var LOW_GUT = 30; // Below this we suggest gut training before race day.
 
   // UNCHECKED. Typical sweat rate (L an hour) when the athlete has not tested. Marked Typical (RP-02-W1).
@@ -141,8 +143,8 @@
   function validate(input) {
     var errs = [];
     if (!CARB_CEILING[input.distance]) errs.push({ field: 'distance', message: DISTANCE_MESSAGE });
-    if (!between(input.bikeMin, BIKE_MIN[0], BIKE_MIN[1])) errs.push({ field: 'bikeMin', message: 'Enter a bike time between 0:20 and 10:00.' });
-    if (!between(input.runMin, RUN_MIN[0], RUN_MIN[1])) errs.push({ field: 'runMin', message: 'Enter a run time between 0:15 and 7:00.' });
+    if (!between(input.bikeMin, BIKE_MIN[0], BIKE_MIN[1])) errs.push({ field: 'bikeMin', message: 'Enter a bike time between 0:20 and 15:00.' });
+    if (!between(input.runMin, RUN_MIN[0], RUN_MIN[1])) errs.push({ field: 'runMin', message: 'Enter a run time between 0:15 and 9:00.' });
     if (!between(input.gut, 0, 120)) errs.push({ field: 'gut', message: 'Enter the carbs your gut handles, 0 to 120 g an hour.' });
     if (input.sweat != null && !between(input.sweat, 0.2, 3)) errs.push({ field: 'sweat', message: 'Enter a sweat rate between 0.2 and 3 L an hour, or use a typical value.' });
     if (!input.gel || !(isNum(input.gel.carbs) && input.gel.carbs > 0) || !between(input.gel.sodium, 0, 5000)) errs.push({ field: 'gel', message: 'Pick a gel or chew with its carbs per serve.' });
