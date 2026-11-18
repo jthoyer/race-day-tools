@@ -99,7 +99,7 @@ test('truisms.css has no print rule, and sizes its type with clamp(), never belo
   }
 });
 
-// Links on the index that are not cards: the page switch and the research notes (19 Nov 2026).
+// Links on the index that are not cards: the page switch and the research notes (18 Nov 2026).
 const OTHER_LINKS = ['index.html', 'research/index.html'];
 const cardLinks = (src) => [...src.matchAll(/<a (?:class="[^"]*" )?href="([^"]+)"/g)].map((m) => m[1]).filter((href) => /^d\d\d(?:-\d\d)?-[a-z0-9-]+\.html$/.test(href));
 
@@ -160,7 +160,7 @@ test('the index is a page of the app: the app\'s content policy, stylesheet vers
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// The research notes (19 Nov 2026): public/truisms/research/index.html, and the way the two pages and the app link.
+// The research notes (18 Nov 2026): public/truisms/research/index.html, and the way the two pages and the app link.
 const RSRC = path.join(DIR, 'research');
 const NOTES = [...RESEARCH.matchAll(/<article class="rcard" id="(D\d\d\.\d)" aria-labelledby="h-D\d\d\.\d">([\s\S]*?)<\/article>/g)].map((m) => ({ id: m[1], body: m[2] }));
 const notesLinkedFromIndex = [...INDEX.matchAll(/href="research\/index\.html#(D\d\d\.\d)"/g)].map((m) => m[1]);
@@ -187,7 +187,7 @@ test('every research note is for a card that exists, shows that card\'s headline
   for (const n of NOTES) {
     const tile = new RegExp('<a class="tile" href="([^"]+)"><span class="tile-label">' + n.id.replace('.', '\\.') + '</span><span class="tile-headline">([^<]+)</span>').exec(INDEX);
     assert.ok(tile, `${n.id}: a tile on the index`);
-    assert.match(n.body, new RegExp('<h2 id="h-' + n.id.replace('.', '\\.') + '">' + tile[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/&#39;/g, "&#39;") + '</h2>'), `${n.id}: the card's own headline`);
+    assert.match(n.body, new RegExp('<h2 id="h-' + n.id.replace('.', '\\.') + '">' + tile[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '</h2>'), `${n.id}: the card's own headline`);
     assert.ok(n.body.includes(`href="../${tile[1]}"`), `${n.id}: links to its card`);
     assert.ok(fs.existsSync(path.join(DIR, tile[1])), `${n.id}: the card exists`);
   }
@@ -195,28 +195,31 @@ test('every research note is for a card that exists, shows that card\'s headline
 
 test('every note says how far to trust its source: a status, a check, and a DOI link only where PubMed holds the paper', () => {
   const stats = { found: 0, closest: 0, notfound: 0 };
+  const itemStatus = Object.fromEntries([...RESEARCH.matchAll(/<li data-item data-topic="D\d\d" data-status="(found|closest|notfound)" data-search="[^"]*">\s*<article class="rcard" id="(D\d\d\.\d)"/g)].map((m) => [m[2], m[1]]));
+  assert.equal(Object.keys(itemStatus).length, NOTES.length, 'every note sits in a filter item with a status');
   for (const n of NOTES) {
-    const status = /data-status="(found|closest|notfound)"/.exec(RESEARCH.slice(0, RESEARCH.indexOf(`id="${n.id}"`)).split('<li data-item').pop() + ' data-status=""') ;
     const label = /<span class="tag(?: warn)?">([^<]+)<\/span>/.exec(n.body)?.[1];
-    assert.match(label, /^(Found in PubMed|Closest match in PubMed|Not found in PubMed)$/, `${n.id}: a source status`);
-    stats[{ 'Found in PubMed': 'found', 'Closest match in PubMed': 'closest', 'Not found in PubMed': 'notfound' }[label]]++;
+    assert.match(label, /^(Paper exists in PubMed|Closest paper in PubMed|Not confirmed)$/, `${n.id}: a source status`);
+    stats[{ 'Paper exists in PubMed': 'found', 'Closest paper in PubMed': 'closest', 'Not confirmed': 'notfound' }[label]]++;
+    // The item's own data-status (what the filter reads) agrees with the tag a person sees.
+    assert.equal(itemStatus[n.id], { 'Paper exists in PubMed': 'found', 'Closest paper in PubMed': 'closest', 'Not confirmed': 'notfound' }[label], `${n.id}: data-status matches the tag`);
     assert.match(n.body, /<h3>Check before you rely on it<\/h3><p class="rcard-check">[^<]{20,}</, `${n.id}: a check`);
     const dois = [...n.body.matchAll(/href="(https:\/\/doi\.org\/[^"]+)" rel="noopener noreferrer"/g)];
-    assert.equal(dois.length, label === 'Not found in PubMed' ? 0 : 1, `${n.id}: a DOI link only for a source PubMed holds`);
+    assert.equal(dois.length, label === 'Not confirmed' ? 0 : 1, `${n.id}: a DOI link only for a source PubMed holds`);
     assert.equal((n.body.match(/href="https?:/g) || []).length, dois.length, `${n.id}: no other outside link`);
   }
   // The counts on the page add up to the notes on the page.
   const stat = (name) => Number(new RegExp('<dt>' + name + '</dt><dd>(\\d+)</dd>').exec(RESEARCH)[1]);
   assert.equal(stat('Notes'), NOTES.length);
-  assert.equal(stat('Source found'), stats.found);
-  assert.equal(stat('Closest match'), stats.closest);
-  assert.equal(stat('Source not found'), stats.notfound);
+  assert.equal(stat('Paper in PubMed'), stats.found);
+  assert.equal(stat('Closest paper'), stats.closest);
+  assert.equal(stat('Not confirmed'), stats.notfound);
   assert.equal(stats.found + stats.closest + stats.notfound, NOTES.length);
 });
 
 test('no truisms page says the figures are checked, peer-reviewed or fully sourced: every figure is still UNCHECKED (README, Numbers to verify)', () => {
   for (const [name, src] of [['index', INDEX], ['research', RESEARCH]]) {
-    assert.doesNotMatch(visibleText(src), /peer[- ]reviewed|fully sourced|84 ?\/ ?84|verified figures/i, name);
+    assert.doesNotMatch(visibleText(src), /peer[- ]reviewed|\bsourced\b|\bverified\b|84 ?\/ ?84/i, name);
     assert.match(visibleText(src), /not yet been checked|every figure is still unchecked/i, `${name} says the figures are unchecked`);
   }
 });
@@ -247,7 +250,8 @@ test('truism-research.css has no media, print or import rule, no outside file, t
   assert.match(rcss, /#0b23ef/);
   const sizes = [...rcss.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]));
   assert.ok(sizes.length && sizes.every((n) => n >= 14), 'type is 14px or more');
-  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8'), /rcard|truism-research/);
+  // None of this page's rules or the grid's page parts are in app.css, so the card colours they carry stay out of it.
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8'), /rcard|truism-research|\.tnav|\.tstats|\.tfilter|\.tile-research|\.truism-grid/);
   const grid = fs.readFileSync(path.join(ROOT, 'css', 'truism-grid.css'), 'utf8');
   assert.doesNotMatch(grid, /@media|@import|url\(/);
   const gsizes = [...grid.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]));
@@ -264,7 +268,12 @@ test('truism-filter.js: words all have to match, topic and status narrow it, a b
   assert.equal(matches(item, { q: '', topic: 'D08', status: 'all' }), false);
   assert.equal(matches(item, { q: '', topic: 'all', status: 'notfound' }), false);
   assert.equal(matches({ topic: 'D01', status: 'none' }, { q: '  ', topic: 'all', status: 'all' }), true, 'a missing search text and a blank query still match');
+  assert.equal(matches({ topic: 'D02', status: 'x', search: 'a swimmer\u2019s effort' }, { q: "swimmer's", topic: 'all', status: 'all' }), true, 'a straight apostrophe finds a curly one');
   assert.equal(countText(84, 84, 'cards'), 'Showing all 84 cards');
   assert.equal(countText(3, 84, 'cards'), 'Showing 3 of 84 cards');
-  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'js', 'truism-filter.js'), 'utf8'), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|fetch\(|XMLHttpRequest|localStorage|sessionStorage/);
+  // The script starts from what the controls show, since a browser can restore them after a reload.
+  const filterSrc = fs.readFileSync(path.join(ROOT, 'js', 'truism-filter.js'), 'utf8');
+  assert.match(filterSrc, /state\.q = input\.value;[\s\S]*state\.status = statusSelect\.value;/);
+  for (const page of [INDEX, RESEARCH]) assert.match(page, /<select id="tstatus" autocomplete="off">/);
+  assert.doesNotMatch(filterSrc, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|fetch\(|XMLHttpRequest|localStorage|sessionStorage/);
 });

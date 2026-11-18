@@ -260,7 +260,7 @@ for (const [i, href] of ['guides/race-fuel.html', 'guides/bike-pacing.html'].ent
   await page.waitForURL('**/' + href);
   check(/· TRI Momentum$/.test(await page.title()), `The S0 guide link ${i + 1} opens ${href}`);
 }
-// The truisms, under the guides in the same footer column (19 Nov 2026): a heading and two plain links, each tagged Draft,
+// The truisms, under the guides in the same footer column (18 Nov 2026): a heading and two plain links, each tagged Draft,
 // apart from the guides section, and each opening its page. The two pages link to each other, filter, and do not scroll sideways.
 await page.goto(base + '/index.html');
 await page.locator('section.tlinks').waitFor();
@@ -294,11 +294,18 @@ check((await guides.getByRole('link').count()) === 2 && (await guides.getByRole(
   check((await T.locator('[data-item]:not([hidden])').count()) === 16, 'the "With research notes" filter shows the 16 cards that have notes');
   await page.locator('#tq').fill('zzzz-no-such-truism');
   check(await page.locator('#tempty').isVisible(), 'a search with no match says so');
+  // A browser can restore a chosen filter after a reload: the list must match what the select shows.
+  await page.locator('#tstatus').selectOption('notes');
+  await page.evaluate(() => { document.getElementById('tstatus').value = 'notes'; });
+  await page.reload();
+  await page.locator('#tcount').waitFor();
+  check((await page.locator('#tstatus').inputValue()) === (await page.locator('#tstatus').evaluate((e) => e.value)) && (await T.locator('[data-item]:not([hidden])').count()) === ((await page.locator('#tstatus').inputValue()) === 'notes' ? 16 : 84), 'after a reload the list agrees with what the Show filter shows');
   await page.locator('#treset').click();
   // A tile with notes links to its note, and that note shows and is the target.
   await page.locator('li[data-item] a.tile-research[href$="#D08.3"]').click();
   await page.waitForURL('**/truisms/research/index.html#D08.3');
-  check(/^Research notes · TRI Momentum$/.test(await page.title()) && (await page.locator('#D08\\.3').isVisible()), 'a tile\'s research link opens that note on the research page');
+  check(/^Research notes · TRI Momentum$/.test(await page.title()) && (await page.locator('#D08\\.3').isVisible()) && (await page.evaluate(() => document.querySelector(':target') && document.querySelector(':target').id)) === 'D08.3', 'a tile\'s research link opens that note on the research page, and the note is the target');
+  check(await page.locator('#D08\\.3').evaluate((e) => { const r = e.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), 'the note is in view after the page settles');
   check((await page.locator('#D08\\.3 h2').innerText()) === 'Run the first 5 km easier than you want. Think in thirds.', 'the note shows the card\'s own headline');
   check((await page.locator('#tcount').innerText()) === 'Showing all 16 notes', 'the research page shows all 16 notes and says so');
   await noHorizontalScroll('research page');
@@ -308,7 +315,7 @@ check((await guides.getByRole('link').count()) === 2 && (await guides.getByRole(
   await noHorizontalScroll('research page', 1280);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#tstatus').selectOption('notfound');
-  check((await page.locator('[data-item]:not([hidden])').count()) === 6 && (await page.locator('[data-item]:not([hidden]) .tag.warn').count()) === 6, 'the "Not found" filter shows the 6 notes whose source was not found, each tagged');
+  check((await page.locator('[data-item]:not([hidden])').count()) === 6 && (await page.locator('[data-item]:not([hidden]) .tag.warn').count()) === 6, 'the "Not confirmed" filter shows the 6 notes whose source is not confirmed, each tagged');
   await page.locator('#treset').click();
   await page.locator('#tq').fill('jeukendrup');
   check((await page.locator('[data-item]:not([hidden])').count()) >= 1, 'an author can be searched');
@@ -327,7 +334,7 @@ check((await guides.getByRole('link').count()) === 2 && (await guides.getByRole(
   check(/· TRI Momentum$/.test(await page.title()), 'a note links to its truism card');
   await page.goto(base + '/truisms/research/index.html');
   await page.getByRole('link', { name: 'TRI Momentum' }).first().click();
-  await page.waitForURL('**/index.html');
+  await page.waitForURL((u) => u.pathname === '/index.html');
   check(/^TRI Momentum$/.test(await page.title()), 'the wordmark on the research page goes home');
 }
 await page.context().close();

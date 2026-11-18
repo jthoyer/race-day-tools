@@ -111,7 +111,7 @@
 .rcard-chips li {
   padding: 4px 12px;
   border-radius: 9px;
-  background: #e8ecf3;
+  background: var(--seg-bg);
   color: #0a0a8c;
   font-size: 14px;
   font-weight: 700;

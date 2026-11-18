@@ -425,7 +425,7 @@
       })));
   }
 
-  // The truisms, under the guides in the same footer column (19 Nov 2026): a heading and two plain links, one to every truism card
+  // The truisms, under the guides in the same footer column (18 Nov 2026): a heading and two plain links, one to every truism card
   // and one to the research notes. A separate section from the guides, so the guides list stays the guides. Both pages carry
   // unchecked figures, so each link says Draft, as the guide links do.
   var TRUISM_LINKS = [

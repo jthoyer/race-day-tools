@@ -8,10 +8,14 @@
 
   // Does one item match? `item` has { topic, status, search } (all strings, search already lower case).
   // `state` has { q, topic, status }. A blank filter ('' or 'all') matches everything.
+  // A curly apostrophe in the page's words matches a straight one typed in the box.
+  function plain(t) { return String(t || '').toLowerCase().replace(/[\u2018\u2019]/g, "'"); }
+
   api.matches = function (item, state) {
-    var q = String(state.q || '').toLowerCase().trim();
+    var q = plain(state.q).trim();
     var words = q ? q.split(/\s+/) : [];
-    for (var i = 0; i < words.length; i++) if (String(item.search || '').indexOf(words[i]) === -1) return false;
+    var hay = plain(item.search);
+    for (var i = 0; i < words.length; i++) if (hay.indexOf(words[i]) === -1) return false;
     if (state.topic && state.topic !== 'all' && item.topic !== state.topic) return false;
     if (state.status && state.status !== 'all' && item.status !== state.status) return false;
     return true;
@@ -55,6 +59,9 @@
   }
 
   if (controls) controls.hidden = false;
+  // A browser can put back what was typed or chosen before a reload or a Back. Start from what the controls show.
+  if (input) state.q = input.value;
+  if (statusSelect) state.status = statusSelect.value;
   if (input) input.addEventListener('input', function () { state.q = input.value; apply(); });
   if (statusSelect) statusSelect.addEventListener('change', function () { state.status = statusSelect.value; apply(); });
   chips.forEach(function (c) {
