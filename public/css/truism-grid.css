@@ -123,13 +123,20 @@
 }
 
 /* A tile and, when the truism has research notes, a link under it to those notes. */
+/* A list item is a tile and, for a truism with notes, a link under it. The tile takes the column's width and is a square from
+   it: it must not grow to fill the item, because with its square aspect ratio a taller item would make it wider than its column
+   and run it over the next tile. min-width 0 lets the column set the width. */
 .truism-grid li {
   display: flex;
   flex-direction: column;
+  align-self: start;
+  min-width: 0;
   gap: 8px;
 }
 .truism-grid li > .tile {
-  flex: 1;
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 .truism-grid .tile-research {
   display: inline-flex;
@@ -197,4 +204,9 @@
 .truism-grid .tile:focus-visible {
   outline: 3px solid #0a0a8c;
   outline-offset: 3px;
+}
+
+/* Air between one topic's tiles and the next topic's heading. */
+.truisms-index [data-group] {
+  margin-top: 20px;
 }

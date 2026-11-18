@@ -280,6 +280,31 @@ check((await guides.getByRole('link').count()) === 2 && (await guides.getByRole(
   await noHorizontalScroll('truisms page');
   for (const w of [360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('truisms page', w); }
   await page.setViewportSize({ width: 390, height: 844 });
+  // No tile is wider than its column or runs over the next one. Chromium stretches a tile across its item, which hides the bug in
+  // Safari and Firefox (a tile grown by its item's height got wider by its aspect ratio), so force that sizing and check again.
+  const tileFit = () => page.evaluate(() => {
+    const bad = [];
+    document.querySelectorAll('.truism-grid ul').forEach((ul) => {
+      const tiles = [...ul.querySelectorAll('li > .tile')].map((t) => ({ id: t.querySelector('.tile-label').textContent, r: t.getBoundingClientRect(), col: t.parentElement.getBoundingClientRect() }));
+      tiles.forEach((t, i) => {
+        if (t.r.width > t.col.width + 1) bad.push(t.id + ' is wider than its column');
+        tiles.slice(i + 1).forEach((u) => { if (t.r.left < u.r.right - 1 && u.r.left < t.r.right - 1 && t.r.top < u.r.bottom - 1 && u.r.top < t.r.bottom - 1) bad.push(t.id + ' runs over ' + u.id); });
+      });
+    });
+    return bad;
+  });
+  for (const w of [1280, 990, 700, 390]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    check((await tileFit()).length === 0, `the truisms grid tiles fit their columns at ${w}px`);
+  }
+  await page.addStyleTag({ content: '.truism-grid li > .tile { align-self: flex-start; }' });
+  for (const w of [1280, 990, 700]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    check((await tileFit()).length === 0, `the truisms grid tiles fit their columns at ${w}px even when a tile is not stretched`);
+  }
+  await page.reload();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#tcount').waitFor();
   // Search, topic and status narrow the list, and Reset puts it back.
   await page.locator('#tq').fill('taper');
   const nTaper = await T.locator('[data-item]:not([hidden])').count();
