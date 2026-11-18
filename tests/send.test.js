@@ -736,6 +736,38 @@ test('A17: a race name with "stream" or "obj" in it still sends, because the car
   assert.equal(C.sheet({ race: { name: 'Mainstream' } }).name, 'MAINSTREAM');
 });
 
+test('A17: Sprint and Ironman cards, drawn now from real plans, are one A4 page and are accepted (18 Nov 2026)', async () => {
+  const C = require('../public/js/card.js');
+  const P = require('../public/js/pace.js');
+  const F = require('../public/js/fuel.js');
+  const { jsPDF } = require('../public/js/vendor/jspdf.umd.min.js');
+  const [G, D] = F.DEFAULT_PRODUCTS;
+  const ex = { mode: 'power', css: 105, ftp: 240, ftpRecent: true, runThreshold: 290, weight: 72, course: 'rolling', heat: 'warm' };
+  const pages = (bytes) => (Buffer.from(bytes).toString('latin1').match(/\/Type \/Page\b(?!s)/g) || []).length;
+  const small = { ...G, carbs: 20 };
+  // The last case is the worst the limits allow: a 15 hour bike and a 9 hour run on small gels and no drink.
+  const cases = [
+    { distance: 'sprint', gel: G, drink: D },
+    { distance: 'ironman', gel: G, drink: D },
+    { distance: 'ironman', gel: small, drink: D },
+    { distance: 'ironman', gel: small, drink: null, bikeMin: 900, runMin: 540, gut: 120 }
+  ];
+  for (const c of cases) {
+    const pace = P.planPace({ ...ex, distance: c.distance });
+    assert.ok(pace.ok, JSON.stringify(pace.errors));
+    const mid = P.midSplits(pace);
+    const fuel = F.planFuel({ distance: c.distance, bikeMin: c.bikeMin || mid.bike, runMin: c.runMin || mid.run, heat: 'warm', gut: c.gut || (c.distance === 'sprint' ? 60 : 90), sweat: null, gel: c.gel, drink: c.drink });
+    assert.ok(fuel.ok, JSON.stringify(fuel.errors));
+    const sheet = C.sheet({ race: { distance: c.distance, name: 'Test ' + c.distance, date: '2026-12-06' }, pace, fuel, fuelStale: false });
+    assert.equal(sheet.sub, 'SUN 6 DEC · ' + c.distance.toUpperCase());
+    const bytes = C.drawPdf(jsPDF, sheet);
+    assert.equal(pages(bytes), 1, `${c.distance} ${c.gel.carbs}g: one page, never two`);
+    assert.ok(bytes.length < 100000, 'under the size the function accepts');
+    const r = await send(good({ pdf: C.toBase64(bytes) }));
+    assert.equal(r.res.status, 200, `${c.distance} ${c.gel.carbs}g ${c.bikeMin || ''}`);
+  }
+});
+
 test('A19: the count goes up only when the mail service takes the send', async () => {
   const last = () => logged[logged.length - 1];
   await send(good());

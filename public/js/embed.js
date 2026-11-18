@@ -13,6 +13,8 @@
   var h = RD.ui.h;
   var T = RD.time;
   var APP = root.RD_APP_URL || '../index.html';
+  // Olympic is stored as 'standard' so older saves load.
+  var DIST_LABEL = { sprint: 'Sprint', standard: 'Olympic', '70.3': '70.3', ironman: 'Ironman' };
 
   function startPlan(apply) {
     var S = RD.store.load();
@@ -117,7 +119,7 @@
       }
       el.appendChild(h('div', { class: 'stack' },
         h('section', { class: 'tool', 'aria-label': 'Nutrition calculator' },
-          h('div', { class: 'head' }, h('h2', null, 'Your ' + (st.distance === '70.3' ? '70.3' : 'Olympic') + ' nutrition'), h('span', { class: 'free' }, 'Free to try')),
+          h('div', { class: 'head' }, h('h2', null, 'Your ' + (DIST_LABEL[st.distance] || '70.3') + ' nutrition'), h('span', { class: 'free' }, 'Free to try')),
           h('div', { class: 'two' }, inp('bike', 'Bike time', null, 'bike'), inp('run', 'Run time', null, 'run')),
           inp('gut', 'Carbs your gut handles', 'g an hour', 'gut', 'decimal'),
           h('div', null, h('p', { class: 'label' }, 'Heat'),

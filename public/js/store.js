@@ -13,7 +13,7 @@
       details: { weight: null, sweat: null, sweatTypical: true, gut: null },
       fitness: { mode: 'power', css: null, ftp: null, ftpRecent: true, runThreshold: null, bikeLthr: null, runLthr: null, steadySpeed: null },
       // race: { name, distance, date, taperDays, t1, t2, course, heat, pace, fuel, splits, splitsByHand }
-      // distance is 'standard' or '70.3'; 'standard' is shown as Olympic. An older save may also hold start and
+      // distance is 'sprint', 'standard', '70.3' or 'ironman'; 'standard' is shown as Olympic. An older save may also hold start and
       // transitionOpens. They are legacy: nothing reads them and nothing shows them, and they load without error.
       // taperDays, t1 and t2 are the athlete's own (RD-031); null or missing means our guide.
       race: null,

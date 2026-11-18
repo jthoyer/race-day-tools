@@ -1,6 +1,6 @@
 # Race-day tools
 
-Pace targets and a timed nutrition plan for Olympic and 70.3 triathlon, on one race card you can email to yourself as a PDF. It's a static web app. It runs on the athlete's device with no account and no health data held. Two things can leave the device, each only when the person taps: a PDF of the race card, when the athlete types an address and taps to email it, and a short feedback message, when they send one from the footer (it carries no plan data). Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
+Pace targets and a timed nutrition plan for Sprint, Olympic, 70.3 and Ironman triathlon, on one race card you can email to yourself as a PDF. It's a static web app. It runs on the athlete's device with no account and no health data held. Two things can leave the device, each only when the person taps: a PDF of the race card, when the athlete types an address and taps to email it, and a short feedback message, when they send one from the footer (it carries no plan data). Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
 
 This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Countdown and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
 
@@ -114,20 +114,21 @@ The maths files work in the browser and in Node, so the tests run with no browse
 
 ## Numbers to verify before launch
 
-All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`. Change them there, never in the screens. The Olympic distance is stored as `standard` in the code and in saved plans, so older saves still load; only the label changed.
+All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`. Change them there, never in the screens. The Olympic distance is stored as `standard` in the code and in saved plans, so older saves still load; only the label changed. Sprint (`sprint`) and Ironman (`ironman`) were added on 18 November 2026. Their rows are first guesses with no source, not checked values: the Sprint carb ceilings copy Olympic and the Ironman ceilings copy 70.3.
 
 | Number | Where | Current value |
 | --- | --- | --- |
-| Bike intensity factor | `BIKE_IF` | 70.3: 0.73–0.77 rolling; Olympic: 0.83–0.88 rolling |
+| Bike intensity factor | `BIKE_IF` | 70.3: 0.73–0.77 rolling; Olympic: 0.83–0.88 rolling; Sprint: 0.89–0.94 rolling; Ironman: 0.67–0.71 rolling |
 | Heat and old-test cuts | `HOT_IF_CUT`, `OLD_TEST_IF_CUT` | 0.02 each |
-| Run off the bike | `RUN_FACTOR`, `RUN_HEAT` | 70.3: 1.08–1.13 × threshold; hot +4% |
-| Swim in open water | `SWIM_FACTOR` | 70.3: 1.06–1.12 × CSS |
+| Run off the bike | `RUN_FACTOR`, `RUN_HEAT` | 70.3: 1.08–1.13 × threshold; Sprint: 0.98–1.03; Ironman: 1.18–1.30; hot +4% |
+| Swim in open water | `SWIM_FACTOR` | 70.3: 1.06–1.12 × CSS; Sprint: 1.02–1.07; Ironman: 1.08–1.14 |
 | Heart-rate and effort targets | `BIKE_HR`, `RUN_HR`, `EFFORT` | see file |
 | Bike speed model | `BIKE_MODEL`, `COURSE_TIME` | CdA 0.29, Crr 0.005, rolling +4%, hilly +10% |
-| Changeovers, our guide | `T1`, `T2` | 70.3: T1 4–5, T2 2–4 min; Olympic: T1 2–3, T2 1–2 min (they add up to the old combined 6–9 and 3–5) |
-| Taper length | `TAPER` | guide 14 days for a 70.3, 10 for an Olympic; offered 10, 14, 21; a picked day 1–42 days out |
+| Changeovers, our guide | `T1`, `T2` | 70.3: T1 4–5, T2 2–4 min; Olympic: T1 2–3, T2 1–2 min (they add up to the old combined 6–9 and 3–5); Sprint: T1 1–2, T2 1–2; Ironman: T1 5–8, T2 3–6 |
+| Taper length | `TAPER` | guide 14 days for a 70.3, 10 for an Olympic or a Sprint, 21 for an Ironman; offered 10, 14, 21; a picked day 1–42 days out |
 | Gel before the swim | `PRE_SWIM_GEL_MIN` | 15 minutes, optional; shown on the race card PDF beside the swim |
-| Carb ceilings | `CARB_CEILING` | 70.3: bike 90, run 60 g/h; Olympic: 60, 30 |
+| Carb ceilings | `CARB_CEILING` | 70.3: bike 90, run 60 g/h; Olympic: 60, 30; Sprint: 60, 30 (copied from Olympic); Ironman: 90, 60 (copied from 70.3) |
+| Bike and run times we accept | `BIKE_MIN`, `RUN_MIN` | bike 0:20–15:00, run 0:15–9:00 (wide enough for a fast Sprint and for every time pacing can hand over, which for a very slow Ironman is about 14 h and 8 h 15) |
 | Typical sweat rate | `TYPICAL_SWEAT` | 0.6 / 0.8 / 1.1 L/h by heat |
 | Fluid share and limits | `REPLACE`, `FLUID_FLOOR`, `FLUID_CEILING` | bike 75% of sweat, 0.4–1.0 L/h |
 | Sodium | `SODIUM_PER_L`, `SODIUM_RANGE` | 600–800 mg/L, 300–1,000 mg/h |
