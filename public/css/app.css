@@ -1513,8 +1513,8 @@ p.notice.go {
 }
 
 /* The split front page (18 Nov 2026). S0 is a truism stage, the S0 column, then the About section and the guides under both.
-   One random truism per page load, shown whole: an image (never cropped, never scaled past its own 1200 px) or the live
-   fuelling truism. The stage is truism blue, and its three card colours belong to the live truism only: this blue and these
+   One random truism per page load, shown whole: an image (never cropped, at most 960 px wide, twice the 480 px column) or the live
+   fuelling truism (a square, at most 720 px, one and a half times the column). The stage is truism blue, and its three card colours belong to the live truism only: this blue and these
    colours are used nowhere else. Stacked by default (a phone: the stage on top); side by side from 1024 px, the one media query. */
 .split {
   display: grid;
@@ -1655,11 +1655,16 @@ p.notice.go {
     margin-top: 0;
   }
   .split {
+    --s0col: 480px; /* the S0 column's width, from .app max-width; the graphic is sized from it */
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     grid-template-rows: minmax(100vh, auto);
   }
   .truism {
     padding: 32px;
+  }
+  /* An image is at most twice the column wide (960 px); the stage still sets the limit where it is narrower. */
+  .truism-img {
+    max-width: min(100%, calc(var(--s0col) * 2));
   }
   .home.s0col {
     align-self: center;
@@ -1670,9 +1675,10 @@ p.notice.go {
     padding-left: clamp(24px, 3.5vw, 56px);
     padding-right: clamp(24px, 3.5vw, 56px);
   }
-  /* The live truism, side by side: a square scaled to the stage with container units, as in the owner's layout. */
+  /* The live truism, side by side: a square scaled to the stage with container units, as in the owner's layout,
+     at most 1.5 times the column (720 px) and never taller than the screen. */
   .truism-live {
-    width: min(100%, calc(100vh - 64px));
+    width: min(100%, calc(100vh - 64px), calc(var(--s0col) * 1.5));
     max-width: none;
     aspect-ratio: 1 / 1;
   }
