@@ -2486,6 +2486,8 @@ for (const [w, hh] of [[1440, 900], [1024, 768]]) {
   const below = await box('#about');
   const kids = await page.locator('.s0col').evaluate((e) => [...e.children].map((c) => c.getBoundingClientRect().width));
   check(st.left <= 1 && st.top <= 1 && col.left >= st.right - 1 && st.width / w >= 0.62 && st.width / w <= 0.7, `S0-desktop ${w}: the stage is on the left and ${(st.width / w).toFixed(3)} of the width`);
+  const gutter = await page.locator('.s0col').evaluate((e) => { const c = e.getBoundingClientRect(); const k = [...e.children].map((x) => x.getBoundingClientRect()); return { left: Math.min(...k.map((r) => r.left)) - c.left, right: c.right - Math.max(...k.map((r) => r.right)) }; });
+  check(gutter.left >= 30 && gutter.right >= 30 && Math.abs(gutter.left - gutter.right) <= 1, `S0-desktop ${w}: the S0 column has ${Math.round(gutter.left)} px of room on its left and ${Math.round(gutter.right)} px on its right (at least 30, and even)`);
   check(col.width >= 320 && Math.max(...kids) <= 480, `S0-desktop ${w}: the S0 column is ${Math.round(col.width)} px wide with content at most ${Math.round(Math.max(...kids))} px`);
   check(below.top >= st.bottom - 1 && below.top >= col.bottom - 1, `S0-desktop ${w}: the footer's About section and the guides sit below the stage and the column`);
   const band = await box('#feedback .fb-band');

@@ -1666,6 +1666,9 @@ p.notice.go {
     width: 100%;
     padding-top: 24px;
     padding-bottom: 24px;
+    /* Room between the blue stage, the text and the page edge: 36 px at 1024 wide, 50 px at 1440, never under 24 or over 56. */
+    padding-left: clamp(24px, 3.5vw, 56px);
+    padding-right: clamp(24px, 3.5vw, 56px);
   }
   /* The live truism, side by side: a square scaled to the stage with container units, as in the owner's layout. */
   .truism-live {
