@@ -12,7 +12,7 @@ function carbsTaken(leg, p, gel) {
 }
 
 test('carbs never go above the gut figure, on any leg (RD-02-A1, RP-02-A2)', () => {
-  for (const distance of ['standard', '70.3']) {
+  for (const distance of ['sprint', 'standard', '70.3', 'ironman']) {
     for (const gut of [0, 20, 30, 45, 60, 70, 90, 120]) {
       for (const gel of [GEL, CHEWS, { id: 'big', name: 'Big gel', kind: 'gel', carbs: 40, sodium: 100 }]) {
         for (const drink of [DRINK, null, { id: 's', name: 'Strong', kind: 'drink', carbs: 90, sodium: 500, serveMl: 500 }]) {
@@ -279,11 +279,11 @@ test('unreadable or half-filled gel timing is refused with a message, and a blan
   assert.deepEqual(none.suggested.bike, plain.bike.gelTimes);
 });
 
-test('an unknown distance is refused with "Pick Olympic or 70.3." (the stored value stays "standard")', () => {
-  const base = { distance: 'ironman', bikeMin: 165, runMin: 115, heat: 'warm', gut: 60, sweat: null, gel: F.DEFAULT_PRODUCTS[0], drink: F.DEFAULT_PRODUCTS[1] };
+test('an unknown distance is refused with "Pick Sprint, Olympic, 70.3 or Ironman." (the stored value stays "standard")', () => {
+  const base = { distance: 'triple', bikeMin: 165, runMin: 115, heat: 'warm', gut: 60, sweat: null, gel: F.DEFAULT_PRODUCTS[0], drink: F.DEFAULT_PRODUCTS[1] };
   const bad = F.planFuel(base);
   assert.equal(bad.ok, false);
-  assert.equal(bad.errors.find((e) => e.field === 'distance').message, 'Pick Olympic or 70.3.');
+  assert.equal(bad.errors.find((e) => e.field === 'distance').message, 'Pick Sprint, Olympic, 70.3 or Ironman.');
   assert.equal(F.planFuel({ ...base, distance: 'standard' }).ok, true);
 });
 
@@ -292,4 +292,53 @@ test('the optional gel before the swim comes from one named number, and the sent
   assert.equal(plan.preRaceMin, 15);
   assert.equal(plan.preRace, 'Optional: a gel about 15 minutes before the swim start, if you have practised it.');
   assert.equal(plan.bike.carbsPerHour <= 70 && plan.run.carbsPerHour <= 70, true, 'it adds nothing to a leg, so the gut cap is untouched');
+});
+
+// Sprint and Ironman (18 Nov 2026). The ceilings for them are placeholders marked UNCHECKED in fuel.js; these tests pin
+// the safety rules, which must hold whatever the ceilings turn out to be.
+test('every distance has a carb ceiling, and sprint and Ironman plans keep the gut and sweat caps', () => {
+  assert.deepEqual(Object.keys(F.CARB_CEILING).sort(), ['70.3', 'ironman', 'sprint', 'standard']);
+  const sweatLimit = { mild: 0.6, warm: 0.8, hot: 1.1 };
+  for (const distance of ['sprint', 'ironman']) {
+    const [bikeMin, runMin] = distance === 'sprint' ? [35, 22] : [380, 270];
+    for (const gut of [0, 30, 60, 90, 120]) {
+      for (const heat of ['mild', 'warm', 'hot']) {
+        for (const sweat of [null, 0.5, 1.4]) {
+          const p = F.planFuel({ ...base, distance, bikeMin, runMin, gut, heat, sweat });
+          assert.ok(p.ok, JSON.stringify(p.errors));
+          assert.ok(p.bike.carbsPerHour <= gut && p.run.carbsPerHour <= gut, `${distance} gut ${gut}`);
+          assert.ok(p.bike.carbsPerHour <= F.CARB_CEILING[distance].bike && p.run.carbsPerHour <= F.CARB_CEILING[distance].run);
+          const limit = sweat == null ? sweatLimit[heat] : sweat;
+          assert.ok(p.bike.fluidPerHour <= limit + 1e-9 && p.run.fluidPerHour <= limit + 1e-9, `${distance} fluid over sweat rate`);
+        }
+      }
+    }
+  }
+});
+
+test('an Ironman and a sprint time are accepted, and a blank or absurd one is still refused, never read as zero', () => {
+  assert.equal(F.planFuel({ ...base, distance: 'ironman', bikeMin: 540, runMin: 400 }).ok, true, '9:00 bike and 6:40 run');
+  assert.equal(F.planFuel({ ...base, distance: 'sprint', bikeMin: 25, runMin: 16 }).ok, true, 'a fast sprint');
+  for (const [field, bad] of [['bikeMin', 601], ['bikeMin', 19], ['bikeMin', null], ['bikeMin', 0], ['runMin', 421], ['runMin', 14], ['runMin', null], ['runMin', '']]) {
+    const r = F.planFuel({ ...base, [field]: bad });
+    assert.equal(r.ok, false, `${field} ${bad}`);
+    assert.ok(r.errors.some((e) => e.field === field));
+  }
+  assert.match(F.planFuel({ ...base, bikeMin: 700 }).errors[0].message, /0:20 and 10:00/);
+  assert.match(F.planFuel({ ...base, runMin: 500 }).errors[0].message, /0:15 and 7:00/);
+});
+
+test('a long Ironman bike gives many gels, none in the last 10 minutes of a leg, and gel times never pass the gut figure', () => {
+  const p = F.planFuel({ ...base, distance: 'ironman', bikeMin: 380, runMin: 270, gut: 80 });
+  assert.ok(p.bike.gels > 8);
+  for (const t of p.bike.gelTimes) assert.ok(t <= 380 - F.END_GAP);
+  for (const t of p.run.gelTimes) assert.ok(t <= 270 - F.END_GAP);
+});
+
+test('a sodium top-up is suggested for an Ironman as for a 70.3, and not for a mild sprint', () => {
+  const low = { ...base, gel: { ...F.DEFAULT_PRODUCTS[0], sodium: 0 }, drink: null, heat: 'mild', gut: 60 };
+  const iron = F.planFuel({ ...low, distance: 'ironman', bikeMin: 380, runMin: 270 });
+  const sprint = F.planFuel({ ...low, distance: 'sprint', bikeMin: 35, runMin: 22 });
+  assert.ok(iron.bike.sodiumShort > 0 || iron.run.sodiumShort > 0, 'Ironman top-up');
+  assert.equal(sprint.bike.sodiumShort + sprint.run.sodiumShort, 0);
 });

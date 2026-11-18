@@ -8,50 +8,70 @@
 (function (root) {
   'use strict';
 
+  // The four distances. The stored keys are 'sprint', 'standard' (shown as Olympic, kept so older saves load), '70.3'
+  // and 'ironman'. Leg distances are the standard race distances in km.
   var LEGS = {
+    sprint: { swim: 0.75, bike: 20, run: 5 },
     standard: { swim: 1.5, bike: 40, run: 10 },
-    '70.3': { swim: 1.9, bike: 90, run: 21.1 }
+    '70.3': { swim: 1.9, bike: 90, run: 21.1 },
+    ironman: { swim: 3.8, bike: 180, run: 42.2 }
   };
+  var DISTANCE_MESSAGE = 'Pick Sprint, Olympic, 70.3 or Ironman.';
+  // How a distance reads in a sentence ("a 70.3", "an Olympic race").
+  var DISTANCE_WORDS = { sprint: 'a sprint race', standard: 'an Olympic race', '70.3': 'a 70.3', ironman: 'an Ironman' };
 
   // UNCHECKED. Open-water race pace as a multiple of pool CSS (slower: sighting, start, wetsuit varies).
-  var SWIM_FACTOR = { standard: [1.03, 1.08], '70.3': [1.06, 1.12] };
+  // The sprint and Ironman rows are new (18 Nov 2026) and are first guesses, not checked against any source.
+  var SWIM_FACTOR = { sprint: [1.02, 1.07], standard: [1.03, 1.08], '70.3': [1.06, 1.12], ironman: [1.08, 1.14] };
 
   // UNCHECKED. Bike intensity factor (share of FTP) by distance and course.
   // 70.3 rolling 0.73-0.77 is the blueprint's figure (RP-05-A1). Verify against current coaching sources.
+  // The sprint and Ironman rows are new (18 Nov 2026) and are first guesses, not checked against any source.
   var BIKE_IF = {
+    sprint: { flat: [0.9, 0.95], rolling: [0.89, 0.94], hilly: [0.87, 0.92] },
     standard: { flat: [0.84, 0.89], rolling: [0.83, 0.88], hilly: [0.81, 0.86] },
-    '70.3': { flat: [0.74, 0.78], rolling: [0.73, 0.77], hilly: [0.71, 0.75] }
+    '70.3': { flat: [0.74, 0.78], rolling: [0.73, 0.77], hilly: [0.71, 0.75] },
+    ironman: { flat: [0.68, 0.72], rolling: [0.67, 0.71], hilly: [0.65, 0.69] }
   };
   var HOT_IF_CUT = 0.02; // UNCHECKED. Ride a little easier in the heat.
   var OLD_TEST_IF_CUT = 0.02; // UNCHECKED. An FTP test over 6 weeks old: aim lower (RP-03-W1).
 
   // UNCHECKED. Heart-rate targets as a share of threshold heart rate.
-  var BIKE_HR = { standard: [0.88, 0.93], '70.3': [0.8, 0.85] };
-  var RUN_HR = { standard: [0.93, 0.98], '70.3': [0.85, 0.9] };
+  // Sprint and Ironman rows are new (18 Nov 2026), first guesses.
+  var BIKE_HR = { sprint: [0.92, 0.97], standard: [0.88, 0.93], '70.3': [0.8, 0.85], ironman: [0.74, 0.79] };
+  var RUN_HR = { sprint: [0.96, 1.0], standard: [0.93, 0.98], '70.3': [0.85, 0.9], ironman: [0.78, 0.84] };
 
   // UNCHECKED. Effort mode: targets out of 10 with a talk test (RP-03-A2).
+  // Sprint and Ironman rows are new (18 Nov 2026), first guesses.
   var EFFORT = {
+    sprint: { bike: '8 out of 10: only a few words at a time', run: '8–9 out of 10: single words' },
     standard: { bike: '7 out of 10: a few words at a time', run: '7–8 out of 10: a word or two at a time' },
-    '70.3': { bike: '5–6 out of 10: you can speak in short sentences', run: '6–7 out of 10: short phrases only' }
+    '70.3': { bike: '5–6 out of 10: you can speak in short sentences', run: '6–7 out of 10: short phrases only' },
+    ironman: { bike: '4–5 out of 10: you can hold a conversation', run: '5–6 out of 10: short sentences' }
   };
 
   // UNCHECKED. Race speed against the speed of a hard long ride, for Heart rate and Effort modes.
-  var SPEED_FACTOR = { standard: [1.02, 1.08], '70.3': [0.98, 1.04] };
+  // Sprint and Ironman rows are new (18 Nov 2026), first guesses.
+  var SPEED_FACTOR = { sprint: [1.05, 1.12], standard: [1.02, 1.08], '70.3': [0.98, 1.04], ironman: [0.9, 0.97] };
 
   // UNCHECKED. Run pace off the bike as a multiple of run threshold pace (RP-05-A2).
-  var RUN_FACTOR = { standard: [1.02, 1.06], '70.3': [1.08, 1.13] };
+  // Sprint and Ironman rows are new (18 Nov 2026), first guesses.
+  var RUN_FACTOR = { sprint: [0.98, 1.03], standard: [1.02, 1.06], '70.3': [1.08, 1.13], ironman: [1.18, 1.3] };
   var RUN_HEAT = { mild: 1.0, warm: 1.01, hot: 1.04 };
 
   // UNCHECKED. Each changeover on its own, in whole minutes: T1 (swim to bike) and T2 (bike to run). They add up to
   // the combined range this file used before (Standard 3-5, 70.3 6-9), so a plan with no times of its own is unchanged.
   // The athlete can set their own T1 and T2 (RD-031); our range stays as the guide beside each field.
-  var T1 = { standard: [2, 3], '70.3': [4, 5] };
-  var T2 = { standard: [1, 2], '70.3': [2, 4] };
-  var TRANSITIONS = { standard: [T1.standard[0] + T2.standard[0], T1.standard[1] + T2.standard[1]], '70.3': [T1['70.3'][0] + T2['70.3'][0], T1['70.3'][1] + T2['70.3'][1]] };
+  // The sprint and Ironman rows are new (18 Nov 2026), first guesses; they have no older combined range to match.
+  var T1 = { sprint: [1, 2], standard: [2, 3], '70.3': [4, 5], ironman: [5, 8] };
+  var T2 = { sprint: [1, 2], standard: [1, 2], '70.3': [2, 4], ironman: [3, 6] };
+  var TRANSITIONS = {};
+  Object.keys(LEGS).forEach(function (d) { TRANSITIONS[d] = [T1[d][0] + T2[d][0], T1[d][1] + T2[d][1]]; });
 
   // UNCHECKED. Taper length in days before race day: the guide for each distance, the lengths offered as one tap,
   // and the shortest and longest we accept from a picked date (RD-011, RD-031). A coach's plan wins over the guide.
-  var TAPER = { guide: { standard: 10, '70.3': 14 }, options: [10, 14, 21], limits: [1, 42] };
+  // The sprint and Ironman guides (10 and 21) are first guesses, picked from the lengths already offered as one tap.
+  var TAPER = { guide: { sprint: 10, standard: 10, '70.3': 14, ironman: 21 }, options: [10, 14, 21], limits: [1, 42] };
 
   // Bike speed model: steady-state power balance on flat roads, then a time multiplier per course.
   // UNCHECKED. CdA 0.29 m2 suits an age-grouper on aero bars; Crr 0.005 suits good road tyres.
@@ -114,7 +134,7 @@
   // Checks the inputs. Returns a list of { field, message }. Empty means good to go.
   function validate(input) {
     var errs = [];
-    if (!LEGS[input.distance]) errs.push({ field: 'distance', message: 'Pick Olympic or 70.3.' });
+    if (!LEGS[input.distance]) errs.push({ field: 'distance', message: DISTANCE_MESSAGE });
     if (!within(input.css, LIMITS.css)) errs.push({ field: 'css', message: 'Enter your critical swim speed (CSS) as m:ss per 100 m, between 1:05 and 3:30.' });
     if (!within(input.runThreshold, LIMITS.runThreshold)) errs.push({ field: 'runThreshold', message: 'Enter your run threshold as m:ss per km, between 3:00 and 9:00.' });
     if (!within(input.weight, LIMITS.weight)) errs.push({ field: 'weight', message: 'Enter a body weight between 35 and 150 kg.' });
@@ -172,7 +192,7 @@
       why.push({
         leg: 'Bike',
         text: Math.round(f[0] * 100) + '–' + Math.round(f[1] * 100) + '% of your FTP of ' + input.ftp + ' W, a typical range for ' +
-          (d === '70.3' ? 'a 70.3' : 'an Olympic race') + ' on a ' + course + ' course' + (heat === 'hot' ? ', eased for the heat' : '') + '.'
+          DISTANCE_WORDS[d] + ' on a ' + course + ' course' + (heat === 'hot' ? ', eased for the heat' : '') + '.'
       });
       if (input.ftpRecent === false) warnings.push('Your FTP test is over 6 weeks old, so the bike target is set a little lower. Retest if you can.');
     } else {
@@ -260,6 +280,7 @@
 
   var api = {
     LEGS: LEGS,
+    DISTANCE_MESSAGE: DISTANCE_MESSAGE,
     kmAt: kmAt,
     KM_NOTE: KM_NOTE,
     LIMITS: LIMITS,

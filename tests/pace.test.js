@@ -27,7 +27,7 @@ test('CSS is explained where the app mentions it (RD-021)', () => {
 });
 
 test('the legs always add up to the finish range (RP-05-W2)', () => {
-  for (const distance of ['standard', '70.3']) {
+  for (const distance of ['sprint', 'standard', '70.3', 'ironman']) {
     for (const course of ['flat', 'rolling', 'hilly']) {
       for (const heat of ['mild', 'warm', 'hot']) {
         for (const mode of ['power', 'hr', 'effort']) {
@@ -84,7 +84,7 @@ test('implausible numbers are refused, not planned (RP-03-A1)', () => {
   assert.equal(bad.ok, false);
   const fields = bad.errors.map((e) => e.field).sort();
   assert.deepEqual(fields, ['css', 'ftp', 'runThreshold', 'weight']);
-  assert.equal(P.planPace({ ...example, distance: 'ironman' }).ok, false);
+  assert.equal(P.planPace({ ...example, distance: 'triple' }).ok, false);
 });
 
 test('bikeTarget matches the full plan, so the guide and the app agree', () => {
@@ -107,7 +107,7 @@ test('midSplits hands the fuel plan the middle of each leg', () => {
 
 test('low numbers still give a range, never one number (RD-05-A2)', () => {
   for (const ftp of [80, 100, 120, 125]) {
-    for (const distance of ['standard', '70.3']) {
+    for (const distance of ['sprint', 'standard', '70.3', 'ironman']) {
       const p = P.planPace({ ...example, ftp, distance });
       assert.ok(p.ok);
       assert.ok(p.bike.watts[0] < p.bike.watts[1], `FTP ${ftp} ${distance}: ${p.bike.watts}`);
@@ -141,12 +141,12 @@ test('kmAt never passes the leg distance, and a blank or unreadable value gives 
   for (const bad of [null, undefined, NaN, Infinity, '161', 0, -5]) assert.equal(P.kmAt('70.3', 'bike', 40, bad), null, String(bad));
   for (const bad of [null, undefined, NaN, '40', -1]) assert.equal(P.kmAt('70.3', 'bike', bad, 161), null, String(bad));
   // An unknown distance or leg gives no km. So does a name that only exists on every object.
-  for (const d of ['sprint', null, undefined, 'constructor', 'toString']) assert.equal(P.kmAt(d, 'bike', 40, 161), null, String(d));
+  for (const d of ['triple', null, undefined, 'constructor', 'toString']) assert.equal(P.kmAt(d, 'bike', 40, 161), null, String(d));
   for (const l of ['swim', 'toString', undefined]) assert.equal(P.kmAt('70.3', l, 40, 161), null, String(l));
 });
 
 test('T1 and T2 split our old combined changeover range, so a plan with no times of its own is unchanged (RD-031)', () => {
-  for (const d of ['standard', '70.3']) {
+  for (const d of ['sprint', 'standard', '70.3', 'ironman']) {
     assert.deepEqual(P.TRANSITIONS[d], [P.T1[d][0] + P.T2[d][0], P.T1[d][1] + P.T2[d][1]]);
   }
   assert.deepEqual(P.TRANSITIONS.standard, [3, 5]);
@@ -159,7 +159,7 @@ test('T1 and T2 split our old combined changeover range, so a plan with no times
 });
 
 test('your own T1 and T2 are used, and the legs and changeovers still add up to the finish (RD-031, RP-05-W2)', () => {
-  for (const distance of ['standard', '70.3']) {
+  for (const distance of ['sprint', 'standard', '70.3', 'ironman']) {
     for (const t1 of [null, 1, 4, 12, 30]) {
       for (const t2 of [null, 1, 3, 30]) {
         const p = P.planPace({ ...example, distance, t1, t2 });
@@ -199,7 +199,7 @@ test('taperDays uses your own length when it is whole days in range, else the gu
   assert.equal(P.taperDays('standard', 7), 7);
   // A blank, zero, a fraction, a string or a value out of range never sets the taper: the guide stays.
   for (const bad of [0, -1, 2.5, 43, 365, NaN, '21']) assert.equal(P.taperDays('70.3', bad), 14, String(bad));
-  assert.equal(P.taperDays('sprint', null), 14);
+  assert.equal(P.taperDays('triple', null), 14);
   P.TAPER.options.forEach((n) => assert.equal(P.taperDays('70.3', n), n));
 });
 
@@ -209,6 +209,79 @@ test('KM_NOTE is the owner\'s wording, and the bike explanation says Olympic (8-
   assert.match(bike, /an Olympic race/);
   assert.doesNotMatch(bike, /Standard/);
   // The stored distance stays "standard"; only the words changed. A distance we do not know is refused with the new name.
-  const bad = P.planPace({ ...example, distance: 'ironman' });
-  assert.equal(bad.errors.find((e) => e.field === 'distance').message, 'Pick Olympic or 70.3.');
+  const bad = P.planPace({ ...example, distance: 'triple' });
+  assert.equal(bad.errors.find((e) => e.field === 'distance').message, 'Pick Sprint, Olympic, 70.3 or Ironman.');
+});
+
+// Sprint and Ironman (18 Nov 2026). Every range is a first guess and marked UNCHECKED in pace.js, so these tests pin
+// the shape (legs, order, adding up, ranges), not the figures themselves.
+test('the four distances have their standard leg lengths', () => {
+  assert.deepEqual(P.LEGS.sprint, { swim: 0.75, bike: 20, run: 5 });
+  assert.deepEqual(P.LEGS.standard, { swim: 1.5, bike: 40, run: 10 });
+  assert.deepEqual(P.LEGS['70.3'], { swim: 1.9, bike: 90, run: 21.1 });
+  assert.deepEqual(P.LEGS.ironman, { swim: 3.8, bike: 180, run: 42.2 });
+});
+
+test('every table in pace.js has a row for every distance', () => {
+  const keys = Object.keys(P.LEGS).sort();
+  assert.deepEqual(keys, ['70.3', 'ironman', 'sprint', 'standard']);
+  for (const table of [P.BIKE_IF, P.T1, P.T2, P.TRANSITIONS, P.TAPER.guide]) assert.deepEqual(Object.keys(table).sort(), keys);
+  for (const d of keys) {
+    assert.ok(P.TAPER.options.includes(P.TAPER.guide[d]), `${d}: the guide is one of the lengths offered as one tap`);
+    for (const course of ['flat', 'rolling', 'hilly']) assert.equal(P.BIKE_IF[d][course].length, 2);
+  }
+});
+
+test('the shorter the race, the harder the effort, and the longer the race, the easier (sprint to Ironman)', () => {
+  const order = ['sprint', 'standard', '70.3', 'ironman'];
+  const plans = order.map((distance) => P.planPace({ ...example, distance }));
+  for (const p of plans) assert.ok(p.ok, JSON.stringify(p.errors));
+  for (let i = 1; i < plans.length; i++) {
+    assert.ok(plans[i].bike.watts[1] <= plans[i - 1].bike.watts[0] + 5, `${order[i]} bike watts sit at or under ${order[i - 1]}`);
+    assert.ok(plans[i].run.pace[0] >= plans[i - 1].run.pace[0], `${order[i]} run is not faster than ${order[i - 1]}`);
+  }
+  assert.ok(plans[0].finish[1] < plans[1].finish[0], 'a sprint finishes before an Olympic');
+  assert.ok(plans[3].finish[0] > plans[2].finish[1], 'an Ironman finishes after a 70.3');
+});
+
+test('an Ironman is a long day, and a sprint is a short one, both as ranges that add up', () => {
+  const sprint = P.planPace({ ...example, distance: 'sprint' });
+  const iron = P.planPace({ ...example, distance: 'ironman' });
+  assert.ok(sprint.finish[0] >= 45 && sprint.finish[1] <= 120, 'sprint finish ' + sprint.finish);
+  assert.ok(iron.finish[0] >= 8 * 60 && iron.finish[1] <= 17 * 60, 'ironman finish ' + iron.finish);
+  assert.deepEqual(iron.legs, { swim: 3.8, bike: 180, run: 42.2 });
+  assert.match(iron.why.find((w) => w.leg === 'Bike').text, /for an Ironman on a rolling course/);
+  assert.match(sprint.why.find((w) => w.leg === 'Bike').text, /for a sprint race on a rolling course/);
+  assert.match(iron.why.find((w) => w.leg === 'Run').text, /after 180 km on the bike/);
+});
+
+test('km beside a gel time uses the sprint and Ironman leg lengths', () => {
+  assert.equal(P.kmAt('ironman', 'bike', 180, 360), 90);
+  assert.equal(P.kmAt('ironman', 'bike', 360, 360), 180);
+  assert.equal(P.kmAt('ironman', 'run', 120, 240), 21);
+  assert.equal(P.kmAt('ironman', 'run', 240, 240), 42);
+  assert.equal(P.kmAt('sprint', 'bike', 30, 30), 20);
+  assert.equal(P.kmAt('sprint', 'run', 10, 20), 3);
+  assert.equal(P.kmAt('ironman', 'bike', 999, 360), 180);
+});
+
+test('Sprint and Ironman changeovers and taper come from their own rows, and your own T1 and T2 still win', () => {
+  const s = P.planPace({ ...example, distance: 'sprint' });
+  const i = P.planPace({ ...example, distance: 'ironman' });
+  assert.deepEqual(s.t1, P.T1.sprint);
+  assert.deepEqual(i.t2, P.T2.ironman);
+  assert.deepEqual(i.transitions, P.TRANSITIONS.ironman);
+  assert.equal(P.taperDays('sprint', null), 10);
+  assert.equal(P.taperDays('ironman', undefined), 21);
+  assert.equal(P.taperDays('ironman', 14), 14);
+  assert.deepEqual(P.planPace({ ...example, distance: 'ironman', t1: 6 }).t1, [6, 6]);
+});
+
+test('a distance we do not know is refused, and the old Olympic key still works', () => {
+  for (const bad of ['triple', '', null, undefined, 'Ironman', 'sprint ']) {
+    const p = P.planPace({ ...example, distance: bad });
+    assert.equal(p.ok, false, String(bad));
+    assert.equal(p.errors.find((e) => e.field === 'distance').message, P.DISTANCE_MESSAGE);
+  }
+  assert.equal(P.planPace({ ...example, distance: 'standard' }).ok, true);
 });
