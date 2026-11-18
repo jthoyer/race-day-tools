@@ -70,7 +70,7 @@ One small pull request, after step 10 passes:
 
 ## Roll back
 
-Keep GitHub Pages live until the new address is checked. To go back, point DNS at GitHub Pages again. The email block hides itself there.
+Keep GitHub Pages live until the new address is checked. To go back, point DNS at GitHub Pages again. The email block and the feedback footer hide themselves there.
 
 ## Still blocks launch
 

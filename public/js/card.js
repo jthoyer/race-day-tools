@@ -6,7 +6,7 @@
  *   drawPdf(JsPDF)   one A4 page of built-in Helvetica from that model: a black-bordered strip to cut out and stick
  *                    to the top tube, with a "How to use" column beside it. The jsPDF constructor is passed in, so
  *                    this file does not care whether it came from the browser or from Node.
- *   normaliseEmail   the address rules. functions/api/send.js holds the same rules; tests/email-cases.js drives both.
+ *   normaliseEmail   the address rules. functions/api/send.js and functions/api/feedback.js hold the same rules; tests/email-cases.js drives all three.
  *
  * It reads the saved plan and does no new maths: every number in the model is one the race card shows. A blank,
  * unreadable or zero value gives no row, or the time alone, never "NaN" or "0". Product names are never put on the

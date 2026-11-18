@@ -48,17 +48,17 @@ let n = 0;
 let page; // the page the checks below talk to
 const KEY = 'race-day-tools.v1';
 
-// RD-039 A24. The one request the app may make besides loading itself is a POST to /api/send, made by its own address.
-// Anything else under /api/ is a failure, and so is any request to another host. Kept as a function so it can be tried
+// RD-039 A24. The requests the app may make besides loading itself are a POST to /api/send (email the card) and a POST to
+// /api/feedback (the feedback panel), made by its own address. Anything else under /api/ is a failure, and so is any request to another host. Kept as a function so it can be tried
 // on made-up requests below: a guard that has never been seen to fail is not a guard.
 function badRequest(method, url) {
   const u = new URL(url);
   if (/^https?:$/.test(u.protocol) && u.hostname !== 'localhost') return 'outside request';
-  if ((u.pathname === '/api' || u.pathname.startsWith('/api/')) && !(method === 'POST' && u.pathname === '/api/send')) return 'unexpected /api/ request';
+  if ((u.pathname === '/api' || u.pathname.startsWith('/api/')) && !(method === 'POST' && (u.pathname === '/api/send' || u.pathname === '/api/feedback'))) return 'unexpected /api/ request';
   return null;
 }
-// Set while a scenario expects /api/send to fail (a 404, an offline device, a refused call): the browser's own console
-// error for that one address is not a problem there. Any other console error still is.
+// Set while a scenario expects /api/send or /api/feedback to fail (a 404, an offline device, a refused call): the browser's own
+// console error for those two addresses is not a problem there. Any other console error still is.
 let sendErrorsExpected = false;
 
 // Every scenario below says how it is isolated. A "fresh" one is a new browser context: empty storage, no shared module state.
@@ -68,10 +68,10 @@ async function fresh(label, { width = 390, init } = {}) {
   p.on('pageerror', (e) => problems.push(`page error (${label}): ` + e.message));
   p.on('console', (m) => {
     if (m.type() !== 'error') return;
-    if (sendErrorsExpected && (m.location().url || '').endsWith('/api/send')) return;
+    if (sendErrorsExpected && /\/api\/(send|feedback)$/.test(m.location().url || '')) return;
     problems.push(`console (${label}): ` + m.text());
   });
-  // Fonts ship with the app, so nothing may be requested from another host, and only POST /api/send may be called.
+  // Fonts ship with the app, so nothing may be requested from another host, and only POST /api/send and POST /api/feedback may be called.
   p.on('request', (r) => { const bad = badRequest(r.method(), r.url()); if (bad) problems.push(`${bad} (${label}): ${r.method()} ` + r.url()); });
   // A content-policy violation shows as a console error above, and as a securitypolicyviolation event here.
   await p.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error('CSP blocked ' + e.violatedDirective + ' ' + e.blockedURI)));
@@ -205,7 +205,7 @@ check((await guides.locator('.label').innerText()).trim().toLowerCase() === 'gui
 check((await gl.allInnerTexts()).every((t) => /Draft/.test(t)) && /How many gels for a 70\.3\?/.test(await gl.nth(0).innerText()) && /How hard should you ride a 70\.3 bike\?/.test(await gl.nth(1).innerText()), 'S0 guide links use the guides\' own titles and say Draft');
 check(await gl.evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44)), 'S0 guide links are at least 44 px high');
 check((await guides.locator('.btn, button').count()) === 0, 'S0 guide links are plain links, not buttons or cards');
-check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(guides)) && (await guides.evaluate((e) => e.getBoundingClientRect().bottom)) >= (await page.locator('body').evaluate((b) => b.getBoundingClientRect().bottom)) - 40, 'S0 puts the guides below the note, at the very bottom');
+check((await topOf(page.getByText('Free. No account needed.'))) < (await topOf(guides)) && (await guides.evaluate((e) => e.getBoundingClientRect().bottom)) >= (await page.locator('#view').evaluate((b) => b.getBoundingClientRect().bottom)) - 40, 'S0 puts the guides below the note, at the very bottom of the screen (the feedback footer sits below the screen, outside #view)');
 // The "Four steps" label, the "Learn more" link and the About section (owner ask, 17 Nov 2026).
 const stepsLabel = page.getByText('Four steps', { exact: true });
 check(await stepsLabel.isVisible() && (await topOf(stepsLabel)) < (await topOf(page.locator('ol.steps'))) && (await page.locator('ol.steps').getAttribute('aria-labelledby')) === 'steps-label', 'S0 has a "Four steps" label above the list, naming it');
@@ -241,7 +241,8 @@ const own = await page.evaluate(() => fetch('/css/app.css').then((r) => r.status
 check(own === 200, "connect-src 'self' lets the page call its own address");
 // The two guards, tried on made-up requests: each must say no where it should, and yes where it should.
 check(badRequest('GET', 'https://outside.example.test/x') === 'outside request' && badRequest('POST', 'http://localhost:8000/api/send') === null && badRequest('GET', 'http://localhost:8000/js/app.js') === null, 'The outside-host guard refuses another host and lets the app load itself');
-check(badRequest('GET', 'http://localhost:8000/api/send') && badRequest('PUT', 'http://localhost:8000/api/send') && badRequest('POST', 'http://localhost:8000/api/other') && badRequest('POST', 'http://localhost:8000/api') && badRequest('POST', 'http://localhost:8000/api/send/x') && badRequest('POST', 'http://localhost:8000/api/send') === null, 'The /api/ guard allows POST /api/send and nothing else under /api/');
+check(badRequest('GET', 'http://localhost:8000/api/send') && badRequest('PUT', 'http://localhost:8000/api/send') && badRequest('POST', 'http://localhost:8000/api/other') && badRequest('POST', 'http://localhost:8000/api') && badRequest('POST', 'http://localhost:8000/api/send/x') && badRequest('POST', 'http://localhost:8000/api/send') === null, 'The /api/ guard allows POST /api/send and nothing else under /api/ but feedback (below)');
+check(badRequest('POST', 'http://localhost:8000/api/feedback') === null && badRequest('GET', 'http://localhost:8000/api/feedback') && badRequest('PUT', 'http://localhost:8000/api/feedback') && badRequest('POST', 'http://localhost:8000/api/feedback/x') && badRequest('POST', 'http://localhost:8000/api/feedbackx') && badRequest('POST', 'http://localhost:8000/api/feedback/') && badRequest('POST', 'https://outside.example.test/api/feedback') === 'outside request', 'The /api/ guard allows POST /api/feedback, and refuses GET, PUT, a longer or shorter path and another host');
 const fontsLoaded = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, '')); });
 check(fontsLoaded.includes('DM Sans') && fontsLoaded.includes('Outfit'), 'DM Sans and Outfit load from the app, with no outside request');
 await noHorizontalScroll('S0');
@@ -849,7 +850,7 @@ check(!('start' in soloRace) && !('transitionOpens' in soloRace) && soloRace.fue
 await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------
-// Scenario 4: a save from before this change (criterion 31). Isolation: fresh context. The fixture was captured from
+// Scenario 4: a save from before this change (criterion 27). Isolation: fresh context. The fixture was captured from
 // main at 8ba9825. Only race.date is moved to a future day, which feeds no inputKey.
 const fixture = JSON.parse(await readFile(join(ROOT, '..', 'scripts', 'fixtures', 'save-before-four-step.json'), 'utf8'));
 check(fixture.race.distance === 'standard' && fixture.race.start === '06:40' && fixture.race.transitionOpens === '05:30' && !!fixture.race.pace.inputKey && !!fixture.race.fuel.inputKey, 'The fixture is a Standard save with a start, a transition time, and a pace and nutrition plan, each with its inputKey');
@@ -1901,6 +1902,483 @@ await stripPage('step 3 with a race has the button', stripSeed(), '#/fuel');
 await headerIs('Step 3 with a race', { plan: true });
 check((await planPanel().count()) === 1 && (await statusRow().count()) === 1, 'Step 3 with a race has the panel element and the status row');
 await page.context().close();
+
+// ---------------------------------------------------------------------------------------------------------------
+// Scenarios 37 to 45: the feedback footer and panel (criterion 31). Each one is a fresh browser context (empty storage, no
+// shared module state), seeded from the made-up Sam Lee plan. /api/feedback is stubbed with page.route in each, and no
+// scenario touches a real network or a real mail service. The function itself runs only on Cloudflare, and is tested in
+// tests/feedback.test.js. The 3 second wait before a send is skipped with the page's fake clock (fastForward) everywhere
+// except scenario 40, which measures it in real time.
+const FB = {
+  sent: 'Thanks, your feedback is on its way.',
+  refused: "We couldn't send that. Check your message and email, then try again. Your message is still here.",
+  rate: "You've sent a few messages in a short time. Try again in a little while. Your message is still here.",
+  later: "Feedback isn't working right now. Please try again later. Your message is still here.",
+  net: "Couldn't reach the server. Check your connection and try again. Your message is still here.",
+  short: 'Write a little more: at least 5 characters.',
+  badEmail: 'Type one email address, such as sam@example.test, or leave this blank.'
+};
+const FB_MESSAGE = 'The countdown on my race card looks one day out.';
+const fbSave = () => stripSeed({ name: 'Sam Lee Spring Sprint Cup' });
+const fbBtn = () => page.locator('#fb-btn');
+const fbPanel = () => page.locator('#fb-panel');
+const fbStatus = () => page.locator('#fb-status');
+const fbMsg = () => page.locator('#f-fb-message');
+const fbMail = () => page.locator('#f-fb-email');
+const fbSendBtn = () => fbPanel().getByRole('button', { name: /^(Send|Sending\.\.\.)$/ });
+const fbInit = (save) => ({
+  fn: ([k, v]) => {
+    if (v && !localStorage.getItem(k)) localStorage.setItem(k, v);
+    // Records what the page asks fetch to do, since a route cannot see the cache and credentials options.
+    const real = window.fetch.bind(window);
+    window.__fetches = [];
+    window.fetch = (u, i) => { window.__fetches.push({ url: String(u), method: i && i.method, cache: i && i.cache, credentials: i && i.credentials }); return real(u, i); };
+  },
+  arg: [KEY, save ? JSON.stringify(save) : '']
+});
+// Opens an app screen with /api/feedback stubbed. handler is (route) => ..., or null for no stub at all: the smoke server
+// then answers 404, which is what a static host gives. Returns the requests the stub saw, each with the time it arrived.
+async function fbPage(label, { hash = '#/card', width = 390, save = fbSave(), handler = (route) => route.fulfill(json(200, 'sent')), errorsExpected = false } = {}) {
+  sendErrorsExpected = errorsExpected;
+  await fresh(label, { width, init: fbInit(save) });
+  const seen = [];
+  if (handler) await page.route('**/api/feedback', async (route) => { seen.push({ req: route.request(), at: Date.now() }); await handler(route); });
+  await page.goto(base + '/index.html' + hash);
+  await page.locator('#view h1').first().waitFor();
+  await page.locator('#fb-btn').waitFor();
+  return seen;
+}
+async function fbWatch() {
+  await page.evaluate(() => {
+    window.__fbsaid = [];
+    const el = document.getElementById('fb-status');
+    new MutationObserver(() => { if (el.textContent) window.__fbsaid.push(el.textContent); }).observe(el, { childList: true, characterData: true, subtree: true });
+  });
+}
+const fbSaid = () => page.evaluate(() => window.__fbsaid);
+const fbFetches = () => page.evaluate(() => window.__fetches);
+const fbWaitFor = (text) => page.waitForFunction((t) => document.getElementById('fb-status').textContent === t, text);
+// Open, type, tap Send, and let the 3 second wait pass on the page's fake clock.
+async function fbFillAndSend(message = FB_MESSAGE, address = '') {
+  await page.clock.install();
+  await fbBtn().click();
+  await fbMsg().fill(message);
+  await fbMail().fill(address);
+  await fbSendBtn().click();
+  await page.clock.fastForward(3100);
+}
+async function fbStillWorks(where, before, message, address) {
+  check((await storeText()) === before, `${where}: the saved plan is exactly as it was`);
+  check((await fbMsg().inputValue()) === message && (await fbMail().inputValue()) === address, `${where}: both fields are as typed`);
+  check((await fbSendBtn().isEnabled()) && (await fbSendBtn().innerText()) === 'Send' && (await fbPanel().isVisible()), `${where}: the panel is open and Send is back to "Send"`);
+}
+
+// 37. Where it shows (AC19). Isolation: a fresh context per screen, so no earlier visit can leave a footer behind.
+for (const [what, hash, save] of [['S0', '#/', null], ['S5', '#/', fbSave()], ['step 1', '#/setup/1'], ['pacing part 1', '#/pacing/1'], ['pacing part 2', '#/pacing/2'], ['pacing part 3', '#/pacing/3'], ['step 3', '#/fuel'], ['the race card', '#/card'], ['My products', '#/products']]) {
+  const seen = await fbPage(`footer ${what}`, { hash, ...(save === undefined ? {} : { save }) });
+  const f = await page.evaluate(() => {
+    const foot = document.getElementById('feedback'); const btn = document.getElementById('fb-btn'); const view = document.getElementById('view');
+    const r = btn.getBoundingClientRect();
+    return { count: document.querySelectorAll('#feedback').length, inView: view.contains(foot), below: foot.getBoundingClientRect().top >= view.getBoundingClientRect().bottom - 1, tag: foot.tagName,
+      w: r.width, h: r.height, expanded: btn.getAttribute('aria-expanded'), controls: btn.getAttribute('aria-controls'), bg: getComputedStyle(btn).backgroundColor, text: foot.innerText.replace(/\s+/g, ' ').trim(),
+      panelHidden: document.getElementById('fb-panel').hidden, target: !!document.getElementById(btn.getAttribute('aria-controls')) };
+  });
+  check(f.count === 1 && f.tag === 'FOOTER' && !f.inView && f.below, `${what}: one footer, outside the screen (#view) and below it`);
+  check(f.text.startsWith('Something broken? Got an idea? Tell us what to fix') && f.expanded === 'false' && f.controls === 'fb-panel' && f.target && f.panelHidden, `${what}: the footer says "Something broken? Got an idea?" and has a "Tell us what to fix" button, closed, with aria-controls naming the panel`);
+  check(f.w >= 44 && f.h >= 44 && f.bg !== YELLOW, `${what}: the button is ${Math.round(f.w)} x ${Math.round(f.h)} and not yellow (${f.bg})`);
+  await page.waitForTimeout(150);
+  check(seen.length === 0 && (await fbFetches()).length === 0, `${what}: showing the footer makes no request`);
+  await page.context().close();
+}
+
+// 37b. Hidden where the function does not exist (AC19): a github.io host. Isolation: its own context. The pages are served
+// from the local files under a made-up github.io address by a route, so no real host is asked for anything, and the outside-host
+// guard of fresh() is not used here on purpose (the address is not localhost).
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const p = await ctx.newPage();
+  const asked = [];
+  const errs = [];
+  p.on('pageerror', (e) => errs.push(e.message));
+  await p.route('**/*', async (route) => {
+    const u = new URL(route.request().url());
+    asked.push(u.hostname + u.pathname);
+    if (u.hostname !== 'someone.github.io') return route.abort();
+    const rel = u.pathname === '/' ? '/index.html' : u.pathname;
+    try {
+      await route.fulfill({ status: 200, headers: { 'content-type': TYPES[extname(rel)] || 'application/octet-stream' }, body: await readFile(join(ROOT, normalize(rel))) });
+    } catch { await route.fulfill({ status: 404, body: 'not found' }); }
+  });
+  await p.goto('http://someone.github.io/index.html#/setup/1');
+  await p.locator('#view h1').first().waitFor();
+  check((await p.locator('#feedback, #fb-btn, #fb-panel').count()) === 0 && (await p.evaluate(() => !!(window.RD && window.RD.feedback))), 'On a github.io address the page has no feedback footer, button or panel (the rules still load)');
+  check(errs.length === 0 && !asked.some((a) => a.includes('/api/')), 'and it asked for no /api/ address');
+  await ctx.close();
+}
+
+// 37c. The guide pages have no footer, load no feedback code and call no function (AC20). Isolation: fresh context per page.
+for (const href of ['guides/race-fuel.html', 'guides/bike-pacing.html']) {
+  await fresh(`guide ${href}`);
+  const loaded = [];
+  page.on('request', (r) => loaded.push(new URL(r.url()).pathname));
+  await page.goto(base + '/' + href);
+  await page.locator('h1').first().waitFor();
+  await page.waitForTimeout(200);
+  check((await page.locator('#feedback, #fb-btn, #fb-panel').count()) === 0 && !/Tell us what to fix|Something broken/.test(await appText()), `${href} has no feedback footer`);
+  check(!loaded.some((u) => /feedback|\/api\//.test(u)) && (await page.evaluate(() => !(window.RD && window.RD.feedback))), `${href} loads no feedback code and makes no /api/ request`);
+  await page.context().close();
+}
+
+// 38. The panel: open, close, focus, fields, accessibility and size (AC22 start, AC27, AC28). Isolation: fresh context.
+{
+  const seen = await fbPage('panel open', { hash: '#/fuel' });
+  await fbBtn().click();
+  const o = await page.evaluate(() => {
+    const q = (s) => document.querySelector(s); const panel = q('#fb-panel'); const msg = q('#f-fb-message'); const mail = q('#f-fb-email'); const trap = q('#fb-trap');
+    const size = (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; };
+    const hidden = trap.closest('[aria-hidden="true"]');
+    const tr = hidden.getBoundingClientRect(); // the box the field sits in: 1 px and clipped, so the field inside shows nothing
+    const hs = getComputedStyle(hidden);
+    return {
+      expanded: q('#fb-btn').getAttribute('aria-expanded'), visible: !panel.hidden, focus: document.activeElement.id, tag: panel.tagName, role: panel.getAttribute('role'), modal: panel.getAttribute('aria-modal'),
+      inert: document.querySelectorAll('[inert]').length, dialog: document.querySelectorAll('dialog, [role=dialog], [aria-modal]').length, labelledby: panel.getAttribute('aria-labelledby'),
+      heading: panel.querySelector('h2') && panel.querySelector('h2').textContent, text: panel.innerText.replace(/\s+/g, ' ').trim(),
+      msgAttrs: [msg.tagName, msg.getAttribute('maxlength'), msg.required], mailAttrs: [mail.type, mail.getAttribute('inputmode'), mail.getAttribute('autocomplete')],
+      count: q('#fb-count').textContent, sizes: [size(msg), size(mail), size(q('#fb-btn'))].concat([...panel.querySelectorAll('button')].filter((b) => b.offsetParent !== null).map(size)),
+      trap: { tabindex: trap.getAttribute('tabindex'), ariaHidden: !!hidden, auto: trap.getAttribute('autocomplete'), visible: tr.width > 1 || tr.height > 1 || hs.overflow !== 'hidden' || hs.clip === 'auto', display: getComputedStyle(trap).display, inTabOrder: trap.tabIndex >= 0 },
+      msgLabel: msg.labels.length && msg.labels[0].textContent.startsWith('Your feedback'), mailLabel: mail.labels.length && mail.labels[0].textContent.startsWith('Your email (optional)')
+    };
+  });
+  check(o.expanded === 'true' && o.visible && o.focus === 'f-fb-message', 'Opening the panel sets aria-expanded=true and moves focus to the feedback box');
+  check(o.tag === 'SECTION' && !o.role && !o.modal && o.dialog === 0 && o.inert === 0 && o.labelledby === 'fb-h' && o.heading === 'Tell us what to fix', 'The panel is a labelled section in the page, not a dialog: no role, no aria-modal, nothing inert');
+  check(/It goes straight to the person who runs TRI Momentum\./.test(o.text) && /Only if you'd like a reply\./.test(o.text) && /We send your message and which step you were on\. Nothing from your plan is sent\./.test(o.text), 'The panel holds the intro, the reply hint and the line about what is sent');
+  check(o.msgLabel && o.mailLabel && (await page.getByLabel('Your feedback', { exact: true }).count()) === 1 && (await page.getByLabel('Your email (optional)', { exact: true }).count()) === 1, 'The two fields are labelled "Your feedback" and "Your email (optional)"');
+  check(o.msgAttrs.join() === 'TEXTAREA,2000,false' && o.mailAttrs.join() === 'email,email,email' && o.count === '0 of 2,000 characters', 'The box is a textarea with maxlength 2000, the address field is type email with inputmode and autocomplete email, and the count starts "0 of 2,000 characters"');
+  check(o.sizes.every(([w, hh]) => w >= 44 && hh >= 44), `Every control is at least 44 px (${JSON.stringify(o.sizes)})`);
+  check(o.trap.tabindex === '-1' && o.trap.ariaHidden && o.trap.auto === 'off' && !o.trap.visible && !o.trap.inTabOrder && o.trap.display !== 'none', `The trap field is aria-hidden, autocomplete off, out of the tab order, off screen (1 px), and not display:none (${JSON.stringify(o.trap)})`);
+  await fbMsg().fill('abc');
+  check((await page.locator('#fb-count').innerText()) === '3 of 2,000 characters', 'The count follows what is typed');
+  // Tab order: from the address field the next stop is Send (the trap is skipped), then Close, and focus is not trapped.
+  await fbMail().focus();
+  await page.keyboard.press('Tab');
+  const t1 = await page.evaluate(() => document.activeElement.textContent);
+  await page.keyboard.press('Tab');
+  const t2 = await page.evaluate(() => document.activeElement.textContent);
+  await page.keyboard.press('Tab');
+  const t3 = await page.evaluate(() => document.activeElement.closest('#fb-panel') === null);
+  check(t1 === 'Send' && t2 === 'Close' && t3, `Tab goes address, Send, Close, then out of the panel (${t1}, ${t2}, left the panel: ${t3}): the trap is skipped and focus is not trapped`);
+  await shot('feedback-open-390');
+  // Close returns focus to the footer button.
+  await fbPanel().getByRole('button', { name: 'Close' }).click();
+  check((await fbBtn().getAttribute('aria-expanded')) === 'false' && (await fbPanel().isHidden()) && (await activeId()) === 'fb-btn', 'Close hides the panel, sets aria-expanded=false and puts focus on the footer button');
+  await fbBtn().click();
+  await fbBtn().click();
+  check((await fbBtn().getAttribute('aria-expanded')) === 'false' && (await fbPanel().isHidden()), 'The footer button also closes an open panel');
+  await page.waitForTimeout(150);
+  check(seen.length === 0, 'Opening and closing the panel sent nothing');
+  await page.context().close();
+}
+
+// 38b. No sideways scroll with the panel open at 390, 360 and 320 px, and a look at 1280 (AC27). Isolation: fresh context per width.
+for (const w of [390, 360, 320, 1280]) {
+  await fbPage(`panel width ${w}`, { hash: '#/card', width: w });
+  await fbBtn().click();
+  await fbMsg().fill('A long message to see how the box wraps. '.repeat(8));
+  await fbMail().fill('a.very.long.address.for.a.narrow.screen@example.test');
+  await noHorizontalScroll(`The race card with the feedback panel open`, w);
+  if (w === 1280) { await shot('feedback-open-1280'); await fbBtn().evaluate((e) => e.scrollIntoView()); }
+  await page.context().close();
+}
+await fbPage('footer closed screenshots', { hash: '#/fuel', width: 1280 });
+await page.locator('#feedback').scrollIntoViewIfNeeded();
+await shot('feedback-closed-1280');
+await page.context().close();
+
+// 39. Validation makes no request and says why by the field (AC22). Isolation: fresh context.
+{
+  const seen = await fbPage('validation');
+  await fbBtn().click();
+  const err = page.locator('#fb-msg-err');
+  const eerr = page.locator('#fb-email-err');
+  for (const [what, v] of [['blank', ''], ['spaces only', '      '], ['four characters', 'abcd'], ['two after trimming', '  hi  ']]) {
+    await fbMsg().fill(v);
+    await fbSendBtn().click();
+    check((await err.isVisible()) && (await err.innerText()) === FB.short && (await fbMsg().getAttribute('aria-invalid')) === 'true' && /fb-msg-err/.test(await fbMsg().getAttribute('aria-describedby')), `${what}: "${FB.short}" shows by the box, with aria-invalid and aria-describedby`);
+    check((await activeId()) === 'f-fb-message', `${what}: focus goes to the box`);
+  }
+  await fbMsg().fill('abcde');
+  check(!(await err.isVisible()) && !(await fbMsg().getAttribute('aria-invalid')), 'Five characters clear the message as they are typed');
+  await fbMsg().fill(FB_MESSAGE);
+  for (const [what, v] of [['no @', 'sam.example.test'], ['two addresses', 'sam@example.test, lee@example.test'], ['no dot in the domain', 'sam@example'], ['a semicolon', 'sam@example.test;lee@example.test']]) {
+    await fbMail().fill(v);
+    await fbSendBtn().click();
+    check((await eerr.isVisible()) && (await eerr.innerText()) === FB.badEmail && (await fbMail().getAttribute('aria-invalid')) === 'true' && /fb-email-err/.test(await fbMail().getAttribute('aria-describedby')) && (await activeId()) === 'f-fb-email', `${what}: "${FB.badEmail}" shows by the address field and focus goes there`);
+  }
+  await fbMail().fill('sam@example.test');
+  check(!(await eerr.isVisible()) && !(await fbMail().getAttribute('aria-invalid')), 'A good address clears its message as it is typed');
+  await page.waitForTimeout(300);
+  check(seen.length === 0, 'No blank, short or bad entry made a request (route counter stays 0)');
+  await page.context().close();
+}
+
+// 40. A good send, the body, the wait, a double tap, and the status history (AC22, AC23, AC24 sent, AC26). Isolation: fresh
+// context, real time (no fake clock), because this scenario measures the 3 second wait.
+{
+  const save = fbSave();
+  const seen = await fbPage('send', { hash: '#/card', save, handler: async (route) => { await page.waitForTimeout(200); await route.fulfill(json(200, 'sent')); } });
+  const before = await storeText();
+  await fbWatch();
+  const openedAt = Date.now();
+  await fbBtn().click();
+  await fbMsg().fill('  ' + FB_MESSAGE + '  ');
+  await fbMail().fill(`  ${ADDRESS}  `);
+  await fbSendBtn().dblclick();
+  const busy = fbPanel().getByRole('button', { name: 'Sending...' });
+  check((await busy.isDisabled()) && (await busy.count()) === 1, 'Right after the tap Send is disabled and says "Sending..."');
+  await page.waitForTimeout(1500);
+  check(seen.length === 0 && (await busy.isDisabled()), 'Tapped at once, nothing is sent after 1.5 s and it still says "Sending..." (the 3 second wait)');
+  await fbWaitFor(FB.sent);
+  await page.waitForTimeout(400);
+  check(seen.length === 1, `A double tap sent once (${seen.length} request)`);
+  const wait = seen[0].at - openedAt;
+  check(wait >= 2900 && wait < 6000, `The request went out about 3 s after the panel opened (${wait} ms)`);
+  const req = seen[0].req;
+  const body = req.postDataJSON();
+  check(req.method() === 'POST' && new URL(req.url()).pathname === '/api/feedback' && (await req.headerValue('content-type')) === 'application/json' && (await req.headerValue('origin')) === base, 'The request is a POST of JSON to /api/feedback, from the page\'s own origin');
+  check(Object.keys(body).sort().join() === 'email,message,page,website' && Object.values(body).every((v) => typeof v === 'string'), `The body has exactly message, email, page and website, all strings (${Object.keys(body).sort()})`);
+  check(body.message === '  ' + FB_MESSAGE + '  ' && body.email === ADDRESS && body.page === '#/card' && body.website === '', `The message is as typed, the address is the one typed (the browser trims an email field itself), the page is "#/card" and the trap is empty (${JSON.stringify(body)})`);
+  const raw = req.postData();
+  const planBits = [save.race.name, 'Sam Lee', String(save.fitness.ftp), String(save.fitness.css), 'pdf', 'pace', 'fuel', 'gut', 'sweat', 'race'].filter((x) => x && x !== 'undefined' && x !== 'null');
+  check(planBits.every((bit) => !raw.replace(FB_MESSAGE, '').toLowerCase().includes(bit.toLowerCase())) && raw.length < 300, `Nothing from the saved plan is in the body (looked for ${planBits.length} strings; ${raw.length} bytes)`);
+  const fetches = await fbFetches();
+  check(fetches.length === 1 && fetches[0].url.endsWith('/api/feedback') && fetches[0].credentials === 'omit' && fetches[0].cache === 'no-store' && fetches[0].method === 'POST', `The page asked fetch for credentials "omit" and cache "no-store" (${JSON.stringify(fetches)})`);
+  const said = await fbSaid();
+  check(said.length === 1 && said[0] === FB.sent, `The status line was written once with the thanks (${JSON.stringify(said)})`);
+  check((await fbStatus().getAttribute('role')) === 'status' && !/delivered/i.test(await fbStatus().innerText()), 'The result is in a role=status line');
+  check((await fbMsg().isHidden()) && (await fbMail().isHidden()) && (await fbPanel().getByRole('button', { name: 'Send more feedback' }).isVisible()) && (await fbPanel().getByRole('button', { name: 'Close' }).isVisible()) && (await fbPanel().locator('button').filter({ hasText: /^Send$/ }).isHidden()), 'After sent the form is replaced by the thanks, "Send more feedback" and "Close"');
+  check((await activeId()) === 'fb-again', `Focus is not lost: it is on "Send more feedback" (active id "${await activeId()}")`);
+  check((await storeText()) === before, 'The saved plan is exactly as it was after sending');
+  await fbPanel().getByRole('button', { name: 'Send more feedback' }).click();
+  check((await fbMsg().isVisible()) && (await fbMsg().inputValue()) === '' && (await fbMail().inputValue()) === '' && (await page.locator('#fb-count').innerText()) === '0 of 2,000 characters' && (await fbStatus().innerText()) === '' && (await activeId()) === 'f-fb-message', '"Send more feedback" gives an empty form and puts focus in the box');
+  await fbPanel().getByRole('button', { name: 'Close' }).click();
+  check((await activeId()) === 'fb-btn', 'Close puts focus back on the footer button');
+  await page.context().close();
+}
+
+// 40a. Text typed while a send is pending is not wiped unsent (the fix to review finding M1). Isolation: fresh context, fake
+// clock; the stub holds its reply until the scenario lets it go, so the send is pending for as long as the checks need.
+{
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const seen = await fbPage('typing while pending', { handler: async (route) => { await gate; await route.fulfill(json(200, 'sent')); } });
+  await fbFillAndSend(FB_MESSAGE, '');
+  await page.waitForFunction(() => window.__fetches.length === 1);
+  check((await fbSendBtn().isDisabled()) && (await fbMsg().getAttribute('readonly')) !== null && (await fbMail().getAttribute('readonly')) !== null, 'While the send is pending both fields are read-only');
+  await fbMsg().focus();
+  await page.keyboard.type(' MORE');
+  check((await fbMsg().inputValue()) === FB_MESSAGE, `Typing into the message while it is pending changes nothing (${await fbMsg().inputValue()})`);
+  // The guard behind read-only: a value that changed some other way is kept, not cleared, when the reply is "sent".
+  await page.evaluate(() => { document.getElementById('f-fb-message').value = 'a later draft that was never sent'; });
+  release();
+  await fbWaitFor(FB.sent);
+  check(seen.length === 1 && seen[0].req.postDataJSON().message === FB_MESSAGE, 'Only the message as it was at the tap was sent');
+  const kept = await page.evaluate(() => document.getElementById('f-fb-message').value);
+  check(kept === 'a later draft that was never sent', `A message that no longer equals what was sent is not cleared on "sent" (${kept})`);
+  check((await fbMsg().getAttribute('readonly')) === null && (await fbMail().getAttribute('readonly')) === null, 'Both fields are editable again once the reply is in');
+  await page.context().close();
+}
+
+// 40a2. A message with a vertical tab, DEL or a C1 control is sent with a space in its place, not refused (finding M2).
+// Isolation: fresh context, fake clock.
+{
+  const seen = await fbPage('control characters');
+  await fbFillAndSend('first\u000bsecond\u007fthird\u0085fourth', '');
+  await fbWaitFor(FB.sent);
+  const body = seen[0].req.postDataJSON();
+  check(seen.length === 1 && body.message === 'first second third fourth', `Each control character goes as a space (${JSON.stringify(body.message)})`);
+  await page.context().close();
+}
+
+// 40b. After sent, Close from the thanks returns focus to the footer button; a whitespace-only address sends with email "" (AC22).
+// Isolation: fresh context, fake clock.
+{
+  const seen = await fbPage('send blank address');
+  await fbFillAndSend(FB_MESSAGE, '     ');
+  await fbWaitFor(FB.sent);
+  const body = seen[0].req.postDataJSON();
+  check(seen.length === 1 && body.email === '', `A whitespace-only address sends, with email "" (${JSON.stringify(body.email)})`);
+  await fbPanel().getByRole('button', { name: 'Close' }).click();
+  check((await activeId()) === 'fb-btn' && (await fbBtn().getAttribute('aria-expanded')) === 'false', 'Close after sending puts focus on the footer button');
+  await fbBtn().click();
+  check((await fbPanel().getByRole('button', { name: 'Send more feedback' }).isVisible()) && (await fbMsg().isHidden()), 'Reopening after sending still shows the thanks, until "Send more feedback" is tapped');
+  await page.context().close();
+}
+
+// 41. Every failure: its copy, written once, both fields as typed, the plan untouched (AC24). Isolation: fresh context per
+// result, fake clock. 404 is the smoke server with no stub at all, which is what a static host gives.
+const FAILURES = [
+  ['a 400 refused', FB.refused, (route) => route.fulfill(json(400, 'refused'))],
+  ['a 429 later', FB.rate, (route) => route.fulfill(json(429, 'later'))],
+  ['a 429 with no JSON', FB.rate, (route) => route.fulfill({ status: 429, contentType: 'text/plain', body: 'slow down' })],
+  ['a 503 later', FB.later, (route) => route.fulfill(json(503, 'later'))],
+  ['a 405', FB.later, (route) => route.fulfill(json(405, 'refused'))],
+  ['a 500 with a page', FB.later, (route) => route.fulfill({ status: 500, contentType: 'text/html', body: '<!doctype html><title>x</title>' })],
+  ['a 200 that is a page, not JSON', FB.later, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>x</title>' })],
+  ['a 200 with no result', FB.later, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })],
+  ['a 400 that is not JSON', FB.later, (route) => route.fulfill({ status: 400, contentType: 'text/html', body: 'bad' })],
+  ['a dropped connection', FB.net, (route) => route.abort('connectionreset')],
+  ['no function at all (404)', FB.later, null]
+];
+for (const [what, expected, handler] of FAILURES) {
+  const seen = await fbPage(`failure ${what}`, { handler, errorsExpected: true });
+  const before = await storeText();
+  await fbWatch();
+  let hit = null;
+  page.on('response', (r) => { if (new URL(r.url()).pathname === '/api/feedback') hit = [r.request().method(), r.status()]; });
+  await fbFillAndSend(FB_MESSAGE, ADDRESS);
+  await fbWaitFor(expected);
+  await page.waitForTimeout(150);
+  const said = await fbSaid();
+  check(said.length === 1 && said[0] === expected && (await fbStatus().isVisible()) && /Your message is still here\.$/.test(expected), `${what}: the status line says "${expected}", written once`);
+  if (!handler) check(JSON.stringify(hit) === '["POST",404]', `${what}: the smoke server answered 404 (${JSON.stringify(hit)})`);
+  else check(seen.length === 1, `${what}: one request was made (${seen.length})`);
+  await fbStillWorks(what, before, FB_MESSAGE, ADDRESS);
+  check((await fbMsg().isVisible()) && !(await page.getByText('Thanks, your feedback is on its way.').count()), `${what}: the form is still there and no thanks shows`);
+  await page.context().close();
+}
+sendErrorsExpected = false;
+
+// 41b. Offline, and a reply that never comes. Isolation: fresh context each.
+{
+  sendErrorsExpected = true;
+  const seen = await fbPage('offline', { errorsExpected: true });
+  const before = await storeText();
+  await fbWatch();
+  await page.context().setOffline(true);
+  await fbFillAndSend(FB_MESSAGE, ADDRESS);
+  await fbWaitFor(FB.net);
+  check(seen.length === 0 && (await fbSaid()).join('|') === FB.net, 'Offline: "Couldn\'t reach the server..." shows once and no request goes out');
+  await fbStillWorks('Offline', before, FB_MESSAGE, ADDRESS);
+  await page.context().close();
+}
+{
+  const seen = await fbPage('timeout', { errorsExpected: true, handler: async () => { /* never answers */ } });
+  const before = await storeText();
+  await fbWatch();
+  await fbFillAndSend(FB_MESSAGE, ADDRESS);
+  await page.waitForFunction(() => window.__fetches.length === 1);
+  await page.clock.fastForward(14000);
+  check((await fbSendBtn().innerText()) === 'Sending...' && (await fbSaid()).length === 0, 'After 14 seconds with no reply it is still sending');
+  await page.clock.fastForward(2000);
+  await fbWaitFor(FB.net);
+  check(seen.length === 1 && (await fbSaid()).join('|') === FB.net, 'After about 15 seconds with no reply: "Couldn\'t reach the server..." shows once');
+  await fbStillWorks('Timeout', before, FB_MESSAGE, ADDRESS);
+  await page.context().close();
+}
+sendErrorsExpected = false;
+
+// 41c. After a failure the person can send again, and it goes (AC24). Isolation: fresh context, one stub that fails then succeeds.
+{
+  let calls = 0;
+  const seen = await fbPage('retry', { errorsExpected: true, handler: (route) => route.fulfill(++calls === 1 ? json(503, 'later') : json(200, 'sent')) });
+  await fbWatch();
+  await fbFillAndSend(FB_MESSAGE, '');
+  await fbWaitFor(FB.later);
+  await fbSendBtn().click();
+  await page.clock.fastForward(100);
+  await fbWaitFor(FB.sent);
+  check(seen.length === 2 && (await fbSaid()).join('|') === FB.later + '|' + FB.sent, `After a failure the same text sends again and the history is one message per result (${JSON.stringify(await fbSaid())})`);
+  await page.context().close();
+}
+sendErrorsExpected = false;
+
+// 42. The draft lives in the page only (AC25). Isolation: fresh context. Steps share the session on purpose: this is a
+// scenario about the draft surviving moves, and the reload at the end is the check that it does not survive that.
+{
+  const save = fbSave();
+  const seen = await fbPage('draft', { hash: '#/setup/1', save });
+  const typedMsg = 'Draft text with a marker zzq-draft-marker.';
+  const typedMail = 'draft.person@example.test';
+  await fbBtn().click();
+  await fbMsg().fill(typedMsg);
+  await fbMail().fill(typedMail);
+  const same = async () => (await fbMsg().inputValue()) === typedMsg && (await fbMail().inputValue()) === typedMail;
+  await page.goto(base + '/index.html#/pacing/1', { waitUntil: 'commit' }).catch(() => {});
+  await page.evaluate(() => { location.hash = '#/pacing/2'; });
+  await page.getByRole('heading', { name: 'Course and heat' }).waitFor();
+  check((await same()) && (await fbBtn().getAttribute('aria-expanded')) === 'true' && (await fbPanel().isVisible()), 'Moving to another screen (a hash change) keeps both fields and leaves the panel open');
+  // A quiet refresh: the Distance choice on step 1 redraws the screen in place.
+  await page.evaluate(() => { location.hash = '#/setup/1'; });
+  await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+  await page.getByRole('button', { name: 'Olympic' }).click();
+  check((await same()) && (await fbPanel().isVisible()), 'A quiet refresh of the screen keeps both fields');
+  await fbPanel().getByRole('button', { name: 'Close' }).click();
+  await fbBtn().click();
+  check(await same(), 'Closing and reopening the panel keeps both fields');
+  const where = await page.evaluate(() => ({
+    keys: Object.keys(localStorage), ls: JSON.stringify(localStorage), ss: JSON.stringify(sessionStorage), cookie: document.cookie, url: location.href, session: sessionStorage.length
+  }));
+  check(where.keys.length === 1 && where.keys[0] === KEY && !where.ls.includes('zzq-draft-marker') && !where.ls.includes('draft.person'), `localStorage holds only the one existing key, with no message or address in it (${where.keys})`);
+  check(where.session === 0 && where.cookie === '' && !where.url.includes('zzq') && !where.url.includes('draft.person'), 'sessionStorage and the cookie are empty and the address does not hold the draft');
+  await page.reload();
+  await page.locator('#fb-btn').waitFor();
+  check((await fbBtn().getAttribute('aria-expanded')) === 'false' && (await fbPanel().isHidden()), 'After a reload the panel is closed');
+  await fbBtn().click();
+  check((await fbMsg().inputValue()) === '' && (await fbMail().inputValue()) === '', 'After a reload both fields are empty');
+  check(seen.length === 0, 'None of that made a request');
+  await page.context().close();
+}
+
+// 42b. The page value (AC23). Isolation: fresh context per address, fake clock.
+for (const [hash, expected] of [['#/pacing/2', '#/pacing/2'], ['#/', '#/'], ['', ''], ['#/Card', ''], ['#/card?x=1', '']]) {
+  const seen = await fbPage(`page value ${hash || 'none'}`, { hash });
+  await fbFillAndSend();
+  await fbWaitFor(FB.sent);
+  check(seen[0].req.postDataJSON().page === expected, `At "${hash}" the page value sent is ${JSON.stringify(expected)} (${JSON.stringify(seen[0].req.postDataJSON().page)})`);
+  await page.context().close();
+}
+
+// 43. The trap field is sent as typed (AC23, and the function's own handling is in tests/feedback.test.js). Isolation: fresh
+// context, fake clock. A reply of "sent" for a filled trap looks like any other, so the page shows the thanks.
+{
+  const seen = await fbPage('trap filled');
+  await page.clock.install();
+  await fbBtn().click();
+  await page.locator('#fb-trap').evaluate((e) => { e.value = 'http://spam.example.test'; });
+  await fbMsg().fill(FB_MESSAGE);
+  await fbSendBtn().click();
+  await page.clock.fastForward(3100);
+  await fbWaitFor(FB.sent);
+  check(seen.length === 1 && seen[0].req.postDataJSON().website === 'http://spam.example.test', 'A filled trap field goes in the request as `website`');
+  await page.context().close();
+}
+
+// 44. No native submit, ever (AC28). Isolation: fresh context. Enter in the address field does nothing: no navigation, no request,
+// no content-policy violation (fresh() turns any such console error into a failure).
+{
+  const seen = await fbPage('enter key');
+  await fbBtn().click();
+  await fbMsg().fill(FB_MESSAGE);
+  await fbMail().fill(ADDRESS);
+  const url = page.url();
+  await fbMail().press('Enter');
+  await page.waitForTimeout(500);
+  check(page.url() === url && seen.length === 0 && (await page.locator('form').count()) === 0, 'Enter in the address field neither navigates, nor sends, and the page has no form element');
+  check((await fbMsg().inputValue()) === FB_MESSAGE && (await fbMail().inputValue()) === ADDRESS, 'and both fields are untouched');
+  await page.context().close();
+}
+
+// 45. The page's own look is the app's: the one yellow action on each screen is not the feedback button (AC30). Isolation:
+// fresh context per screen. Nothing in the footer or the panel is yellow, and the yellow count on the screen is unchanged.
+for (const hash of ['#/card', '#/fuel', '#/setup/1']) {
+  await fbPage(`yellow ${hash}`, { hash });
+  const before = await page.locator('#view .btn').evaluateAll((els) => els.filter((e) => getComputedStyle(e).backgroundColor === 'rgb(248, 196, 79)').length);
+  await fbBtn().click();
+  const inFooter = await page.locator('#feedback button').evaluateAll((els) => els.filter((e) => getComputedStyle(e).backgroundColor === 'rgb(248, 196, 79)').length);
+  const total = await page.locator('button, a.btn').evaluateAll((els) => els.filter((e) => getComputedStyle(e).backgroundColor === 'rgb(248, 196, 79)').length);
+  check(inFooter === 0 && total === before && before <= 1, `${hash}: no button in the footer or panel is yellow, and the screen keeps at most one yellow action (${before})`);
+  await page.context().close();
+}
 
 await browser.close();
 server.close();

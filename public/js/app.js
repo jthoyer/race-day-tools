@@ -446,7 +446,7 @@
       h('h3', null, 'How to get it'),
       h('p', null, 'Tap Get started and work through the four steps. Choose your race, set your pacing, then review your nutrition. Your race card is ready at the end.'),
       h('p', null, "It's free, and you don't need an account. Your plan saves on this device only."),
-      h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. That is the only time anything leaves your device, and only when you ask.'),
+      h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. Nothing leaves your device unless you ask: emailing your card, or sending us feedback.'),
       h('p', { class: 'help' }, 'A guide, not medical advice.'),
       h('a', { class: 'more', href: '#/', onclick: function (e) { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('h1').focus({ preventScroll: true }); } }, 'Back to the top'));
   }

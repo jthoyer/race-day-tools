@@ -163,3 +163,53 @@ test('the old header link name is found nowhere in public/, scripts/, tests/ or 
   for (const f of files) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), old, `${path.relative(repo, f)} still says the old name`);
   assert.match('My ' + 'Plan', old); // the pattern ignores case
 });
+
+// Criterion 31. The guide pages are draft articles with the tool inside: they carry no feedback footer, load no feedback
+// code and call no function. Only the app page loads public/js/feedback.js, after card.js, which holds canEmailHere.
+test('the guide pages do not load or mention the feedback code, and the app page loads it once, after card.js', () => {
+  for (const p of PAGES.slice(1)) {
+    assert.doesNotMatch(html[p], /feedback/i, `${p} mentions feedback`);
+    assert.doesNotMatch(html[p], /\/api\//, `${p} names a function`);
+  }
+  assert.equal((html['index.html'].match(/js\/feedback\.js\?v=\d+/g) || []).length, 1);
+  assert.match(html['index.html'], /<script src="js\/card\.js\?v=\d+"><\/script>\s*<script src="js\/feedback\.js\?v=\d+"><\/script>/, 'loaded straight after card.js');
+  // The footer is built outside <main id="view">, so a redraw of a screen cannot wipe the draft.
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'feedback.js'), 'utf8');
+  assert.match(src, /view\.parentNode\.insertBefore\(footer, view\.nextSibling\)/);
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8'), /fb-panel|f-fb-message/, 'app.js does not build the panel');
+});
+
+// Criterion 31. The owner's receiving address is set on the host (FEEDBACK_TO) and is in no file. A real address in public/,
+// functions/ or tests/ fails here: every email-shaped string must be on example.test. The pattern holds no real address.
+// vendor/ is a pinned library and is not ours to edit.
+const EMAIL_SHAPE = /[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g;
+// The files that already held short made-up addresses before this rule: the boundary cases of the address rule (6 characters
+// is the shortest accepted, 5 the longest refused), and one made-up body in send.test.js. Exact strings, in that one file, so a real address there or anywhere else fails.
+const BOUNDARY_FIXTURES = { 'email-cases.js': new Set(['a@b' + '.co', 'a@b' + '.c', 'sam@a' + '.test', 'x@a' + '.test']), 'send.test.js': new Set(['a@b' + '.co']) };
+function foreignAddresses(text, file) {
+  const allowed = BOUNDARY_FIXTURES[file] || new Set();
+  return [...text.matchAll(EMAIL_SHAPE)].filter((m) => !/^(?:[a-z0-9-]+\.)*example\.test$/i.test(m[1]) && !allowed.has(m[0]));
+}
+test('no address outside example.test in public/ (not vendor/), functions/ or tests/', () => {
+  const repo = path.join(__dirname, '..');
+  const files = [
+    ...filesUnder(ROOT).filter((f) => !f.split(path.sep).includes('vendor') && !/\.(woff2?|png|jpe?g|ico)$/.test(f)),
+    ...filesUnder(path.join(repo, 'functions')),
+    ...filesUnder(path.join(repo, 'tests')).filter((f) => !/\.(pdf)$/.test(f))
+  ];
+  assert.ok(files.length > 25, 'looked at the files: ' + files.length);
+  for (const f of files) {
+    const found = foreignAddresses(fs.readFileSync(f, 'latin1'), path.basename(f));
+    assert.deepEqual(found.map((m) => m[0]), [], `${path.relative(repo, f)} holds an address that is not on example.test`);
+  }
+  // The check can see what it is for, and lets example.test through. These are made-up, so the pattern is shown to work
+  // without a real address anywhere in this file.
+  assert.equal(foreignAddresses('write to someone@' + 'example.org please').length, 1);
+  assert.equal(foreignAddresses('a.b+c@' + 'mail.example.net').length, 1);
+  assert.equal(foreignAddresses('sam@example.test and Sam.Lee+race@mail.example.test').length, 0);
+  assert.equal(foreignAddresses('sam@' + 'notexample.test').length, 1, 'a look-alike domain is not example.test');
+  assert.equal(foreignAddresses('sam@' + 'example.test.evil.test').length, 1, 'example.test must be the whole domain');
+  assert.equal(foreignAddresses('a@b' + '.co', 'email-cases.js').length, 0, 'the named boundary fixture is allowed in its own file');
+  assert.equal(foreignAddresses('a@b' + '.co', 'other.js').length, 1, 'and nowhere else');
+  assert.equal(foreignAddresses('z@b' + '.co', 'email-cases.js').length, 1, 'and only that exact string');
+});
