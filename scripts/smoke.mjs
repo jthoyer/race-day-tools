@@ -260,6 +260,76 @@ for (const [i, href] of ['guides/race-fuel.html', 'guides/bike-pacing.html'].ent
   await page.waitForURL('**/' + href);
   check(/· TRI Momentum$/.test(await page.title()), `The S0 guide link ${i + 1} opens ${href}`);
 }
+// The truisms, under the guides in the same footer column (19 Nov 2026): a heading and two plain links, each tagged Draft,
+// apart from the guides section, and each opening its page. The two pages link to each other, filter, and do not scroll sideways.
+await page.goto(base + '/index.html');
+await page.locator('section.tlinks').waitFor();
+const tl = page.locator('section.tlinks');
+check((await tl.getByRole('heading', { name: 'Truisms', level: 3 }).count()) === 1 && (await tl.getByRole('link').count()) === 2 && (await tl.evaluate((e) => !!e.closest('.sitefoot') && e.closest('.sf-col') === document.querySelector('section.guides').closest('.sf-col'))), 'S0 has a Truisms heading and two links, in the footer, in the same column as the guides');
+check((await tl.getByRole('link').allInnerTexts()).every((t) => /Draft/.test(t)) && /All the truisms/.test(await tl.getByRole('link').nth(0).innerText()) && /The research behind them/.test(await tl.getByRole('link').nth(1).innerText()), 'S0 truism links say what they open and say Draft');
+check(await tl.getByRole('link').evaluateAll((els) => els.every((e) => e.getBoundingClientRect().height >= 44)), 'S0 truism links are at least 44 px high');
+check((await guides.getByRole('link').count()) === 2 && (await guides.getByRole('heading', { name: 'Truisms' }).count()) === 0, 'the guides section still holds the two guides only');
+{
+  await page.goto(base + '/index.html');
+  await page.locator('section.tlinks').getByRole('link').nth(0).click();
+  await page.waitForURL('**/truisms/index.html');
+  check(/^Truisms · TRI Momentum$/.test(await page.title()), 'the first truism link opens the truisms page');
+  const T = page.locator('[data-filter-list]');
+  await page.locator('#tcount').waitFor();
+  check((await page.locator('#tcount').innerText()) === 'Showing all 84 cards' && (await T.locator('[data-item]:not([hidden])').count()) === 84, 'the truisms page shows all 84 cards and says so');
+  await noHorizontalScroll('truisms page');
+  for (const w of [360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('truisms page', w); }
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Search, topic and status narrow the list, and Reset puts it back.
+  await page.locator('#tq').fill('taper');
+  const nTaper = await T.locator('[data-item]:not([hidden])').count();
+  check(nTaper >= 1 && nTaper < 84 && /^Showing \d+ of 84 cards$/.test(await page.locator('#tcount').innerText()), 'searching for "taper" narrows the cards and the count says how many');
+  check((await T.locator('[data-group]:not([hidden])').count()) < 14, 'a topic with no match is hidden');
+  await page.locator('#treset').click();
+  check((await T.locator('[data-item]:not([hidden])').count()) === 84 && (await page.locator('#tq').inputValue()) === '', 'Reset shows all 84 cards and clears the search');
+  await page.getByRole('button', { name: 'D07 Fuelling' }).click();
+  check((await T.locator('[data-item]:not([hidden])').count()) === (await T.locator('[data-item][data-topic="D07"]').count()) && (await page.getByRole('button', { name: 'D07 Fuelling' }).getAttribute('aria-pressed')) === 'true', 'a topic chip shows only that topic and is marked pressed');
+  await page.locator('#treset').click();
+  await page.locator('#tstatus').selectOption('notes');
+  check((await T.locator('[data-item]:not([hidden])').count()) === 16, 'the "With research notes" filter shows the 16 cards that have notes');
+  await page.locator('#tq').fill('zzzz-no-such-truism');
+  check(await page.locator('#tempty').isVisible(), 'a search with no match says so');
+  await page.locator('#treset').click();
+  // A tile with notes links to its note, and that note shows and is the target.
+  await page.locator('li[data-item] a.tile-research[href$="#D08.3"]').click();
+  await page.waitForURL('**/truisms/research/index.html#D08.3');
+  check(/^Research notes · TRI Momentum$/.test(await page.title()) && (await page.locator('#D08\\.3').isVisible()), 'a tile\'s research link opens that note on the research page');
+  check((await page.locator('#D08\\.3 h2').innerText()) === 'Run the first 5 km easier than you want. Think in thirds.', 'the note shows the card\'s own headline');
+  check((await page.locator('#tcount').innerText()) === 'Showing all 16 notes', 'the research page shows all 16 notes and says so');
+  await noHorizontalScroll('research page');
+  for (const w of [360, 320]) { await page.setViewportSize({ width: w, height: 844 }); await noHorizontalScroll('research page', w); }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await noHorizontalScroll('research page', 1280);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#tstatus').selectOption('notfound');
+  check((await page.locator('[data-item]:not([hidden])').count()) === 6 && (await page.locator('[data-item]:not([hidden]) .tag.warn').count()) === 6, 'the "Not found" filter shows the 6 notes whose source was not found, each tagged');
+  await page.locator('#treset').click();
+  await page.locator('#tq').fill('jeukendrup');
+  check((await page.locator('[data-item]:not([hidden])').count()) >= 1, 'an author can be searched');
+  await page.locator('#treset').click();
+  const doi = await page.locator('#D07\\.1 a[href^="https://doi.org/"]').first();
+  check((await doi.getAttribute('rel')) === 'noopener noreferrer' && (await doi.innerText()).includes('doi.org'), 'a found source links to its DOI and says it is another site');
+  check((await page.locator('#D02\\.2 a[href^="http"]').count()) === 0, 'a source that was not found has no link');
+  // The page switch goes both ways, and a note links to its card.
+  await page.getByRole('navigation', { name: 'Truisms pages' }).getByRole('link', { name: 'All truisms' }).click();
+  await page.waitForURL('**/truisms/index.html');
+  await page.getByRole('navigation', { name: 'Truisms pages' }).getByRole('link', { name: 'Research notes' }).click();
+  await page.waitForURL('**/truisms/research/index.html');
+  check((await page.getByRole('navigation', { name: 'Truisms pages' }).locator('[aria-current="page"]').innerText()) === 'Research notes', 'the page switch goes both ways and marks the page you are on');
+  await page.locator('#D08\\.3').getByRole('link', { name: 'View the card' }).click();
+  await page.waitForURL('**/truisms/d08-03-*.html');
+  check(/· TRI Momentum$/.test(await page.title()), 'a note links to its truism card');
+  await page.goto(base + '/truisms/research/index.html');
+  await page.getByRole('link', { name: 'TRI Momentum' }).first().click();
+  await page.waitForURL('**/index.html');
+  check(/^TRI Momentum$/.test(await page.title()), 'the wordmark on the research page goes home');
+}
 await page.context().close();
 
 // ---------------------------------------------------------------------------------------------------------------

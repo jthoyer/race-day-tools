@@ -1,5 +1,6 @@
-/* The truism grid on public/truisms/index.html: one tile for each truism card, each tile a link to its card.
-   The index loads this after app.css and no other page loads it.
+/* The truisms pages: the grid on public/truisms/index.html (one tile for each truism card, each tile a link to its card)
+   and the parts both truisms pages share (the page switch, the counts, the search and filter bar). The index and the
+   research page (public/truisms/research/index.html) load this after app.css; no other page does.
 
    Colours. The owner's card colours, as in truisms.css, kept out of app.css on purpose (README, Look). The tile is the
    card's blue with the card's lime for the label, so a tile reads as a small copy of its card.
@@ -8,8 +9,134 @@
    desktop gets three or four. A tile is a square at least 220 px wide. */
 
 /* The app column is 480 px, which holds one tile across. The index is wider so the tiles make a grid. */
-.app.truisms-index {
+.app.truisms-index,
+.app.truisms-research {
   max-width: 1100px;
+}
+
+/* The hidden attribute must win over the display rules below. */
+.app.truisms-index [hidden],
+.app.truisms-research [hidden] {
+  display: none !important;
+}
+
+/* The page switch: Truisms and Research notes, each way to the other. Plain links on the app's own colours. */
+.tnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tnav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--link);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.tnav a[aria-current='page'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+}
+.tnav a:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* Counts under the introduction. */
+.tstats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.tstats > div {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.tstats dt {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.tstats dd {
+  margin: 2px 0 0;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Search and filter. Hidden until the script runs, because without it the controls would do nothing. */
+.tfilter {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.tfilter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.tfilter-row .field {
+  flex: 1 1 220px;
+}
+.tfilter-row .btn {
+  flex: 0 0 auto;
+  width: auto;
+}
+.tchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tcount {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.tempty {
+  padding: 24px 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  text-align: center;
+}
+
+/* A tile and, when the truism has research notes, a link under it to those notes. */
+.truism-grid li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.truism-grid li > .tile {
+  flex: 1;
+}
+.truism-grid .tile-research {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .truism-grid ul {

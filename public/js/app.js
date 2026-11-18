@@ -425,6 +425,21 @@
       })));
   }
 
+  // The truisms, under the guides in the same footer column (19 Nov 2026): a heading and two plain links, one to every truism card
+  // and one to the research notes. A separate section from the guides, so the guides list stays the guides. Both pages carry
+  // unchecked figures, so each link says Draft, as the guide links do.
+  var TRUISM_LINKS = [
+    { href: 'truisms/index.html', title: 'All the truisms', draft: true },
+    { href: 'truisms/research/index.html', title: 'The research behind them', draft: true }
+  ];
+  function truismLinks() {
+    return h('section', { class: 'tlinks', 'aria-label': 'Truisms' },
+      h('h3', null, 'Truisms'),
+      h('ul', null, TRUISM_LINKS.map(function (g) {
+        return h('li', null, h('a', { href: g.href }, g.title, g.draft ? h('span', { class: 'tag' }, 'Draft') : null));
+      })));
+  }
+
   // One of the four steps, as on the front page and the coming-back screen.
   // o: { state: 'done' | 'now' | 'todo' or '' for the plain front-page look, goal, desc, link: [href, text] }
   function stepItem(n, name, o) {
@@ -459,7 +474,7 @@
             h('p', null, 'Tap Get started and work through the four steps. Choose your race, set your pacing, then review your nutrition. Your race card is ready at the end.'),
             h('p', null, "It's free, and you don't need an account. Your plan saves on this device only."),
             h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. Nothing leaves your device unless you ask: emailing your card, or sending us feedback.')),
-          h('div', { class: 'sf-col' }, guideLinks())),
+          h('div', { class: 'sf-col' }, guideLinks(), truismLinks())),
         h('div', { class: 'sf-legal' },
           h('p', null, 'A guide, not medical advice.'),
           h('a', { class: 'sf-top', href: '#/', onclick: function (e) { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('h1').focus({ preventScroll: true }); } }, 'Back to the top'))));

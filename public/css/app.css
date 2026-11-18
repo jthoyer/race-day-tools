@@ -699,20 +699,24 @@ details.test p {
   font-weight: 600;
   font-size: 14px;
 }
-/* The guides, at the bottom of the front page: plain links, so "Get started" stays the one yellow action. */
-.guides {
+/* The guides and the truisms links, in the footer: plain links, so "Get started" stays the one yellow action. */
+.guides,
+.tlinks {
   display: grid;
   gap: 2px;
 }
-.guides ul {
+.guides ul,
+.tlinks ul {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.guides .tag {
+.guides .tag,
+.tlinks .tag {
   align-self: center;
 }
-.guides a {
+.guides a,
+.tlinks a {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1499,9 +1503,13 @@ p.notice.go {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
-.sitefoot .guides ul {
+.sitefoot .guides ul,
+.sitefoot .tlinks ul {
   padding: 0;
   gap: 0;
+}
+.sitefoot .tlinks {
+  margin-top: 24px;
 }
 .sf-legal {
   display: flex;

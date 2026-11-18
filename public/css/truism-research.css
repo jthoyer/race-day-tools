@@ -1,0 +1,183 @@
+/* The research notes on public/truisms/research/index.html: one card for each truism that has notes. Loaded after app.css and
+   truism-grid.css by that page only.
+
+   Colours. The owner's card colours, as in truisms.css and truism-grid.css, kept out of app.css on purpose (README, Look): the
+   card blue for the header, lime and lavender for the target chips and navy for text on them. Everything else is the app's.
+
+   Size. No media query: the cards fill the row with as many 340 px columns as fit, so a phone gets one column and a desktop
+   gets two or three. Type is 14 px or more. */
+
+.rgrid ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.rcard {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-wrap: break-word;
+}
+
+/* A card opened from a link on the truisms page (research/#D08.3) gets a ring. */
+.rcard:target {
+  outline: 3px solid #d5ff4f;
+  box-shadow: 0 0 0 6px #0a0a8c;
+}
+
+.rcard-head {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  background: #0b23ef;
+  color: #fff;
+}
+.rcard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 14px;
+}
+.rcard-id {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #d5ff4f;
+}
+.rcard-type {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #cad0ff;
+  color: #0a0a8c;
+  font-size: 14px;
+  font-weight: 700;
+}
+.rcard-head h2 {
+  margin: 0;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.rcard-body {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+.rcard-body section {
+  display: grid;
+  gap: 6px;
+}
+.rcard-body h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.rcard-body p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.rcard-mech {
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--info-bg);
+}
+
+.rcard-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rcard-chips li {
+  padding: 4px 12px;
+  border-radius: 9px;
+  background: #e8ecf3;
+  color: #0a0a8c;
+  font-size: 14px;
+  font-weight: 700;
+}
+.rcard-chips li.lime {
+  background: #d5ff4f;
+}
+.rcard-chips li.lavender {
+  background: #cad0ff;
+}
+
+.rcard-source {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.rcard-source .src-title {
+  font-weight: 700;
+  color: #0a0a8c;
+}
+.rcard-source .src-by,
+.rcard-source .src-where {
+  color: var(--muted);
+  font-size: 14px;
+}
+.rcard-source .src-where {
+  font-style: italic;
+}
+.rcard-source a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The status of a source, as a tag in the app's own tag style, with a plain word so colour is never the only signal. */
+.rcard-source .tag {
+  font-size: 14px;
+}
+.rcard-source .tag.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.rcard-check {
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  background: var(--warn-bg);
+}
+
+.rcard-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 16px;
+  padding: 0 18px 12px;
+}
+.rcard-foot a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+}
