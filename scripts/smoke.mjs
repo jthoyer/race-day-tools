@@ -190,7 +190,7 @@ await page.goto(base + '/index.html');
 await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
 await shot('s0');
 check((await page.title()) === 'TRI Momentum', 'The tab title is TRI Momentum');
-check(await page.getByRole('img', { name: 'TRI Momentum' }).isVisible(), 'S0 shows the wordmark, named TRI Momentum');
+check((await page.locator('.s0col .mark, .s0col .tri, .s0col .word, .startmark').count()) === 0, 'S0 column has no wordmark (owner, 18 Nov 2026: each truism carries the logo)');
 check(await page.getByText('Pace targets and a timed nutrition plan for your triathlon, on one race card for your bike.', { exact: true }).isVisible(), 'S0 has the subtitle');
 const items = await page.locator('ol.steps li').allInnerTexts();
 check(items.length === 4 && items.map((t) => t.replace(/^\d\s*/, '').trim()).join('|') === 'Choose a race|Choose pacing|Review nutrition|Get your race card for your top tube', 'S0 lists the four steps in order');
@@ -203,9 +203,9 @@ const s0text = await appText();
 check(!/Just plan my|Countdown|Debrief|Coming later/.test(s0text) && (await page.getByRole('link', { name: /account/i }).count()) === 0 && (await page.locator('.gallery,.gcard').count()) === 0, 'S0 has no "Just plan my" link, no account link, no Countdown or Debrief, no gallery');
 check((await planBtn().count()) === 0 && (await page.locator('header.top').count()) === 0, 'S0 has no header bar and no Race plan button');
 await noStatus('S0');
-// The wordmark, the h1, the steps and then the button come in that order.
-const s0tops = [await topOf(page.getByRole('img', { name: 'TRI Momentum' })), await topOf(page.getByRole('heading', { name: 'Race with a plan.' })), await topOf(page.locator('ol.steps')), await topOf(page.getByRole('link', { name: 'Get started' }))];
-check(s0tops.every((v, i) => i === 0 || v > s0tops[i - 1]), 'S0 shows wordmark, heading, steps and button in order');
+// The h1, the steps and then the button come in that order.
+const s0tops = [await topOf(page.getByRole('heading', { name: 'Race with a plan.' })), await topOf(page.locator('ol.steps')), await topOf(page.getByRole('link', { name: 'Get started' }))];
+check(s0tops.every((v, i) => i === 0 || v > s0tops[i - 1]), 'S0 shows heading, steps and button in order');
 // O1, resolved by the owner: the guide links sit at the very bottom of S0, as plain links, each tagged Draft.
 const guides = page.locator('section.guides');
 const gl = guides.getByRole('link');
@@ -2458,10 +2458,10 @@ async function truismWhole(i, where, { firstViewport = false } = {}) {
 for (const i of [1, 12]) {
   await openFront(`phone ${i}`, { i });
   const st = await box('.truism');
-  const mark = await box('.startmark [role=img]');
-  check(Math.abs(st.width - 390) <= 1 && st.left <= 1 && st.top <= 1 && st.bottom <= mark.top, `S0-phone: truism ${i}'s stage is first, 390 px wide, and ends above the wordmark (stage ${Math.round(st.width)} x ${Math.round(st.bottom)}, wordmark top ${Math.round(mark.top)})`);
-  const tops = [await topOf(page.getByRole('img', { name: 'TRI Momentum' })), await topOf(page.getByRole('heading', { name: 'Race with a plan.' })), await topOf(page.locator('p.lead')), await topOf(page.locator('#view a.more').first()), await topOf(page.getByText('Four steps', { exact: true })), await topOf(page.locator('ol.steps li').first()), await topOf(page.locator('ol.steps li').nth(3)), await topOf(page.getByRole('link', { name: 'Get started' })), await topOf(page.getByText('Free. No account needed.')), await topOf(page.locator('#about'))];
-  check(tops.every((v, k) => k === 0 || v > tops[k - 1]), `S0-phone: below the stage come the wordmark, heading, subtitle, Learn more, Four steps, the steps, Get started, the note and About, in order`);
+  const h1 = await box('.s0col h1');
+  check(Math.abs(st.width - 390) <= 1 && st.left <= 1 && st.top <= 1 && st.bottom <= h1.top, `S0-phone: truism ${i}'s stage is first, 390 px wide, and ends above the heading (stage ${Math.round(st.width)} x ${Math.round(st.bottom)}, heading top ${Math.round(h1.top)})`);
+  const tops = [await topOf(page.getByRole('heading', { name: 'Race with a plan.' })), await topOf(page.locator('p.lead')), await topOf(page.locator('#view a.more').first()), await topOf(page.getByText('Four steps', { exact: true })), await topOf(page.locator('ol.steps li').first()), await topOf(page.locator('ol.steps li').nth(3)), await topOf(page.getByRole('link', { name: 'Get started' })), await topOf(page.getByText('Free. No account needed.')), await topOf(page.locator('#about'))];
+  check(tops.every((v, k) => k === 0 || v > tops[k - 1]), `S0-phone: below the stage come the heading, subtitle, Learn more, Four steps, the steps, Get started, the note and About, in order`);
   check((await page.evaluate(() => scrollY)) === 0 && (await box('.truism')).top >= 0, `S0-phone: truism ${i} lands at the top of the page`);
   await page.context().close();
 }
@@ -2538,7 +2538,7 @@ for (let i = 0; i < TRUISM_N; i++) {
       };
     });
     check(g.tag === 'SECTION' && g.label === 'Truism' && g.taps === 0 && g.styled === 0 && g.moving === 0, `S0-a11y: truism ${i}'s stage is one section named Truism, with nothing to tap, no style attribute and no animation (${JSON.stringify(g)})`);
-    check(g.imgs === 1 && (await page.getByRole('img', { name: /TRI Momentum/ }).count()) === 1, `S0-a11y: truism ${i}: exactly one image on S0 is named TRI Momentum`);
+    check(g.imgs === 0 && (await page.getByRole('img', { name: /TRI Momentum/ }).count()) === 0, `S0-a11y: truism ${i}: no image on S0 is named TRI Momentum (the wordmark is gone; the tab title still names the app)`);
     if (TRUISMS[i].kind === 'image') {
       check((await page.locator('.truism img').getAttribute('alt')) === TRUISMS[i].alt && (await page.getByRole('img', { name: TRUISMS[i].alt, exact: true }).count()) === 1, `S0-a11y: truism ${i}'s alt text is the list's, as the image's accessible name`);
     } else {
