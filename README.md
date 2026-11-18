@@ -48,6 +48,7 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 - The feedback footer (17 Nov 2026): a small muted line and one outlined button, "Tell us what to fix", below the screen and outside it, so each screen keeps its one yellow action. It opens an inline card (not a modal) with a textarea and an email field in the same field style. Its buttons use a new class, `.fbtn`, which only joins the existing ghost-button rules (the ghost button's look without being a `.btn`); no new colour, font or component.
 - One yellow action per screen; secondary actions are grey or outlined.
 - Phone first, and light only.
+- The truism cards (`public/truisms/`) keep their own colours, as the owner drew them: a blue card (`#0b23ef`), a lime stat card (`#d5ff4f`), a lavender one (`#cad0ff`) and dark blue text on both (`#0a0a8c`). These are not the app's tokens, and they sit in `css/truisms.css`, not `css/app.css`. The page behind a card uses the app's canvas colour.
 
 ## Hosting
 
@@ -97,6 +98,8 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/feedback.js` | The feedback footer and its inline panel, built once outside `<main>` so a redraw never wipes the draft, plus the rules that load in Node (message length, the reply address, the page shape). Loaded by the app page only, not the guides. |
 | `functions/api/send.js` | A server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing durable (the limiter keeps hashes of the address and visitor in memory only); logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
 | `functions/api/feedback.js` | The second server function. Takes `{ message, email, page, website }`, checks them, and sends one plain-text email to the address in `FEEDBACK_TO`, with the sender's address as Reply-To when given. Own limiter, apart from `send.js`. Stores nothing durable; logs only a status code and a count. Runs only on Cloudflare; the key, sender and recipient come from its environment. |
+| `public/truisms/` | The truism cards: one static page for each graphic of the Race-Day Blueprint wiki, D03 to D14 (72). A card is one rule on one card, in the owner's words. No script, image or link, and no request of its own. Each loads `css/truisms.css` and nothing else. Nothing in the app links to them yet. |
+| `public/css/truisms.css` | The one stylesheet the cards share. From 1024 px wide up a card is the 1024 by 1024 square the owner drew, scaled to the page and never larger. Narrower, the type stops shrinking at 14 px or more, a long card grows taller than a square, and under 560 px each stat card stacks its figure under its words. It uses container query units and no `@media` rule. Outfit comes from `public/fonts/`. |
 | `public/_headers` | Security headers and the content policy. |
 | `public/fonts/` | DM Sans and Outfit as variable `.woff2` files, in two subsets each (Latin, and Latin Extended for other letters), with their licence. Declared at the top of `css/app.css`. |
 | `tests/` | Unit tests (`node --test`). |
