@@ -375,7 +375,10 @@
     var out = fn(parts.slice(1));
     view.appendChild(out);
     var h1 = view.querySelector('h1');
-    if (h1 && !render.quiet) h1.focus();
+    if (h1 && !render.quiet) {
+      // On the front page a tall truism sits above the h1, and focus() would scroll it out of view: stay at the top.
+      if (view.querySelector('.truism')) { root.scrollTo(0, 0); h1.focus({ preventScroll: true }); } else h1.focus();
+    }
     render.quiet = false;
   }
   // Re-render after a tap on the same screen without stealing focus from where the person is.
@@ -457,19 +460,24 @@
   function home() {
     var r = S.race;
     if (isBlankRace(r)) {
-      return h('div', { class: 'app home' },
-        h('div', { class: 'startmark' }, wordmark(true)),
-        h('div', null,
-          h('h1', { tabindex: '-1' }, 'Race with a plan.'),
-          h('p', { class: 'lead' }, 'Pace targets and a timed nutrition plan for your triathlon, on one race card for your bike.'),
-          h('a', { class: 'more', href: '#about', onclick: function (e) { e.preventDefault(); var s = document.getElementById('about'); s.scrollIntoView({ block: 'start' }); s.querySelector('h2').focus({ preventScroll: true }); } }, 'Learn more', h('span', { class: 'sr-only' }, ' about the plan'))),
-        h('div', { class: 'stepsblock' }, h('p', { class: 'label', id: 'steps-label' }, 'Four steps'),
-        h('ol', { class: 'steps', 'aria-labelledby': 'steps-label' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); }))),
-        h('div', { class: 'actions' },
-          h('a', { class: 'btn', href: '#/setup/1' }, 'Get started'),
-          note('Free. No account needed. Saved on this device only.')),
-        aboutSection(),
-        guideLinks());
+      // The split front page (18 Nov 2026): the truism stage first, then the S0 column, then the About section and the guides
+      // under both. The stage is one element for the whole page load (RD.truisms.stage), so a redraw never picks again.
+      return h('div', { class: 'split' },
+        RD.truisms.stage(),
+        h('div', { class: 'app home s0col' },
+          h('div', { class: 'startmark' }, wordmark(true)),
+          h('div', null,
+            h('h1', { tabindex: '-1' }, 'Race with a plan.'),
+            h('p', { class: 'lead' }, 'Pace targets and a timed nutrition plan for your triathlon, on one race card for your bike.'),
+            h('a', { class: 'more', href: '#about', onclick: function (e) { e.preventDefault(); var s = document.getElementById('about'); s.scrollIntoView({ block: 'start' }); s.querySelector('h2').focus({ preventScroll: true }); } }, 'Learn more', h('span', { class: 'sr-only' }, ' about the plan'))),
+          h('div', { class: 'stepsblock' }, h('p', { class: 'label', id: 'steps-label' }, 'Four steps'),
+          h('ol', { class: 'steps', 'aria-labelledby': 'steps-label' }, STEP_NAMES.map(function (t, i) { return stepItem(i + 1, t, { goal: i === 3 }); }))),
+          h('div', { class: 'actions' },
+            h('a', { class: 'btn', href: '#/setup/1' }, 'Get started'),
+            note('Free. No account needed. Saved on this device only.'))),
+        h('div', { class: 'app home s0below' },
+          aboutSection(),
+          guideLinks()));
     }
 
     var days = T.daysUntil(r.date);

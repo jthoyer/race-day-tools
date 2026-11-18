@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'public');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.webp': 'image/webp' };
 const SHOTS = process.env.SHOTS || '';
 
 // Serve public/_headers as a host would, so a content policy that breaks the app fails this test.
@@ -60,22 +60,27 @@ function badRequest(method, url) {
 // Set while a scenario expects /api/send or /api/feedback to fail (a 404, an offline device, a refused call): the browser's own
 // console error for those two addresses is not a problem there. Any other console error still is.
 let sendErrorsExpected = false;
+// Set to a pattern while a scenario aborts truism images on purpose (criterion 26): the browser's own "Failed to load resource"
+// console error for an address that matches is not a problem there. Any other console error still is, and so is one for any
+// other address. Null the rest of the time.
+let expectedConsoleUrl = null;
 
 // Every scenario below says how it is isolated. A "fresh" one is a new browser context: empty storage, no shared module state.
-async function fresh(label, { width = 390, init } = {}) {
-  const ctx = await browser.newContext({ viewport: { width, height: 844 } });
+async function fresh(label, { width = 390, height = 844, init } = {}) {
+  const ctx = await browser.newContext({ viewport: { width, height } });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => problems.push(`page error (${label}): ` + e.message));
   p.on('console', (m) => {
     if (m.type() !== 'error') return;
     if (sendErrorsExpected && /\/api\/(send|feedback)$/.test(m.location().url || '')) return;
+    if (expectedConsoleUrl && expectedConsoleUrl.test(m.location().url || '')) return;
     problems.push(`console (${label}): ` + m.text());
   });
   // Fonts ship with the app, so nothing may be requested from another host, and only POST /api/send and POST /api/feedback may be called.
   p.on('request', (r) => { const bad = badRequest(r.method(), r.url()); if (bad) problems.push(`${bad} (${label}): ${r.method()} ` + r.url()); });
   // A content-policy violation shows as a console error above, and as a securitypolicyviolation event here.
   await p.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error('CSP blocked ' + e.violatedDirective + ' ' + e.blockedURI)));
-  if (init) await p.addInitScript(init.fn, init.arg);
+  for (const one of [].concat(init || [])) await p.addInitScript(one.fn, one.arg);
   page = p;
   return p;
 }
@@ -120,8 +125,10 @@ async function pdfRowsOk(where, fuelStale) {
 }
 
 // 28 and 29: no whole word "fuel" and no "Standard" in what a person reads.
+// The owner's truism, on the front page, is shown as made ("Standard", "fuel"): its words are left out here, and the rest of the
+// page is read as before (decided 18 Nov 2026, criterion 26).
 async function wordsClean(where) {
-  const t = await appText();
+  const t = await page.evaluate(() => { const b = document.body.innerText; const st = document.querySelector('.truism'); return st && st.innerText ? b.replace(st.innerText, '') : b; });
   check(!/\bfuel\b/i.test(t) && !/\bstandard\b/i.test(t) && !/Race-day tools/.test(t), `${where} has no "fuel", "Standard" or "Race-day tools" in its words`);
 }
 // 5 and 6. The header, the Race plan button, the status row and the panel (criterion 19).
@@ -177,7 +184,8 @@ async function stripIs(where, present) {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Scenario 1: front page. Isolation: fresh context, empty storage.
-await fresh('front page');
+// The truism is picked at random, so this scenario pins it (an image, index 0); the new front page scenarios at the end cover all 13.
+await fresh('front page', { init: { fn: (n) => { Math.random = () => (n + 0.5) / 13; }, arg: 0 } });
 await page.goto(base + '/index.html');
 await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
 await shot('s0');
@@ -2388,6 +2396,323 @@ for (const hash of ['#/card', '#/fuel', '#/setup/1']) {
   const total = await page.locator('button, a.btn').evaluateAll((els) => els.filter((e) => getComputedStyle(e).backgroundColor === 'rgb(248, 196, 79)').length);
   check(inFooter === 0 && total === before && before <= 1, `${hash}: no button in the footer or panel is yellow, and the screen keeps at most one yellow action (${before})`);
   await page.context().close();
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Front page truisms (18 Nov 2026): the split screen, criteria 1 to 10 and 14 to 26 of the spec of that date. The truism is picked
+// with Math.random once per page load, so each scenario stubs it with (i + 0.5) / 13 to force truism i, which is the pick's
+// contract (tests/front-page-truisms.test.js, "T-pick"). Every scenario is its own fresh browser context with empty storage, unless it says
+// otherwise. The list comes from public/js/truisms.js, loaded in Node.
+const TRUISMS = require(join(ROOT, 'js', 'truisms.js')).LIST;
+const TRUISM_N = TRUISMS.length;
+const forceTruism = (i) => ({ fn: (n) => { Math.random = () => (n + 0.5) / 13; }, arg: i });
+// A new value on every call: if anything asked for a pick twice, the truism would change.
+const wanderingRandom = { fn: () => { let k = 0; Math.random = () => (((k++) * 5 + 1) % 13 + 0.5) / 13; }, arg: null };
+async function openFront(label, { i, width = 390, height = 844, init = [], hash = '' } = {}) {
+  await fresh(label, { width, height, init: [].concat(i === undefined ? [] : forceTruism(i), init) });
+  await page.goto(base + '/index.html' + hash);
+  await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+  await page.waitForFunction(() => document.activeElement && document.activeElement.tagName === 'H1');
+  await page.waitForFunction(() => { const im = document.querySelector('.truism img'); return !im || im.complete; });
+}
+const truismId = () => page.locator('.truism').getAttribute('data-truism');
+const imagePaths = (asked) => asked.filter((u) => /\/img\/truisms\//.test(u));
+const watchImages = () => { const asked = []; page.on('request', (r) => asked.push(new URL(r.url()).pathname)); return asked; };
+const box = (sel) => page.locator(sel).first().evaluate((e) => { const b = e.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height }; });
+
+// Criterion 6: the whole truism, never cropped, at the width the page is now.
+async function truismWhole(i, where, { firstViewport = false } = {}) {
+  const e = TRUISMS[i];
+  const g = await page.evaluate(() => {
+    const r = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+    const st = document.querySelector('.truism');
+    const out = { id: st.getAttribute('data-truism'), st: r(st), vw: document.documentElement.clientWidth, vh: innerHeight, kids: st.children.length };
+    const img = st.querySelector('img');
+    if (img) out.img = { b: r(img), nw: img.naturalWidth, nh: img.naturalHeight, fit: getComputedStyle(img).objectFit };
+    const live = st.querySelector('.truism-live');
+    if (live) {
+      const lb = r(live);
+      const clip = [];
+      for (let el = live; ; el = el.parentElement) { const cs = getComputedStyle(el); if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') clip.push(el.className); if (el === st) break; }
+      const outside = [...live.querySelectorAll('*')].filter((c) => { const b = c.getBoundingClientRect(); return b.left < lb.l - 1 || b.right > lb.r + 1 || b.top < lb.t - 1 || b.bottom > lb.b + 1; }).map((c) => c.className);
+      out.live = { b: lb, sw: live.scrollWidth, cw: live.clientWidth, sh: live.scrollHeight, ch: live.clientHeight, clip, outside, stSh: st.scrollHeight, stCh: st.clientHeight, stSw: st.scrollWidth, stCw: st.clientWidth };
+    }
+    return out;
+  });
+  check(g.id === e.id && g.kids === 1, `${where}: truism ${i} shows ${e.id}, as the stage's one child`);
+  const eps = 1;
+  if (e.kind === 'image') {
+    const b = g.img.b;
+    check(b.l >= g.st.l - eps && b.r <= g.st.r + eps && b.t >= g.st.t - eps && b.b <= g.st.b + eps && b.r <= g.vw + eps && b.l >= -eps, `${where}: truism ${i} lies inside the stage and the viewport width`);
+    check(Math.abs(b.w / b.h / (1200 / 630) - 1) <= 0.01 || g.img.fit === 'contain', `${where}: truism ${i} keeps its 1200:630 shape (${(b.w / b.h).toFixed(3)}, ${g.img.fit})`);
+    check(g.img.nw === 1200 && g.img.nh === 630, `${where}: truism ${i} is 1200 x 630 on the page`);
+  } else {
+    const l = g.live;
+    check(l.sw <= l.cw + 1 && l.sh <= l.ch + 1 && l.stSw <= l.stCw + 1 && l.stSh <= l.stCh + 1 && l.clip.length === 0 && l.outside.length === 0 && l.b.r <= g.vw + eps, `${where}: the live truism fits whole, with nothing clipped (${JSON.stringify({ sw: l.sw, cw: l.cw, sh: l.sh, ch: l.ch, clip: l.clip, outside: l.outside })})`);
+  }
+  if (firstViewport) check((g.img ? g.img.b.b : g.live.b.b) <= g.vh + 0.5, `${where}: truism ${i} is inside the first viewport (bottom ${Math.round(g.img ? g.img.b.b : g.live.b.b)} of ${g.vh})`);
+  await noHorizontalScroll(`${where} (truism ${i})`, g.vw);
+}
+
+// Criteria 1 and 8: on a phone the stage is first and as wide as the screen; the page lands at its top.
+for (const i of [1, 12]) {
+  await openFront(`phone ${i}`, { i });
+  const st = await box('.truism');
+  const mark = await box('.startmark [role=img]');
+  check(Math.abs(st.width - 390) <= 1 && st.left <= 1 && st.top <= 1 && st.bottom <= mark.top, `S0-phone: truism ${i}'s stage is first, 390 px wide, and ends above the wordmark (stage ${Math.round(st.width)} x ${Math.round(st.bottom)}, wordmark top ${Math.round(mark.top)})`);
+  const tops = [await topOf(page.getByRole('img', { name: 'TRI Momentum' })), await topOf(page.getByRole('heading', { name: 'Race with a plan.' })), await topOf(page.locator('p.lead')), await topOf(page.locator('#view a.more').first()), await topOf(page.getByText('Four steps', { exact: true })), await topOf(page.locator('ol.steps li').first()), await topOf(page.locator('ol.steps li').nth(3)), await topOf(page.getByRole('link', { name: 'Get started' })), await topOf(page.getByText('Free. No account needed.')), await topOf(page.locator('#about'))];
+  check(tops.every((v, k) => k === 0 || v > tops[k - 1]), `S0-phone: below the stage come the wordmark, heading, subtitle, Learn more, Four steps, the steps, Get started, the note and About, in order`);
+  check((await page.evaluate(() => scrollY)) === 0 && (await box('.truism')).top >= 0, `S0-phone: truism ${i} lands at the top of the page`);
+  await page.context().close();
+}
+
+// Criteria 2, 3, 4, 5, 9 and 31 on a wide screen. Fresh context per width.
+for (const [w, hh] of [[1440, 900], [1024, 768]]) {
+  await openFront(`desktop ${w}`, { i: 1, width: w, height: hh });
+  const st = await box('.truism');
+  const col = await box('.s0col');
+  const below = await box('.s0below');
+  const kids = await page.locator('.s0col').evaluate((e) => [...e.children].map((c) => c.getBoundingClientRect().width));
+  check(st.left <= 1 && st.top <= 1 && col.left >= st.right - 1 && st.width / w >= 0.62 && st.width / w <= 0.7, `S0-desktop ${w}: the stage is on the left and ${(st.width / w).toFixed(3)} of the width`);
+  check(col.width >= 320 && Math.max(...kids) <= 480, `S0-desktop ${w}: the S0 column is ${Math.round(col.width)} px wide with content at most ${Math.round(Math.max(...kids))} px`);
+  check(below.top >= st.bottom - 1 && below.top >= col.bottom - 1, `S0-desktop ${w}: About and the guides sit below the stage and the column`);
+  check((await page.locator('.truism').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(11, 35, 239)', `S0-desktop ${w}: the stage is #0b23ef`);
+  check((await page.locator('.btn').count()) === 1, `S0-desktop ${w}: the S0 column has one yellow action`);
+  const small = await page.locator('#view a, #view button').evaluateAll((els) => els.filter((e) => { const b = e.getBoundingClientRect(); return b.height < 44 || b.width < 44; }).map((e) => e.textContent.trim()));
+  check(small.length === 0, `S0-desktop ${w}: every link and button is at least 44 px high and wide (${small.join(', ') || 'none short'})`);
+  await noHorizontalScroll(`S0-desktop ${w}`, w);
+  await page.getByRole('link', { name: 'Get started' }).click();
+  await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+  check(await page.getByRole('heading', { name: 'Choose a race' }).isVisible(), `S0-desktop ${w}: Get started opens "Choose a race" in one tap`);
+  await page.context().close();
+}
+// Criterion 10 on a wide screen: with a named race, home has no stage and keeps its 480 px column. Seeded save, fresh context.
+{
+  await fresh('S5 desktop', { width: 1440, height: 900, init: seedWith(stripSeed()) });
+  const asked = watchImages();
+  await page.goto(base + '/index.html');
+  await page.locator('a.btn').waitFor();
+  const w = await page.locator('.app').evaluate((e) => e.getBoundingClientRect().width);
+  check((await page.locator('.truism').count()) === 0 && (await page.locator('.split').count()) === 0 && w <= 480, `S5-desktop: no stage and a column of ${Math.round(w)} px at 1440`);
+  await page.waitForTimeout(300);
+  check(imagePaths(asked).length === 0, 'S5-desktop: home with a race asks for no truism image');
+  await page.context().close();
+}
+
+// Criteria 6, 7 and 8 for every truism. A fresh load per truism at 390 x 844 (then the page is resized through the other
+// widths, which is a layout check only), a fresh load at 320 x 568, and a fresh load at 1440 x 900 (then 1280 x 800).
+for (let i = 0; i < TRUISM_N; i++) {
+  await openFront(`whole ${i} phone`, { i });
+  check((await truismId()) === TRUISMS[i].id, `S0-whole: the stub forces truism ${i}, ${TRUISMS[i].id}`);
+  check((await page.evaluate(() => scrollY)) === 0 && (await box('.truism')).top >= 0 && (await box('.truism')).top < 844, `S0-whole: truism ${i} lands at the top at 390 x 844`);
+  for (const w of [390, 360, 320, 768, 1024]) { await page.setViewportSize({ width: w, height: 844 }); await truismWhole(i, `S0-whole ${w}`); }
+  await wordsClean(`S0 with truism ${i}`);
+  check((await page.locator('h1').count()) === 1 && (await page.locator('.truism').locator('h1,h2,h3,h4,h5,h6').count()) === 0, `S0-whole: truism ${i}: one h1 on the page, and none in the stage`);
+  await page.context().close();
+  await openFront(`whole ${i} small phone`, { i, width: 320, height: 568 });
+  check((await page.evaluate(() => scrollY)) === 0 && (await box('.truism')).top >= 0 && (await box('.truism')).top < 568, `S0-whole: truism ${i} lands at the top at 320 x 568`);
+  await page.context().close();
+  await openFront(`whole ${i} desktop`, { i, width: 1440, height: 900 });
+  await truismWhole(i, 'S0-whole 1440 x 900', { firstViewport: true });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await truismWhole(i, 'S0-whole 1280 x 800', { firstViewport: true });
+  await page.context().close();
+}
+
+// Criteria 4, 14 and 15: the stage holds nothing to tap, nothing styled inline, nothing that moves; the live truism is real
+// text and its colours are measured as rendered. Fresh context per truism.
+{
+  const lum = (c) => { const v = c.match(/\d+(\.\d+)?/g).slice(0, 3).map((x) => { x = Number(x) / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  for (const i of [0, 7, 12]) {
+    await openFront(`a11y ${i}`, { i });
+    const g = await page.evaluate(() => {
+      const st = document.querySelector('.truism');
+      const all = [st, ...st.querySelectorAll('*')];
+      return {
+        label: st.getAttribute('aria-label'), tag: st.tagName,
+        taps: st.querySelectorAll('a, button, input, select, textarea, [tabindex], [role=button], [role=link]').length,
+        styled: all.filter((e) => e.hasAttribute('style')).length,
+        moving: all.filter((e) => { const cs = getComputedStyle(e); return cs.animationName !== 'none' || cs.transitionDuration.split(',').some((d) => parseFloat(d) > 0); }).length,
+        imgs: [...document.querySelectorAll('[role=img]')].filter((e) => /TRI Momentum/.test(e.getAttribute('aria-label') || '')).length + [...document.querySelectorAll('img')].filter((e) => /TRI Momentum/.test(e.alt)).length
+      };
+    });
+    check(g.tag === 'SECTION' && g.label === 'Truism' && g.taps === 0 && g.styled === 0 && g.moving === 0, `S0-a11y: truism ${i}'s stage is one section named Truism, with nothing to tap, no style attribute and no animation (${JSON.stringify(g)})`);
+    check(g.imgs === 1 && (await page.getByRole('img', { name: /TRI Momentum/ }).count()) === 1, `S0-a11y: truism ${i}: exactly one image on S0 is named TRI Momentum`);
+    if (TRUISMS[i].kind === 'image') {
+      check((await page.locator('.truism img').getAttribute('alt')) === TRUISMS[i].alt && (await page.getByRole('img', { name: TRUISMS[i].alt, exact: true }).count()) === 1, `S0-a11y: truism ${i}'s alt text is the list's, as the image's accessible name`);
+    } else {
+      const e = TRUISMS[i];
+      const t = await page.evaluate(() => {
+        const q = (s) => [...document.querySelectorAll(s)].map((x) => x.innerText);
+        const hid = (s) => !!document.querySelector(s) && document.querySelector(s).getAttribute('aria-hidden') === 'true';
+        return { headline: q('.tl-headline'), body: q('.tl-text'), labels: q('.tl-label'), details: q('.tl-detail'), values: q('.tl-value'), brand: hid('.tl-brand'), tag: hid('.tl-tag'), tagText: document.querySelector('.tl-tag').innerText };
+      });
+      check(t.headline.join() === e.headline && t.body.join() === e.body && t.labels.join('|') === e.cards.map((c) => c.label).join('|') && t.details.join('|') === e.cards.map((c) => c.detail).join('|') && t.values.join('|') === e.cards.map((c) => c.value).join('|'), 'S0-a11y: the live truism shows the list\'s headline, body and card text exactly');
+      check(t.brand && t.tag && t.tagText === 'Helping Triathletes shift gear', 'S0-a11y: the live truism hides its logo and tagline from a screen reader');
+      check((await page.locator('.truism-live img, .truism-live svg').count()) === 0 && (await page.locator('.btn').count()) === 1, 'S0-a11y: the live truism has no image and adds no button');
+      const cols = await page.evaluate(() => {
+        const bg = (el) => getComputedStyle(el).backgroundColor, fg = (el) => getComputedStyle(el).color;
+        const q = (s) => document.querySelector(s);
+        return { white: [fg(q('.tl-headline')), bg(q('.truism'))], lime: [fg(q('.tl-card.lime .tl-label')), bg(q('.tl-card.lime'))], lav: [fg(q('.tl-card.lavender .tl-detail')), bg(q('.tl-card.lavender'))], badge: [fg(q('.tl-badge')), bg(q('.tl-badge'))] };
+      });
+      const r = Object.fromEntries(Object.entries(cols).map(([k, [a, b]]) => [k, +ratio(a, b).toFixed(2)]));
+      console.log('    contrast as rendered: ' + JSON.stringify(r));
+      check(Object.values(r).every((v) => v >= 4.5), `S0-a11y: the live truism's text is at least 4.5:1 on its backgrounds (${JSON.stringify(r)})`);
+    }
+    await page.context().close();
+  }
+}
+
+// Criteria 19, 20 and 25: one pick per load, one image request, and a redraw never picks again. Fresh context per load.
+{
+  const ids = [];
+  for (const i of [2, 9]) {
+    await openFront(`rotate ${i}`, { i, init: [] });
+    ids.push(await truismId());
+    await page.context().close();
+  }
+  check(ids[0] === TRUISMS[2].id && ids[1] === TRUISMS[9].id && ids[0] !== ids[1], `S0-rotate: two loads with different stubs show different truisms (${ids.join(', ')})`);
+  for (const i of [3, 12]) {
+    await fresh(`one request ${i}`, { init: forceTruism(i) });
+    const asked = watchImages();
+    await page.goto(base + '/index.html');
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    await page.waitForLoadState('networkidle');
+    const n = imagePaths(asked).length;
+    check(n === (TRUISMS[i].kind === 'image' ? 1 : 0), `S0-rotate: truism ${i} makes ${n} image request${n === 1 ? '' : 's'} (${TRUISMS[i].kind === 'image' ? 'one' : 'none'} expected)`);
+    check((await page.locator('.truism img').evaluateAll((els) => els.every((e) => e.getAttribute('loading') !== 'lazy'))), `S0-rotate: truism ${i} is not lazy-loaded`);
+    await page.context().close();
+  }
+  // The pick comes from Math.random only once: this stub changes its answer on every call.
+  for (const link of ['wordmark', 'back']) {
+    await openFront(`redraw ${link}`, { init: wanderingRandom });
+    const asked = watchImages();
+    const first = await truismId();
+    await page.evaluate(() => { window.__stage = document.querySelector('.truism'); });
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+    if (link === 'wordmark') await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click(); else await page.goBack();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    check((await truismId()) === first, `S0-rotate: S0 -> step 1 -> ${link === 'wordmark' ? 'the wordmark' : 'Back'} keeps ${first}`);
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+    if (link === 'wordmark') await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click(); else await page.goBack();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    await page.locator('#view a.more').first().click();
+    await page.locator('#about a.more').click();
+    check((await truismId()) === first && (await page.evaluate(() => window.__stage === document.querySelector('.truism'))), `S0-rotate: a second round trip, Learn more and Back to the top keep ${first}, as the same element`);
+    await page.waitForTimeout(200);
+    check(imagePaths(asked).length === 0, 'S0-rotate: no redraw asks for the picture again');
+    await page.context().close();
+  }
+}
+
+// Criterion 21: the pick is never saved. Fresh context, then a reload with a different stub (a second init script wins).
+// Two runs, each on a fresh context. The unseeded run starts with nothing saved, so the app itself creates and saves the blank
+// race on Get started (ensureRace calls commit): a later change that stored the pick through commit() shows up there. The seeded
+// run starts from a known value, so the store can be compared byte for byte; the app writes nothing in it, because ensureRace finds
+// a race and never commits.
+{
+  const state = () => page.evaluate((k) => ({ session: sessionStorage.length, cookie: document.cookie, search: location.search, hash: location.hash, hist: history.state, name: window.name, store: localStorage.getItem(k), keys: Object.keys(localStorage), values: Object.keys(localStorage).map((x) => localStorage.getItem(x)).join('\n') }), KEY);
+  const cleanFor = (tag) => (st, when) => check(st.session === 0 && st.cookie === '' && st.search === '' && (st.hash === '' || st.hash === '#/') && st.hist === null && st.name === '' && !TRUISMS.some((t) => st.values.includes(t.id)) && st.keys.join() === KEY, `${tag}: ${when}: no session storage, cookie, query, hash, history state or window name, and no truism id in storage`);
+
+  // Run 1: unseeded. The app makes and saves the blank race.
+  {
+    const tag = 'S0-persist (unseeded)';
+    const clean = cleanFor(tag);
+    await openFront('persist unseeded', { i: 4 });
+    check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === null, `${tag}: nothing is saved before Get started`);
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+    await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    const saved = await page.evaluate((k) => localStorage.getItem(k), KEY);
+    check(!!saved && JSON.parse(saved).race && !JSON.parse(saved).race.name, `${tag}: Get started made and saved a blank race`);
+    clean(await state(), 'after load, Get started and back to home');
+    await page.addInitScript(forceTruism(10).fn, 10);
+    await page.reload();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    const after = await state();
+    check((await truismId()) === TRUISMS[10].id, `${tag}: the reload picked again (a different truism)`);
+    clean(after, 'after a reload');
+    check(after.store === saved, `${tag}: the saved blank race is byte for byte the same after a reload with a different pick`);
+    await page.context().close();
+  }
+
+  // Run 2: seeded. The seed is built by hand to match the race object app.js builds in ensureRace (about line 545). It has no
+  // `fitness` field, which store.js blank() adds to every save the app writes, so it is not a save the app made.
+  {
+    const tag = 'S0-persist (seeded)';
+    const clean = cleanFor(tag);
+    const blankSave = { details: { weight: null, sweat: null, sweatTypical: true, gut: null }, race: { name: '', distance: '70.3', date: '', course: 'rolling', heat: 'warm', pace: null, fuel: null, splits: null } };
+    const seed = seedWith(blankSave);
+    const seededBefore = JSON.stringify(blankSave);
+    await openFront('persist seeded', { i: 4, init: [seed] });
+    const seeded = await page.evaluate((k) => localStorage.getItem(k), KEY);
+    check(seeded === seededBefore, `${tag}: after load, the store holds exactly the seeded blank race, byte for byte`);
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+    await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    check((await page.evaluate((k) => localStorage.getItem(k), KEY)) === seededBefore, `${tag}: after Get started and back to home, the store is still byte for byte the seed`);
+    check(!!seeded && JSON.parse(seeded).race && !JSON.parse(seeded).race.name, `${tag}: the seed is a hand-built blank race matching the one app.js builds, without the fitness field the app adds when it saves`);
+    clean(await state(), 'after load');
+    await page.addInitScript(forceTruism(10).fn, 10);
+    await page.reload();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    const after = await state();
+    check((await truismId()) === TRUISMS[10].id, `${tag}: the reload picked again (a different truism)`);
+    clean(after, 'after a reload');
+    check(after.store === seededBefore, `${tag}: the seeded blank race is byte for byte the same as the seed after a reload with a different pick`);
+    await page.context().close();
+  }
+}
+
+// Criteria 23, 24 and 26: a failed image gives way to the next truism. Fresh context per case; the failure is made by a route.
+{
+  check(expectedConsoleUrl === null, 'S0-fallback: no console error is tolerated before these scenarios');
+  const tol = /\/img\/truisms\/d01-02-race-rules-drafting-penalties-equipment\.webp$/;
+  check(tol.test('http://localhost:1/img/truisms/d01-02-race-rules-drafting-penalties-equipment.webp') && !tol.test('http://localhost:1/js/app.js') && !tol.test('http://localhost:1/img/truisms/d01-03-race-courses-and-conditions.webp') && !tol.test('http://localhost:1/api/send'), 'S0-fallback: the tolerance names one routed image address and nothing else');
+  for (const [from, label] of [[2, 'an image fails, the next image shows'], [11, 'the last image fails, the live truism shows']]) {
+    const gone = TRUISMS[from].id;
+    const next = TRUISMS[from + 1].id;
+    expectedConsoleUrl = new RegExp('/img/truisms/' + gone + '\\.webp$');
+    await fresh(`fallback ${from}`, { init: forceTruism(from) });
+    const asked = watchImages();
+    await page.route('**/img/truisms/' + gone + '.webp', (route) => route.abort());
+    await page.goto(base + '/index.html');
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    await page.waitForFunction((id) => document.querySelector('.truism').getAttribute('data-truism') === id, next);
+    await page.waitForFunction(() => { const im = document.querySelector('.truism img'); return !im || im.complete; });
+    const broken = await page.locator('.truism img').evaluateAll((els) => els.filter((e) => e.complete && e.naturalWidth === 0).length);
+    const srcs = await page.locator('.truism img').evaluateAll((els) => els.map((e) => e.getAttribute('src')));
+    check((await truismId()) === next && broken === 0 && !srcs.some((u) => u.includes(gone)) && srcs.length === (TRUISMS[from + 1].kind === 'image' ? 1 : 0), `S0-fallback: ${label} (${gone} -> ${next}), and the failed image is out of the page`);
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await page.getByRole('heading', { name: 'Choose a race' }).waitFor();
+    await page.locator('header.top').getByRole('link', { name: 'TRI Momentum' }).click();
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    await page.waitForTimeout(300);
+    check((await truismId()) === next && imagePaths(asked).filter((u) => u.includes(gone)).length === 1, 'S0-fallback: a redraw keeps the substitute and does not ask for the failed file again');
+    await noHorizontalScroll(`S0-fallback ${from}`);
+    await page.context().close();
+    expectedConsoleUrl = null;
+  }
+  // Every image fails: the live truism shows, and no file is asked for twice.
+  expectedConsoleUrl = /\/img\/truisms\//;
+  await fresh('fallback all', { init: forceTruism(0) });
+  const asked = watchImages();
+  await page.route('**/img/truisms/**', (route) => route.abort());
+  await page.goto(base + '/index.html');
+  await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+  await page.waitForFunction((id) => document.querySelector('.truism').getAttribute('data-truism') === id, TRUISMS[TRUISM_N - 1].id);
+  const first = imagePaths(asked).length;
+  await page.waitForTimeout(500);
+  const files = imagePaths(asked);
+  check((await truismId()) === 'd07-fuelling-and-hydration' && (await page.locator('.tl-headline').isVisible()) && (await page.locator('.truism img').count()) === 0, 'S0-fallback: with every image failing, S0 shows the live truism and no image');
+  check(files.length === first && new Set(files).size === files.length && files.length === TRUISM_N - 1, `S0-fallback: each of the ${TRUISM_N - 1} image files was asked for once and the asking stopped (${files.length} requests)`);
+  await page.context().close();
+  expectedConsoleUrl = null;
 }
 
 await browser.close();

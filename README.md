@@ -38,11 +38,13 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 | Green | `#116b43` | Done |
 | Yellow hover (`--accent-hover`) | `#f6cf69` | The labels and edit buttons on an ink band (the race card header and the race strip), and the yellow button on hover |
 | Light blue (`--info-bg`) | `#eaf7fc` | Step 4, the race card, in the status row, the Race plan panel and the step list |
+| Truism blue (`--truism-blue`) | `#0b23ef` | The stage behind a truism on the front page. Nowhere else in `css/app.css`; the truism cards use the same blue in `css/truisms.css` |
 
 - DM Sans for body and controls, Outfit for headings and the wordmark. Both are open fonts (SIL Open Font License). They ship in `public/fonts/`, so no page asks another host for anything. The licence text is in `public/fonts/LICENSE.txt`.
 - A 9 px corner radius on buttons, inputs and cards.
 - The race strip: an ink band under the status row on pacing and step 3 (the race, its countdown, Edit race and Edit taper). It scrolls with the page, like the status row. It is the race card header's band, closed, and uses `--accent-hover` for its buttons.
 - The status row and the Race plan panel: a read-only row under the header on every step and the race card, except step 3 with no race ("Step 2 of 4", the step's name, "Next: ..." and four bars; after race day, "Race done" and one green "Plan complete" bar). A "Race plan" button in the header opens a panel with the four step links and a locked "Review your race" row. In the panel, done is a green circle with a tick, the current step is ink and says "You are here", and step 4 stays on the light blue with a blue ring until it is current. Neither is sticky.
+- The front page split (18 Nov 2026): one random truism per page load on a truism-blue stage, the left two thirds from 1024 px wide and on top below that (the one width breakpoint, a `min-width: 1024px` media query), with the front page content in the right third and the About section and the guides under both. The live fuelling truism also uses navy `#0a0a8c`, lime `#d5ff4f` and lavender `#cad0ff`, on its own stat cards only. In `css/app.css` nothing else uses these four colours; the truism cards use the same four in `css/truisms.css`.
 - The wordmark: three ink boxes holding white T, R and I, then "Momentum" in Outfit.
 - Controls at least 44 px high and wide.
 - The feedback footer (17 Nov 2026): a small muted line and one outlined button, "Tell us what to fix", below the screen and outside it, so each screen keeps its one yellow action. It opens an inline card (not a modal) with a textarea and an email field in the same field style. Its buttons use a new class, `.fbtn`, which only joins the existing ghost-button rules (the ghost button's look without being a `.btn`); no new colour, font or component.
@@ -92,9 +94,11 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/js/ui.js` | DOM helpers. Text always goes in as text, never as HTML. |
 | `public/js/card.js` | The race card as a PDF: the sheet (the words the PDF holds, no DOM), the one-page A4 drawing of the top-tube strip, and the address check. Reads the saved plan; does no maths. |
 | `public/js/vendor/` | jsPDF, vendored at a pinned version with its licence, unedited. Draws the PDF on the device. |
-| `public/js/app.js` | The screens: home (the front page, with a Learn more section and the guide links at its bottom, and coming back), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, and the status row and Race plan panel (Race, Pacing, Nutrition, Race card) that join them. The race strip, an ink band under the status row on pacing and step 3, shows the race and its countdown with Edit race and Edit taper. |
+| `public/js/app.js` | The screens: home (the front page, split into the truism stage and the front page column, with a Learn more section and the guide links at its bottom, and coming back), step 1 race, step 2 pacing in three parts, step 3 nutrition, step 4 race card, My products, and the status row and Race plan panel (Race, Pacing, Nutrition, Race card) that join them. The race strip, an ink band under the status row on pacing and step 3, shows the race and its countdown with Edit race and Edit taper. |
 | `public/js/embed.js` | The tool inside a guide page. One step works alone; saving starts a plan. |
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
+| `public/js/truisms.js` | The front page truisms: the list of 13 (12 images and the live fuelling truism), the pick, and the stage built once per page load, with the fall back to the next truism when an image fails. The list and the pick load in Node. Loaded by the app page only. |
+| `public/img/truisms/` | The 12 truism graphics (1200 x 630 WebP), copied as the owner made them. Each has alt text in `truisms.js`. |
 | `public/js/feedback.js` | The feedback footer and its inline panel, built once outside `<main>` so a redraw never wipes the draft, plus the rules that load in Node (message length, the reply address, the page shape). Loaded by the app page only, not the guides. |
 | `functions/api/send.js` | A server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing durable (the limiter keeps hashes of the address and visitor in memory only); logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
 | `functions/api/feedback.js` | The second server function. Takes `{ message, email, page, website }`, checks them, and sends one plain-text email to the address in `FEEDBACK_TO`, with the sender's address as Reply-To when given. Own limiter, apart from `send.js`. Stores nothing durable; logs only a status code and a count. Runs only on Cloudflare; the key, sender and recipient come from its environment. |
@@ -137,6 +141,15 @@ All of these sit at the top of `pace.js` and `fuel.js`, each marked `UNCHECKED`.
 | Sodium | `SODIUM_PER_L`, `SODIUM_RANGE` | 600–800 mg/L, 300–1,000 mg/h |
 | Gel timing limits | `TIMING_EVERY`, `END_GAP` | a gel every 5–120 min; none in the last 10 min of a leg |
 | Carb list on My products | `CARB_PICK` | 20–50 g in 5 g steps (a figure off the list goes under Other) |
+
+The front page truisms (18 Nov 2026) carry figures too: the owner's content, in the 12 graphics and the live fuelling truism. All are UNCHECKED, this change does not alter any of them, they are never read from or written to `pace.js` or `fuel.js`, and the pull request lists each one for the owner to sign off. Five disagree with the ranges above, and one is for the owner to settle:
+
+1. Olympic "about 90% FTP", against `BIKE_IF` Olympic (`standard`) 0.81 to 0.89 of FTP (rolling 0.83 to 0.88).
+2. 70.3 "about 75 to 80% FTP", against `BIKE_IF` 70.3 0.71 to 0.78 (rolling 0.73 to 0.77).
+3. "500-1000 mg sodium" with no time unit, against `SODIUM_RANGE` 300 to 1,000 mg an hour.
+4. Olympic "~60 g/hr carbs" (shown as STANDARD FUEL), against `CARB_CEILING` Olympic: 60 on the bike but 30 on the run.
+5. 70.3 "60-90 g/hr carbs", against `CARB_CEILING` 70.3: 90 on the bike but 60 on the run, and shown with no word that the plan never passes the gut figure the athlete enters.
+6. For the owner, not a disagreement: "Weeks 15 to 16: sharp taper" before a week 18 race, against the `TAPER` guide (14 days for a 70.3, 10 for an Olympic), and "105% watts cap", which does not say 105% of what.
 
 **Email must not go live while these ranges are marked UNCHECKED (RD-005):** the PDF carries them off the device and has no DRAFT mark (the owner decided no DRAFT mark, 13 Nov 2026).
 
