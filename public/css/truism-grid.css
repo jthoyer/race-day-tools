@@ -1,0 +1,73 @@
+/* The truism grid on public/truisms/index.html: one tile for each truism card, each tile a link to its card.
+   The index loads this after app.css and no other page loads it.
+
+   Colours. The owner's card colours, as in truisms.css, kept out of app.css on purpose (README, Look). The tile is the
+   card's blue with the card's lime for the label, so a tile reads as a small copy of its card.
+
+   Size. No media query: the grid fills the row with as many 220 px tiles as fit, so a phone gets one column and a
+   desktop gets three or four. A tile is a square at least 220 px wide. */
+
+/* The app column is 480 px, which holds one tile across. The index is wider so the tiles make a grid. */
+.app.truisms-index {
+  max-width: 1100px;
+}
+
+.truism-grid ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.truism-grid .tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  aspect-ratio: 1 / 1;
+  min-height: 220px;
+  padding: 18px;
+  border-radius: 12px;
+  background: #0b23ef;
+  color: #fff;
+  text-decoration: none;
+  overflow-wrap: break-word;
+}
+
+.truism-grid .tile-label {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d5ff4f;
+}
+
+.truism-grid .tile-headline {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.truism-grid .tile-go {
+  align-self: flex-start;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #cad0ff;
+  color: #0a0a8c;
+}
+
+.truism-grid .tile:hover .tile-go,
+.truism-grid .tile:focus-visible .tile-go {
+  background: #d5ff4f;
+}
+
+.truism-grid .tile:focus-visible {
+  outline: 3px solid #0a0a8c;
+  outline-offset: 3px;
+}

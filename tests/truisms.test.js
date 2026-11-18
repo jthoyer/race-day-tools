@@ -99,11 +99,38 @@ test('truisms.css has no print rule, and sizes its type with clamp(), never belo
 });
 
 test('the index lists every card once, each link goes to a card that exists, and it names no outside host', () => {
-  const links = [...INDEX.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]).filter((href) => !href.startsWith('..'));
+  const links = [...INDEX.matchAll(/<a (?:class="[^"]*" )?href="([^"]+)"/g)].map((m) => m[1]).filter((href) => !href.startsWith('..'));
   assert.deepEqual([...links].sort(), CARDS, 'the index links to every card, once, and to nothing else');
   for (const href of links) assert.ok(fs.existsSync(path.join(DIR, href)), `${href} is missing`);
   assert.doesNotMatch(INDEX.replace(/<!--[\s\S]*?-->/g, ''), /https?:/);
   assert.doesNotMatch(INDEX, /<script|<img|<iframe|<form|\sstyle=|\son[a-z]+=/i);
+});
+
+test('the grid: D01 and D02 are tiles, one per card, each linking to its card, and the tile shows the card\'s own headline (18 Nov 2026)', () => {
+  const grid = [...INDEX.matchAll(/<section class="truism-grid" aria-label="(D\d\d)[^"]*">([\s\S]*?)<\/section>/g)];
+  assert.deepEqual(grid.map((m) => m[1]), ['D01', 'D02'], 'the grid holds D01 and D02');
+  for (const [, d, body] of grid) {
+    const tiles = [...body.matchAll(/<li><a class="tile" href="([^"]+)"><span class="tile-label">([^<]+)<\/span><span class="tile-headline">([^<]+)<\/span><span class="tile-go" aria-hidden="true">View card →<\/span><\/a><\/li>/g)];
+    const cards = CARDS.filter((f) => f.startsWith(d.toLowerCase() + '-'));
+    assert.equal(cards.length, 6, `${d}: an overview and five cards`);
+    assert.deepEqual(tiles.map((t) => t[1]).sort(), cards, `${d}: one tile for every card`);
+    assert.equal((body.match(/<a /g) || []).length, tiles.length, `${d}: every link is a tile`);
+    for (const [, href, label, headline] of tiles) {
+      assert.equal(headline, /<h1 class="headline">([^<]*)<\/h1>/.exec(html[href])[1], `${href}: the tile shows the card's headline`);
+      assert.match(label, new RegExp('^' + d + '(\\.\\d| · Overview)$'), `${href}: label ${label}`);
+    }
+  }
+});
+
+test('the grid has its own stylesheet, with no media rule, no print rule and the owner\'s colours, and app.css does not hold them', () => {
+  const grid = fs.readFileSync(path.join(ROOT, 'css', 'truism-grid.css'), 'utf8');
+  assert.match(INDEX, /<link rel="stylesheet" href="\.\.\/css\/truism-grid\.css\?v=\d+" \/>/);
+  assert.equal((INDEX.match(/<link /g) || []).length, 2, 'the index loads app.css and the grid, nothing else');
+  assert.doesNotMatch(grid, /@media|@import|url\(/);
+  assert.match(grid, /#0b23ef/);
+  const fontSizes = [...grid.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]));
+  assert.ok(fontSizes.length && fontSizes.every((n) => n >= 14), 'type is 14px or more');
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8'), /truism-grid|\.tile\b/);
 });
 
 test('the index is a page of the app: the app\'s content policy, stylesheet version and wordmark, and a title ending "· TRI Momentum"', () => {
