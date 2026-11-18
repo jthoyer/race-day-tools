@@ -1,6 +1,6 @@
 # Race-day tools
 
-Pace targets and a timed nutrition plan for Sprint, Olympic, 70.3 and Ironman triathlon, on one race card you can email to yourself as a PDF. It's a static web app. It runs on the athlete's device with no account and no health data held. Two things can leave the device, each only when the person taps: a PDF of the race card, when the athlete types an address and taps to email it, and a short feedback message, when they send one from the footer (it carries no plan data). Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
+Pace targets and a timed nutrition plan for Sprint, Olympic, 70.3 and Ironman triathlon, on one race card you can email to yourself as a PDF. It's a static web app. It runs on the athlete's device with no account and no health data held. Two things can leave the device, each only when the person taps: a PDF of the race card, when the athlete types an address and taps to email it, and a short feedback message, when they send one from the footer (it carries no plan data). A third thing leaves without a tap, and it is anonymous: a count of visits, screens reached and race cards made by distance, with no id, no name and nothing from the plan (see *Counts* below). Every screen carries the TRI Momentum name; the repo stays `race-day-tools`.
 
 This is the first build of the race-day tool suite: the **Race Pacing Planner** and the **Race Fuel Planner** (shown to people as nutrition), in a four-step flow: choose a race, choose pacing, review nutrition, get the race card. Countdown and Debrief come later. The plan and the acceptance criteria are in [docs/spec.md](docs/spec.md).
 
@@ -64,7 +64,7 @@ The app uses the same design tokens as the Balance Tri Club apps, so it feels fa
 
 Set up outside the repo, so a rebuild would lose it: in the repo's **Settings → Pages**, *Source* is **GitHub Actions**.
 
-GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'self'` means the page can call only its own address, for the two functions (`/api/send` and `/api/feedback`), and no other host. On GitHub Pages those functions do not exist and an address or a message would be posted to GitHub, so the email block and the feedback footer are hidden on `github.io` (`canEmailHere` in `public/js/card.js`); they appear when the app is served from Cloudflare or localhost. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
+GitHub Pages can't set response headers, so each page carries its content policy in a `<meta>` tag; `connect-src 'self'` means the page can call only its own address, for the three functions (`/api/send`, `/api/feedback` and `/api/event`), and no other host. On GitHub Pages those functions do not exist and an address or a message would be posted to GitHub, so the email block and the feedback footer are hidden on `github.io` (`canEmailHere` in `public/js/card.js`); they appear when the app is served from Cloudflare or localhost. `public/_headers` keeps the full set (it adds `X-Frame-Options`, `frame-ancestors` and the others a `<meta>` tag can't) for a host that reads it, such as Cloudflare, the club apps' host.
 
 The move to Cloudflare Pages, in order, with its checks and its roll-back, is in [docs/host-move.md](docs/host-move.md). Steps 1 to 10 are mostly done and step 11 is open: see the table there. Whether `race.trimomentum.com` is the long-term domain is still open (D4).
 
@@ -79,6 +79,15 @@ The move to Cloudflare Pages, in order, with its checks and its roll-back, is in
 - The host move from GitHub Pages to Cloudflare Pages (step 5). Mostly done; step 11 is open. Steps and checks: [docs/host-move.md](docs/host-move.md). Cloudflare deploys through its Git integration and does not wait for the `npm test` check unless branch protection requires it.
 - Check Resend's data retention against the "We don't keep it" wording. Not checked.
 - Check the Resend request shape (endpoint, header, body) against Resend's docs. Not checked. It is UNVERIFIED, although a real send works.
+
+## Counts
+
+Decided 18 Nov 2026 (D3): the app adds up anonymous counts, so the owner can see where people come from, where they stop and how many race cards each distance makes. Setup, the table and the dashboard refresh are in [docs/analytics.md](docs/analytics.md).
+
+- **Sent:** one same-origin POST to `/api/event` with exactly `kind` and `key`. `visit` (where from: a `utm_source` label, the referring site's host name, or `direct`), `step` (home, race, pacing1 to pacing3, nutrition, card, products), `card` (the distance of a race card with a complete plan) and `emailed` (the distance, after the person's own email tap sent). Nothing else: no id, no cookie, no race name, date or number.
+- **Kept:** one row for each UTC day, kind and key, with a count, in a Cloudflare D1 table. No address, no user agent, nothing finer than the day.
+- **Off** on `github.io`, for Do Not Track and for Global Privacy Control. One count for each thing for each page load, so a reload counts again.
+- **Not owner-checked yet:** the wording in the footer's About text, and the two go-live steps in *Owner set-up for counts* (docs/analytics.md).
 
 ## Contributing
 
@@ -101,6 +110,8 @@ Branches, checks, the safety rules and the policy on AI agents are in [CONTRIBUT
 | `public/guides/` | Two draft guides with the tool inside: bike pacing and race nutrition (`race-fuel.html`). |
 | `public/js/truisms.js` | The front page truisms: the list of 13 (all live text: the 12 square cards of D01 and D02, which were landscape images until 18 Nov 2026, and the fuelling truism), the pick, and the stage built once per page load. The list and the pick load in Node. Loaded by the app page only. |
 | `public/js/feedback.js` | The feedback footer and its inline panel, built once outside `<main>` so a redraw never wipes the draft, plus the rules that load in Node (message length, the reply address, the page shape). Loaded by the app page only, not the guides. |
+| `public/js/stats.js` | The anonymous counts: which screen a hash opens, where a visit came from, and the one-count-a-page-load rule. The rules load in Node. Keeps nothing in storage. Loaded by the app page only. |
+| `functions/api/event.js` | The third server function. Takes `{ kind, key }`, checks both against fixed lists, and adds one to a daily row in D1 (`env.STATS`). Stores no id and no address; logs only a status code and a count. Runs only on Cloudflare. |
 | `functions/api/send.js` | A server function (a Cloudflare Pages Function). Takes `{ email, pdf }`, checks them, and sends one email with the PDF through Resend. Stores nothing durable (the limiter keeps hashes of the address and visitor in memory only); logs only a status code and a count. Runs only on Cloudflare; the key and sender come from its environment. |
 | `functions/api/feedback.js` | The second server function. Takes `{ message, email, page, website }`, checks them, and sends one plain-text email to the address in `FEEDBACK_TO`, with the sender's address as Reply-To when given. Own limiter, apart from `send.js`. Stores nothing durable; logs only a status code and a count. Runs only on Cloudflare; the key, sender and recipient come from its environment. |
 | `public/truisms/` | The truism cards: one static page for each graphic of the Race-Day Blueprint wiki, D01 to D14 (84). Every card is a square, with two to five stat cards. A card is one rule on one card, in the owner's words. No script, image or link, and no request of its own. Each loads `css/truisms.css` and nothing else. `index.html` lists every card by topic, in the app's look: every topic, D01 to D14, as a grid of tiles that link to each card, with a search box, topic chips and a filter for the cards that have research notes (18 Nov 2026). The footer of every app screen links to it, and to the research notes, under a Truisms heading beside the guides. `research/index.html` holds the research notes: one card for each of 16 truisms, with the mechanism, the numbers on the card, a source, what the study did, a check and the race-day use. Each source PubMed could hold was checked there on 18 November 2026 and is tagged paper exists, closest paper or not confirmed (two of the six not confirmed are a book and an engineering paper that PubMed does not hold); a match shows only that the paper exists, and every figure stays UNCHECKED. The two pages link to each other, and a tile links to its note. |
@@ -164,7 +175,7 @@ Good places to check them: the ACSM position stands on nutrition and on fluid re
 These are from the blueprint and stay open. The code leaves room for each.
 
 - **D2** Restoring a purchase with no accounts. No payments yet.
-- **D3** Counting without tracking health data. No analytics yet.
+- **D3** Counting without tracking health data. Decided 18 Nov 2026: anonymous counts only (*Counts* below). No cookies, ids, third-party tools or per-person tracking.
 - **D4** Hosting and an offline copy. The email path is decided (13 Nov 2026); the offline copy and the host move are open.
 - **D6** Where the paywall sits in pace set-up. Everything is free in this build.
 

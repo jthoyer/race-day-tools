@@ -370,6 +370,7 @@
       if (savedNote === 'shown') savedNote = false;
       else if (savedNote === 'pending') savedNote = parts[0] === 'fuel' ? 'shown' : false;
     }
+    if (!render.quiet) RD.stats.step(location.hash);
     RD.ui.clear(view);
     var out = fn(parts.slice(1));
     view.appendChild(out);
@@ -473,7 +474,7 @@
             h('h3', null, 'How to get it'),
             h('p', null, 'Tap Get started and work through the four steps. Choose your race, set your pacing, then review your nutrition. Your race card is ready at the end.'),
             h('p', null, "It's free, and you don't need an account. Your plan saves on this device only."),
-            h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. Nothing leaves your device unless you ask: emailing your card, or sending us feedback.')),
+            h('p', null, 'Want a copy? You can email your race card to yourself as a PDF. Your plan leaves your device only if you ask: emailing your card, or sending us feedback. We also add up anonymous counts of visits, steps and race cards. They hold no name, no address and nothing from your plan. Turn on Do Not Track and we count nothing.')),
           h('div', { class: 'sf-col' }, guideLinks(), truismLinks())),
         h('div', { class: 'sf-legal' },
           h('p', null, 'A guide, not medical advice.'),
@@ -898,6 +899,7 @@
   function raceCard() {
     var r = S.race;
     if (!r) return home();
+    if (r.pace && r.fuel && r.fuel.ok !== false) RD.stats.card(r.distance); // a race card with a complete plan (counted once a page load)
     // The yellow action is the next step until pace and nutrition are both saved. Then it is the email button (one yellow a screen).
     var nextAction = !r.pace ? h('a', { class: 'btn', href: '#/pacing/1' }, 'Choose pacing')
       : !r.fuel ? h('a', { class: 'btn', href: '#/fuel' }, 'Review nutrition') : null;
@@ -970,6 +972,7 @@
   // kind: 'sent', 'refused' or 'later'. Every way out of a send comes here, so every one leaves a message.
   function mailDone(kind) {
     mail.busy = false;
+    if (kind === 'sent' && S.race) RD.stats.emailed(S.race.distance);
     mail.kind = kind === 'sent' ? 'ok' : 'bad';
     mail.result = MAIL_TEXT[kind];
     paintMail();
@@ -1664,5 +1667,6 @@
   // Mount the footer's link area once, after the feedback band when there is one (it is hidden on github.io).
   var footAnchor = document.getElementById('feedback') || document.getElementById('view');
   footAnchor.parentNode.insertBefore(siteFooter(), footAnchor.nextSibling);
+  RD.stats.visit();
   render();
 })(this);

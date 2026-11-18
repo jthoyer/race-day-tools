@@ -48,13 +48,13 @@ let n = 0;
 let page; // the page the checks below talk to
 const KEY = 'race-day-tools.v1';
 
-// RD-039 A24. The requests the app may make besides loading itself are a POST to /api/send (email the card) and a POST to
-// /api/feedback (the feedback panel), made by its own address. Anything else under /api/ is a failure, and so is any request to another host. Kept as a function so it can be tried
+// RD-039 A24. The requests the app may make besides loading itself are a POST to /api/send (email the card), a POST to
+// /api/feedback (the feedback panel) and a POST to /api/event (an anonymous count, 18 Nov 2026), made by its own address. Anything else under /api/ is a failure, and so is any request to another host. Kept as a function so it can be tried
 // on made-up requests below: a guard that has never been seen to fail is not a guard.
 function badRequest(method, url) {
   const u = new URL(url);
   if (/^https?:$/.test(u.protocol) && u.hostname !== 'localhost') return 'outside request';
-  if ((u.pathname === '/api' || u.pathname.startsWith('/api/')) && !(method === 'POST' && (u.pathname === '/api/send' || u.pathname === '/api/feedback'))) return 'unexpected /api/ request';
+  if ((u.pathname === '/api' || u.pathname.startsWith('/api/')) && !(method === 'POST' && (u.pathname === '/api/send' || u.pathname === '/api/feedback' || u.pathname === '/api/event'))) return 'unexpected /api/ request';
   return null;
 }
 // Set while a scenario expects /api/send or /api/feedback to fail (a 404, an offline device, a refused call): the browser's own
@@ -72,6 +72,7 @@ async function fresh(label, { width = 390, height = 844, init } = {}) {
   p.on('pageerror', (e) => problems.push(`page error (${label}): ` + e.message));
   p.on('console', (m) => {
     if (m.type() !== 'error') return;
+    if (/\/api\/event$/.test(m.location().url || '')) return; // a count is best effort: the smoke server's 404 for one is not a problem
     if (sendErrorsExpected && /\/api\/(send|feedback)$/.test(m.location().url || '')) return;
     if (expectedConsoleUrl && expectedConsoleUrl.test(m.location().url || '')) return;
     problems.push(`console (${label}): ` + m.text());
@@ -250,6 +251,7 @@ check(own === 200, "connect-src 'self' lets the page call its own address");
 // The two guards, tried on made-up requests: each must say no where it should, and yes where it should.
 check(badRequest('GET', 'https://outside.example.test/x') === 'outside request' && badRequest('POST', 'http://localhost:8000/api/send') === null && badRequest('GET', 'http://localhost:8000/js/app.js') === null, 'The outside-host guard refuses another host and lets the app load itself');
 check(badRequest('GET', 'http://localhost:8000/api/send') && badRequest('PUT', 'http://localhost:8000/api/send') && badRequest('POST', 'http://localhost:8000/api/other') && badRequest('POST', 'http://localhost:8000/api') && badRequest('POST', 'http://localhost:8000/api/send/x') && badRequest('POST', 'http://localhost:8000/api/send') === null, 'The /api/ guard allows POST /api/send and nothing else under /api/ but feedback (below)');
+check(badRequest('POST', 'http://localhost:8000/api/event') === null && badRequest('GET', 'http://localhost:8000/api/event') && badRequest('PUT', 'http://localhost:8000/api/event') && badRequest('POST', 'http://localhost:8000/api/event/x') && badRequest('POST', 'http://localhost:8000/api/events') && badRequest('POST', 'https://outside.example.test/api/event') === 'outside request', 'The /api/ guard allows POST /api/event, and refuses GET, PUT, a longer path and another host');
 check(badRequest('POST', 'http://localhost:8000/api/feedback') === null && badRequest('GET', 'http://localhost:8000/api/feedback') && badRequest('PUT', 'http://localhost:8000/api/feedback') && badRequest('POST', 'http://localhost:8000/api/feedback/x') && badRequest('POST', 'http://localhost:8000/api/feedbackx') && badRequest('POST', 'http://localhost:8000/api/feedback/') && badRequest('POST', 'https://outside.example.test/api/feedback') === 'outside request', 'The /api/ guard allows POST /api/feedback, and refuses GET, PUT, a longer or shorter path and another host');
 const fontsLoaded = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, '')); });
 check(fontsLoaded.includes('DM Sans') && fontsLoaded.includes('Outfit'), 'DM Sans and Outfit load from the app, with no outside request');
@@ -2039,7 +2041,7 @@ const fbInit = (save) => ({
     // Records what the page asks fetch to do, since a route cannot see the cache and credentials options.
     const real = window.fetch.bind(window);
     window.__fetches = [];
-    window.fetch = (u, i) => { window.__fetches.push({ url: String(u), method: i && i.method, cache: i && i.cache, credentials: i && i.credentials }); return real(u, i); };
+    window.fetch = (u, i) => { if (!String(u).endsWith('/api/event')) window.__fetches.push({ url: String(u), method: i && i.method, cache: i && i.cache, credentials: i && i.credentials }); return real(u, i); };
   },
   arg: [KEY, save ? JSON.stringify(save) : '']
 });
@@ -2764,6 +2766,49 @@ for (let i = 0; i < TRUISM_N; i++) {
     await page.waitForLoadState('networkidle');
     check(asked.filter((u) => /\/img\/|\.(webp|png|jpe?g|gif|svg)$/.test(u)).length === 0, `S0-no-pictures: truism ${i} makes no image request (${asked.filter((u) => /\/img\//.test(u)).join(', ')})`);
     check((await page.locator('.truism img').count()) === 0 && (await page.locator('.truism-live').count()) === 1, `S0-no-pictures: truism ${i} is one block of live text, with no <img>`);
+    await page.context().close();
+  }
+}
+
+// Counts (18 Nov 2026, spec criterion 35): a short journey with /api/event stubbed. Each body is two strings and nothing else,
+// the race name and every number stay on the device, a repeat is not sent twice, and a browser that says Do Not Track sends none.
+// Isolation: a fresh context each.
+{
+  const bodies = [];
+  await fresh('counts', { init: fbInit(fbSave()) });
+  await page.route('**/api/event', async (route) => { bodies.push(JSON.parse(route.request().postData())); await route.fulfill(json(200, 'counted')); });
+  await page.goto(base + '/index.html#/card', { referer: 'https://www.google.com/search?q=sam+lee+private' });
+  await page.locator('#view h1').first().waitFor();
+  await page.evaluate(() => { location.hash = '#/setup/1'; });
+  await page.locator('#view h1').first().waitFor();
+  await page.evaluate(() => { location.hash = '#/pacing/2'; });
+  await page.locator('#view h1').first().waitFor();
+  await page.evaluate(() => { location.hash = '#/card'; });
+  await page.locator('#view h1').first().waitFor();
+  await page.waitForTimeout(300);
+  const seen = bodies.map((b) => b.kind + ':' + b.key);
+  check(seen[0] === 'visit:google.com', `counts: the first count is where the visit came from, as a host name only (${seen[0]})`);
+  check(seen.includes('step:card') && seen.includes('step:race') && seen.includes('step:pacing2'), `counts: each screen reached is counted (${seen.join(', ')})`);
+  check(seen.filter((x) => x === 'step:card').length === 1, 'counts: opening the race card twice in one page load counts once');
+  check(seen.filter((x) => x.startsWith('card:')).length === 1 && seen.some((x) => /^card:(sprint|standard|70\.3|ironman)$/.test(x)), `counts: a race card with a complete plan counts once, with its distance (${seen.filter((x) => x.startsWith('card:')).join(', ')})`);
+  check(bodies.every((b) => Object.keys(b).sort().join() === 'key,kind'), 'counts: every body holds exactly kind and key');
+  const all = JSON.stringify(bodies);
+  check(!/sam|lee|spring|cup|private/i.test(all), 'counts: nothing the person typed, and no search words, leave the page');
+  check((await page.evaluate(() => Object.keys(localStorage).length + Object.keys(sessionStorage).length)) === 1, 'counts: nothing is kept in storage besides the one plan');
+  await page.context().close();
+
+  // Do Not Track and Global Privacy Control: no count at all.
+  for (const flag of ['dnt', 'gpc']) {
+    const none = [];
+    await fresh('counts-' + flag, {
+      init: { fn: (f) => { Object.defineProperty(navigator, f === 'dnt' ? 'doNotTrack' : 'globalPrivacyControl', { get: () => (f === 'dnt' ? '1' : true) }); }, arg: flag }
+    });
+    page.on('request', (r) => { if (r.url().endsWith('/api/event')) none.push(r.url()); });
+    await page.goto(base + '/index.html');
+    await page.getByRole('heading', { name: 'Race with a plan.' }).waitFor();
+    await page.evaluate(() => { location.hash = '#/setup/1'; });
+    await page.waitForTimeout(300);
+    check(none.length === 0, `counts: ${flag === 'dnt' ? 'Do Not Track' : 'Global Privacy Control'} sends no count`);
     await page.context().close();
   }
 }
