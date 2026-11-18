@@ -2401,7 +2401,7 @@ for (const hash of ['#/card', '#/fuel', '#/setup/1']) {
 // ---------------------------------------------------------------------------------------------------------------
 // Front page truisms (18 Nov 2026): the split screen, criteria 1 to 10 and 14 to 26 of the spec of that date. The truism is picked
 // with Math.random once per page load, so each scenario stubs it with (i + 0.5) / 13 to force truism i, which is the pick's
-// contract (tests/truisms.test.js, "T-pick"). Every scenario is its own fresh browser context with empty storage, unless it says
+// contract (tests/front-page-truisms.test.js, "T-pick"). Every scenario is its own fresh browser context with empty storage, unless it says
 // otherwise. The list comes from public/js/truisms.js, loaded in Node.
 const TRUISMS = require(join(ROOT, 'js', 'truisms.js')).LIST;
 const TRUISM_N = TRUISMS.length;

@@ -3,7 +3,7 @@
  * front page (S0) content. Twelve are images in public/img/truisms/; the thirteenth, on fuelling, is live text.
  *
  * Two halves in one file, so the list and its rules load in Node and the tests can run them:
- *   the list   LIST and pick(). No DOM. tests/truisms.test.js drives them.
+ *   the list   LIST and pick(). No DOM. tests/front-page-truisms.test.js drives them.
  *   the stage  built with RD.ui.h (text as text nodes), one element for the whole page load, held in memory only.
  *
  * EVERY FIGURE HERE IS UNCHECKED. The words and numbers in the list (the alt text of each image, and the live truism) are

@@ -3,157 +3,109 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// The front page truisms (18 Nov 2026). public/js/truisms.js loads in Node on its own: this file requires it alone.
-const PUBLIC = path.join(__dirname, '..', 'public');
-const FILE = path.join(PUBLIC, 'js', 'truisms.js');
-const T = require('../public/js/truisms.js');
-const source = fs.readFileSync(FILE, 'utf8');
+// The truism cards (public/truisms/): static pages that share one stylesheet and make no request of their own.
+const ROOT = path.join(__dirname, '..', 'public');
+const DIR = path.join(ROOT, 'truisms');
+const CARDS = fs.readdirSync(DIR).filter((f) => f.endsWith('.html') && f !== 'index.html').sort();
+const INDEX = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+const html = Object.fromEntries(CARDS.map((f) => [f, fs.readFileSync(path.join(DIR, f), 'utf8')]));
+const css = fs.readFileSync(path.join(ROOT, 'css', 'truisms.css'), 'utf8');
+const csp = (src) => /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(src)?.[1];
 
-// The order is part of the contract: the pick is floor(r * 13) in list order, and the smoke test forces a truism by it.
-const IDS = [
-  'd01-race-formats-rules-and-logistics',
-  'd01-01-race-formats-standard-vs-70-3',
-  'd01-02-race-rules-drafting-penalties-equipment',
-  'd01-03-race-courses-and-conditions',
-  'd01-04-choosing-and-sequencing-races',
-  'd01-05-race-logistics-and-travel',
-  'd02-swim',
-  'd02-01-swim-open-water-skills',
-  'd02-02-swim-stroke-efficiency-and-drag',
-  'd02-03-swim-threshold-sets-and-pacing',
-  'd02-04-swim-wetsuit-swimming',
-  'd02-05-swim-weekly-structure-and-fitness',
-  'd07-fuelling-and-hydration'
-];
-
-// The headline of each image, as the owner's graphic says it. The alt text starts with it.
-const HEADLINES = {
-  'd01-race-formats-rules-and-logistics': 'Fitness sets the ceiling. Execution decides the race.',
-  'd01-01-race-formats-standard-vs-70-3': 'Standard is hard. 70.3 is patient.',
-  'd01-02-race-rules-drafting-penalties-equipment': 'The draft zone is a box, not a suggestion.',
-  'd01-03-race-courses-and-conditions': 'Pace the profile, not the distance.',
-  'd01-04-choosing-and-sequencing-races': 'One season, one peak.',
-  'd01-05-race-logistics-and-travel': 'Logistics is the fourth discipline.',
-  'd02-swim': 'Arrive fresh, not first.',
-  'd02-01-swim-open-water-skills': 'Straight is faster than strong.',
-  'd02-02-swim-stroke-efficiency-and-drag': 'Drag costs more than power.',
-  'd02-03-swim-threshold-sets-and-pacing': 'The first 200 m always lies.',
-  'd02-04-swim-wetsuit-swimming': 'Fit beats brand.',
-  'd02-05-swim-weekly-structure-and-fitness': 'Two or three swims beat one long one.'
-};
-
-const images = T.LIST.filter((e) => e.kind === 'image');
-const live = T.LIST.filter((e) => e.kind === 'live');
-
-// Every string in an entry, however deep.
-function strings(v) {
-  if (typeof v === 'string') return [v];
-  if (Array.isArray(v)) return v.flatMap(strings);
-  if (v && typeof v === 'object') return Object.values(v).flatMap(strings);
-  return [];
+// The visible words of a page: no tags, no scripts or styles, no comments.
+function visibleText(src) {
+  return src.replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style)[\s\S]*?<\/\1>/g, '').replace(/<[^>]+>/g, ' ');
 }
 
-test('T-list: 13 entries, 12 images then 1 live, in the agreed order, with unique ids', () => {
-  assert.equal(T.LIST.length, 13);
-  assert.equal(images.length, 12);
-  assert.equal(live.length, 1);
-  assert.deepEqual(T.LIST.map((e) => e.id), IDS);
-  assert.equal(new Set(T.LIST.map((e) => e.id)).size, 13);
-  assert.equal(T.LIST[12].kind, 'live', 'the live truism is last');
-  for (const e of images) {
-    assert.equal(e.width, 1200, e.id);
-    assert.equal(e.height, 630, e.id);
+test('there are cards, and each is named like a page the site can serve', () => {
+  assert.ok(CARDS.length >= 72, `expected the D03 to D14 cards, found ${CARDS.length}`);
+  for (const f of CARDS) assert.match(f, /^d\d\d(?:-\d\d)?-[a-z0-9-]+\.html$/, f);
+});
+
+test('every card has the same content policy as the app, and it names no outside host', () => {
+  const app = csp(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
+  assert.ok(app, 'the app page has a content policy');
+  for (const f of CARDS) {
+    assert.equal(csp(html[f]), app, f);
+    assert.doesNotMatch(csp(html[f]), /https?:|\*/, f);
   }
 });
 
-test('T-list: no string in the list holds a "<", so none can be read as markup', () => {
-  const markup = (list) => strings(list).filter((s) => /</.test(s));
-  assert.ok(strings(T.LIST).concat(T.TAGLINE).length > 30, 'looked at the strings');
-  assert.deepEqual(markup([T.LIST, T.TAGLINE]), []);
-  // The checker finds a "<" in a deliberately bad entry, nested as deep as the real ones.
-  assert.deepEqual(markup([{ id: 'x', cards: [{ detail: 'a<b' }] }]), ['a<b']);
-});
-
-// WebP: "RIFF", a size, "WEBP", then a VP8, VP8L or VP8X chunk. Returns [width, height].
-function webpSize(buf) {
-  const chunk = buf.toString('latin1', 12, 16);
-  if (chunk === 'VP8X') return [buf.readUIntLE(24, 3) + 1, buf.readUIntLE(27, 3) + 1];
-  if (chunk === 'VP8 ') return [buf.readUInt16LE(26) & 0x3fff, buf.readUInt16LE(28) & 0x3fff];
-  if (chunk === 'VP8L') { const b = buf.readUInt32LE(21); return [(b & 0x3fff) + 1, ((b >> 14) & 0x3fff) + 1]; }
-  return [0, 0];
-}
-
-test('T-files: every image src is a relative public/img/truisms path to a real WebP of 1200 x 630, and no file is extra', () => {
-  for (const e of images) {
-    assert.match(e.src, /^img\/truisms\/[a-z0-9-]+\.webp$/, e.id);
-    assert.equal(e.src, 'img/truisms/' + e.id + '.webp', 'the file is named for its id');
-    const buf = fs.readFileSync(path.join(PUBLIC, e.src));
-    assert.equal(buf.toString('latin1', 0, 4), 'RIFF', e.id);
-    assert.equal(buf.toString('latin1', 8, 12), 'WEBP', e.id);
-    assert.deepEqual(webpSize(buf), [1200, 630], e.id + ' is 1200 x 630 in its own header');
-  }
-  const onDisk = fs.readdirSync(path.join(PUBLIC, 'img', 'truisms')).sort();
-  assert.deepEqual(onDisk, images.map((e) => path.basename(e.src)).sort(), 'the folder holds the listed files and nothing else');
-  // The pattern refuses an outside host, a root-absolute path, a data: address and a climb out of the folder.
-  for (const bad of ['https://x.test/img/truisms/a.webp', '/img/truisms/a.webp', 'data:image/webp;base64,AAAA', 'img/truisms/../a.webp', '//x.test/img/truisms/a.webp', 'img/truisms/a.png']) {
-    assert.doesNotMatch(bad, /^img\/truisms\/[a-z0-9-]+\.webp$/, bad);
+test('every card has a title ending "· TRI Momentum", one h1, and a description', () => {
+  for (const f of CARDS) {
+    assert.match(html[f], /<title>[^<]+ · TRI Momentum<\/title>/, f);
+    assert.equal((html[f].match(/<h1[ >]/g) || []).length, 1, `${f}: one h1`);
+    assert.match(html[f], /<meta name="description" content="[^"]+"/, f);
+    assert.doesNotMatch(visibleText(html[f]), /Race-day tools/, f);
   }
 });
 
-test('T-alt: every image has real alt text that starts with its headline and leaves out the logo', () => {
-  assert.deepEqual(Object.keys(HEADLINES), images.map((e) => e.id));
-  for (const e of images) {
-    assert.equal(typeof e.alt, 'string', e.id);
-    assert.ok(e.alt.length >= 60, `${e.id}: alt is ${e.alt.length} characters`);
-    assert.ok(e.alt.startsWith(HEADLINES[e.id]), `${e.id}: alt starts with its headline`);
-    assert.doesNotMatch(e.alt, /TRI Momentum/i, `${e.id}: the logo is not read out`);
-    assert.doesNotMatch(e.alt, /shift gear/i, `${e.id}: the tagline is not read out`);
+test('every card loads the one shared stylesheet, at the same ?v=, and nothing else', () => {
+  const versions = new Set();
+  for (const f of CARDS) {
+    const links = [...html[f].matchAll(/<link [^>]*>/g)].map((m) => m[0]);
+    assert.equal(links.length, 1, `${f}: one <link>`);
+    const m = /href="\.\.\/css\/truisms\.css\?v=(\d+)"/.exec(links[0]);
+    assert.ok(m, `${f}: loads ../css/truisms.css?v=N`);
+    versions.add(m[1]);
+    assert.doesNotMatch(html[f], /<script|<style|<img|<iframe|<form|<a [^>]*href|\sstyle=|\son[a-z]+=/i, `${f}: no script, style, image, frame, form, link or handler`);
+    assert.doesNotMatch(html[f].replace(/<!--[\s\S]*?-->/g, ''), /https?:/, `${f}: names no outside host`);
   }
-  assert.equal(live[0].alt, undefined, 'the live truism has no alt text: its words are real text');
+  assert.equal(versions.size, 1, `one ?v= on every card: ${[...versions]}`);
+  assert.ok(fs.existsSync(path.join(ROOT, 'css', 'truisms.css')));
 });
 
-test('T-live: the live truism holds the owner\'s strings exactly, as two toned cards', () => {
-  const e = live[0];
-  assert.equal(e.id, 'd07-fuelling-and-hydration');
-  assert.equal(e.headline, 'Fuelling is a trained skill. 70.3 is an eating contest.');
-  assert.equal(e.body, 'What, when, and how much you consume is calculated and rehearsed in training. Standard forgives minor fuelling errors; 70.3 will completely sink under-fuelled athletes.');
-  assert.deepEqual(e.cards, [
-    { label: 'STANDARD FUEL', detail: '~60 g/hr carbs · Electrolyte sip · Fast burn', value: '60 g / HR', tone: 'lime' },
-    { label: '70.3 FUEL', detail: '60–90 g/hr carbs · 500–1000 mg sodium · Gut lock', value: '60–90 g / HR', tone: 'lavender' }
-  ]);
-  assert.equal(T.TAGLINE, 'Helping Triathletes shift gear');
-  assert.equal(e.src, undefined);
-});
-
-test('T-pick: every value of r gives a valid index, and floor(r * 13) inside [0, 1)', () => {
-  for (const r of [0, 0.5, 12.5 / 13, 0.9999999, 1, -0.1, NaN, Infinity, -Infinity, 2, '0.5', null, undefined]) {
-    const i = T.pick(r);
-    assert.ok(Number.isInteger(i) && i >= 0 && i <= 12, `pick(${String(r)}) = ${i}`);
+test('every card is one truism and two stat cards, with their words', () => {
+  for (const f of CARDS) {
+    const src = html[f];
+    assert.equal((src.match(/class="headline"/g) || []).length, 1, `${f}: one headline`);
+    assert.equal((src.match(/class="subtext"/g) || []).length, 1, `${f}: one subtext`);
+    assert.equal((src.match(/class="pill-card pill-(?:lime|lavender)"/g) || []).length, 2, `${f}: two stat cards`);
+    for (const part of ['pill-label', 'pill-detail', 'pill-value']) {
+      const found = [...src.matchAll(new RegExp(`class="${part}">([^<]*)<`, 'g'))].map((m) => m[1].trim());
+      assert.equal(found.length, 2, `${f}: two ${part}`);
+      assert.ok(found.every(Boolean), `${f}: no blank ${part}`);
+    }
+    assert.match(src, /<div class="brand-row" role="img" aria-label="TRI Momentum">/, `${f}: the wordmark is one image to a screen reader`);
   }
-  assert.equal(T.pick(0), 0);
-  assert.equal(T.pick(0.5), 6);
-  assert.equal(T.pick(12.5 / 13), 12);
-  assert.equal(T.pick(0.9999999), 12);
-  assert.equal(T.pick(1), 12, 'one is clamped to the last entry, not past the end');
-  assert.equal(T.pick(-0.1), 0);
-  // The smoke test forces a truism with (i + 0.5) / 13: that must give back i.
-  for (let i = 0; i < 13; i++) assert.equal(T.pick((i + 0.5) / 13), i);
-  for (let k = 0; k < 1000; k++) { const r = k / 1000; assert.equal(T.pick(r), Math.floor(r * 13), String(r)); }
 });
 
-test('T-figures: truisms.js reads nothing from the pacing or nutrition code and loads alone', () => {
-  const WORDS = ['RD.pace', 'RD.fuel', 'require(', 'pace.js', 'fuel.js', 'CARB_CEILING', 'SODIUM_RANGE', 'BIKE_IF'];
-  const mentioned = (text) => WORDS.filter((w) => text.includes(w));
-  assert.deepEqual(mentioned(source), [], 'truisms.js mentions the pacing or nutrition code');
-  assert.ok(source.includes('UNCHECKED'), 'the file says its figures are unchecked');
-  // The scan finds each word in a deliberately bad source.
-  assert.deepEqual(mentioned("x = RD.pace.LEGS; y = RD.fuel; require('./pace.js'); BIKE_IF; SODIUM_RANGE; CARB_CEILING; 'fuel.js'"), WORDS);
+test('truisms.css names no outside host, and every file it loads is shipped', () => {
+  assert.doesNotMatch(css, /https?:|@import/);
+  const urls = [...css.matchAll(/url\(([^)]+)\)/g)].map((m) => m[1].replace(/['"]/g, ''));
+  assert.ok(urls.length >= 2, 'Outfit, in two subsets');
+  for (const u of urls) {
+    assert.match(u, /^\.\.\/fonts\/outfit-[a-z-]+\.woff2$/, u);
+    assert.ok(fs.existsSync(path.join(ROOT, 'fonts', path.basename(u))), `${u} is missing`);
+  }
+  assert.ok(fs.existsSync(path.join(ROOT, 'fonts', 'LICENSE.txt')));
 });
 
-test('T-persist: truisms.js names no place a pick could be saved', () => {
-  const PLACES = ['localStorage', 'sessionStorage', 'cookie', 'history', 'window.name', 'location', 'indexedDB', 'caches'];
-  const named = (text) => PLACES.filter((w) => text.toLowerCase().includes(w.toLowerCase()));
-  assert.deepEqual(named(source), [], 'truisms.js names a place a pick could be saved');
-  // The scan finds each place in a deliberately bad source, whatever its case.
-  assert.deepEqual(named('LOCALSTORAGE sessionStorage document.COOKIE history.replaceState window.name location.hash indexedDB caches.open'), PLACES);
+test('truisms.css has no print rule, and sizes its type with clamp(), never below a size a phone can read', () => {
+  assert.doesNotMatch(css, /@media[^{]*print/, 'criterion 14: no print stylesheet');
+  const sizes = [...css.matchAll(/font-size:\s*([^;]+);/g)].map((m) => m[1].trim());
+  assert.ok(sizes.length >= 8);
+  for (const s of sizes) {
+    const m = /^clamp\((\d+(?:\.\d+)?)px,/.exec(s);
+    assert.ok(m, `font-size is a clamp(): ${s}`);
+    assert.ok(Number(m[1]) >= 14, `the smallest size is at least 14px: ${s}`);
+  }
+});
+
+test('the index lists every card once, each link goes to a card that exists, and it names no outside host', () => {
+  const links = [...INDEX.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]).filter((href) => !href.startsWith('..'));
+  assert.deepEqual([...links].sort(), CARDS, 'the index links to every card, once, and to nothing else');
+  for (const href of links) assert.ok(fs.existsSync(path.join(DIR, href)), `${href} is missing`);
+  assert.doesNotMatch(INDEX.replace(/<!--[\s\S]*?-->/g, ''), /https?:/);
+  assert.doesNotMatch(INDEX, /<script|<img|<iframe|<form|\sstyle=|\son[a-z]+=/i);
+});
+
+test('the index is a page of the app: the app\'s content policy, stylesheet version and wordmark, and a title ending "· TRI Momentum"', () => {
+  const app = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.equal(csp(INDEX), csp(app));
+  assert.match(INDEX, /<title>Truisms · TRI Momentum<\/title>/);
+  assert.equal((INDEX.match(/<h1[ >]/g) || []).length, 1);
+  assert.equal(/css\/app\.css\?v=(\d+)"/.exec(INDEX)?.[1], /css\/app\.css\?v=(\d+)"/.exec(app)[1], 'the same app.css ?v= as the app');
+  assert.match(INDEX, /<span class="tri" aria-hidden="true"><b>T<\/b><b>R<\/b><b>I<\/b><\/span><span class="word">Momentum<\/span>/);
+  assert.doesNotMatch(visibleText(INDEX), /Race-day tools/);
 });
