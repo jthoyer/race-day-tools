@@ -5,7 +5,7 @@
    larger. Below that it keeps the same layout but its type stops shrinking at a size a phone can read (each size is
    clamp(smallest, share of the card's width, largest)), so a long card grows taller than a square rather than
    squeezing its words. The share is the 1024 px size divided by 1024, in cqw (1 cqw is 1% of the card's width).
-   Under 560 px a stat card stacks its figure under its words.
+   Under 720 px a stat card stacks its figure under its words, so neither is squeezed.
 
    Colours. These are the owner's card colours, kept as drawn. They are not the app's tokens in app.css. */
 
@@ -162,8 +162,9 @@ body {
   line-height: 1;
 }
 
-/* A narrow card stacks the figure under its words, and lets a long figure wrap. */
-@container (max-width: 559px) {
+/* A narrow card stacks the figure under its words, and lets a long figure wrap. It starts at 720 px because from
+   560 to about 640 px the row left the words 14 px of room and wrapped the figure (d05-01, 18 Nov 2026). */
+@container (max-width: 719px) {
   .pill-card {
     flex-direction: column;
     align-items: flex-start;
