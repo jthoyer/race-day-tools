@@ -1,5 +1,5 @@
 # Response headers, in the format Cloudflare and Netlify read. Only public/ is published.
-# connect-src 'self' enforces the privacy promise: the page can call its own address only (the two functions, /api/send and /api/feedback), never another host.
+# connect-src 'self' enforces the privacy promise: the page can call its own address only (the three functions, /api/send, /api/feedback and /api/event), never another host.
 # Styles allow 'unsafe-inline' because a few elements set a style attribute.
 /*
   X-Content-Type-Options: nosniff
