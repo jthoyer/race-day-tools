@@ -465,7 +465,7 @@
       'One race card that puts both plans on a single page.'];
     return h('section', { class: 'sitefoot', id: 'about', 'aria-labelledby': 'about-h' },
       h('div', { class: 'sf-in' },
-        h('h2', { id: 'about-h', tabindex: '-1' }, 'What TRI Momentum does'),
+        h('h2', { id: 'about-h', tabindex: '-1' }, 'TRI Momentum - Race Day'),
         h('div', { class: 'sf-cols' },
           h('div', { class: 'sf-col' },
             h('h3', null, 'What you get'),
